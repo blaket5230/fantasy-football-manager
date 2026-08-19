@@ -749,13 +749,26 @@
   .trade-verdict strong{color:var(--chalk);}
 
   /* ---------- DRAFT LAYOUT ---------- */
-  .draft-layout{display:grid;grid-template-columns:380px 1fr;gap:18px;align-items:start;}
+  /* Three columns wide: reference panels, the actual bid/nominate/plan/pool
+     work, and the draft board -- always visible, not a tab you leave the bid
+     panel to check. Two intermediate breakpoints before the full single-
+     column mobile stack: first the history column drops below (still full
+     width, still on screen without much scrolling), then at the existing
+     mobile breakpoint everything stacks the way it always has. */
+  .draft-layout{display:grid;grid-template-columns:380px 1fr 340px;gap:18px;align-items:start;}
   .draft-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px;min-width:0;}
   .draft-sidebar .panel{margin-bottom:0;min-width:0;overflow:hidden;}
   .draft-main{min-width:0;}
+  .draft-history-col{position:sticky;top:16px;min-width:0;}
+  .draft-history-col .panel{margin-bottom:0;min-width:0;}
+  @media (max-width:1400px){
+    .draft-layout{grid-template-columns:340px 1fr;}
+    .draft-history-col{grid-column:1 / -1;position:static;}
+  }
   @media (max-width:920px){
     .draft-layout{grid-template-columns:1fr;}
     .draft-sidebar{position:static;}
+    .draft-history-col{position:static;}
   }
 
   .budget-row{
@@ -773,6 +786,26 @@
     white-space:nowrap;flex-shrink:0;
   }
   .budget-row .b-nums strong{color:var(--gold);font-size:13.5px;}
+
+  /* Draft board picks stack as compact two-line cards, not a table --
+     the column that hosts them is a fixed 340px and a real 5-column
+     table (name, team, price, diff, remove) simply doesn't fit without
+     either truncating team names into unreadable slivers or forcing
+     a sideways scroll on a panel meant to be glanced at mid-bid. */
+  .pick-row{padding:8px 0;border-bottom:1px solid var(--line-soft);}
+  .pick-row:last-child{border-bottom:none;}
+  .pick-row-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;}
+  .pick-row-top .pr-name{color:var(--chalk);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pick-row-top .pr-price{font-family:'JetBrains Mono',monospace;color:var(--gold);flex-shrink:0;}
+  .pick-row-diff{font-size:10.5px;color:var(--chalk-3);margin-top:1px;}
+  .pick-row-bottom{display:flex;align-items:center;gap:6px;margin-top:5px;}
+  .pick-row-bottom select.pick-team-select{
+    flex:1;min-width:0;padding:5px 6px;font-size:11px;
+  }
+  .pick-row-bottom input.pick-price-input{
+    width:52px;flex-shrink:0;padding:5px 6px;font-size:11px;
+  }
+  .pick-row-bottom .icon-btn{flex-shrink:0;padding:5px 7px;font-size:10.5px;}
 
   /* ---------- ROSTER SLOTS ---------- */
   .slot-chip-row{display:flex;flex-wrap:wrap;gap:6px;}
@@ -1544,7 +1577,6 @@
           <button class="sub-tab" data-sub="nominate">Nominate</button>
           <button class="sub-tab" data-sub="plan">My plan</button>
           <button class="sub-tab" data-sub="pool">Pool</button>
-          <button class="sub-tab" data-sub="history">Board</button>
         </nav>
 
         <div id="situationStrip" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em;color:var(--chalk-2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:7px 12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px 14px;"></div>
@@ -1619,12 +1651,18 @@
         </div>
 
         </div>
+      </div>
 
-        <div class="sub-body" data-sub="history" hidden>
+      <!-- Draft board used to be a fifth sub-tab, meaning checking it meant
+           losing sight of whatever you were bidding on. It's the one thing
+           you want visible the entire time, the same way a live auction
+           room's own running sheet always is, so it's its own persistent
+           third column instead -- always on screen, no click required. -->
+      <div class="draft-history-col">
         <div class="panel">
           <h3>Draft board</h3>
           <p class="panel-sub">Live and fully editable. Reassign the team, change the price, or remove a pick entirely. Contract length isn't a factor here, that gets set after the draft per the rules, everything logs as a placeholder until you commit.</p>
-          <div class="table-scroll"><table class="result-table" id="draftHistoryTable"></table></div>
+          <div id="draftHistoryTable"></div>
           <div class="field-row" style="margin-top:12px;align-items:center;">
             <span id="undoBar"></span>
             <span class="row-act" tabindex="0" role="button" id="exportBoardBtn" title="Copy the draft board as text">export board</span>
@@ -1643,7 +1681,6 @@
         </div>
       </div>
     </div>
-  </div>
   </div>
 
   <!-- SQUAD PLAN -->
@@ -5062,23 +5099,27 @@ function updateBidDynamicParts(){
 function renderDraftHistory(){
   const picks = state.draftPicks;
   if(!picks.length){
-    document.getElementById('draftHistoryTable').innerHTML = `<tbody><tr><td>No picks logged yet this session.</td></tr></tbody>`;
+    document.getElementById('draftHistoryTable').innerHTML = `<p class="panel-sub" style="margin:0;">No picks logged yet this session.</p>`;
     return;
   }
   const teamOptions = state.teams.map((t,i)=>`<option value="${i}">${t.owner}</option>`).join('');
   const rows = [...picks].reverse().map(pick=>{
     const diff = pick.price - pick.suggested;
-    const diffLabel = diff===0 ? 'on the number' : (diff>0 ? `$${diff} over` : `$${Math.abs(diff)} under`);
-    return `<tr>
-      <td>${pick.name} <span class="pos-tag">${pick.pos}</span></td>
-      <td><select data-pick-id="${pick.id}" class="pick-team-select">${teamOptions}</select></td>
-      <td><input type="number" min="1" value="${pick.price}" data-pick-id="${pick.id}" class="pick-price-input" style="width:60px;"></td>
-      <td>${diffLabel}</td>
-      <td class="actions"><button class="icon-btn" data-remove-pick="${pick.id}">Remove</button></td>
-    </tr>`;
+    const diffLabel = diff===0 ? 'on the number' : (diff>0 ? `$${diff} over suggested` : `$${Math.abs(diff)} under suggested`);
+    return `<div class="pick-row">
+      <div class="pick-row-top">
+        <span class="pr-name">${pick.name} <span class="pos-tag">${pick.pos}</span></span>
+        <span class="pr-price">$${pick.price}</span>
+      </div>
+      <div class="pick-row-diff">${diffLabel}</div>
+      <div class="pick-row-bottom">
+        <select data-pick-id="${pick.id}" class="pick-team-select">${teamOptions}</select>
+        <input type="number" min="1" value="${pick.price}" data-pick-id="${pick.id}" class="pick-price-input">
+        <button class="icon-btn" data-remove-pick="${pick.id}" title="Remove this pick">&times;</button>
+      </div>
+    </div>`;
   }).join('');
-  document.getElementById('draftHistoryTable').innerHTML =
-    `<thead><tr><th>Player</th><th>Team</th><th>Price</th><th>vs suggested</th><th></th></tr></thead><tbody>${rows}</tbody>`;
+  document.getElementById('draftHistoryTable').innerHTML = rows;
 
   // set current team selection (can't do via template above cleanly since select needs selected attr per option)
   document.querySelectorAll('.pick-team-select').forEach(sel=>{
