@@ -1513,9 +1513,12 @@
 
       <div class="draft-main">
         <div class="panel" id="mockDraftPanel" style="border:1px solid var(--line);">
-          <div id="mockDraftIdle" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <span class="panel-sub" style="margin:0;">Want to rehearse before the real thing? Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.</span>
-            <button class="row-act" tabindex="0" role="button" id="startMockDraftBtn">start mock draft</button>
+          <div id="mockDraftIdle">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <span class="panel-sub" style="margin:0;">Want to rehearse before the real thing? Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.</span>
+              <button class="row-act" tabindex="0" role="button" id="startMockDraftBtn">start mock draft</button>
+            </div>
+            <div id="mockHistoryBody" style="margin-top:10px;"></div>
           </div>
           <div id="mockDraftActive" style="display:none;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#3a2a0a;border:1px solid #7a5a10;border-radius:7px;padding:8px 12px;">
@@ -3718,6 +3721,77 @@ function mockAnnounce(text){
   if(el) el.textContent = text;
 }
 
+/* Mock draft history: a lightweight practice log, completely separate from
+   the real save file. Written to its own localStorage key so it survives
+   across mock drafts (and across page reloads) precisely BECAUSE it's not
+   part of STORAGE_KEY/flushSave() -- nothing here ever touches, or could
+   corrupt, the real ledger. The point is letting Blake see whether he's
+   actually improving run over run, not just rehearsing once and forgetting. */
+const MOCK_HISTORY_KEY = 'zub_mock_history_v1';
+function loadMockHistory(){
+  try{ const raw = localStorage.getItem(MOCK_HISTORY_KEY); return raw ? JSON.parse(raw) : []; }
+  catch(e){ return []; }
+}
+function saveMockHistory(history){
+  try{ localStorage.setItem(MOCK_HISTORY_KEY, JSON.stringify(history)); }
+  catch(e){ /* storage full or blocked -- this is a nice-to-have log, fail silently */ }
+}
+
+/* Snapshot of how the mock draft actually went, read from the still-active
+   mock `state` right before endMockDraft() reverts it back to the real one.
+   Ranks Blake the same way the room itself would: best starting-8 value,
+   same as sim/sim-core.js's own final accounting. */
+function mockFinalStats(){
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  if(myIdx < 0) return null;
+  const teamResults = state.teams.map((t,i)=>{
+    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}));
+    const won = picksForTeam(i).map(p=>({name:p.name,pos:p.pos}));
+    return { teamIdx:i, starterValue: lineupValue(held.concat(won)).starters };
+  });
+  teamResults.sort((a,b)=>b.starterValue-a.starterValue);
+  const mine = teamResults.find(r=>r.teamIdx===myIdx);
+  const myPicks = picksForTeam(myIdx);
+  return {
+    rank: teamResults.findIndex(r=>r.teamIdx===myIdx) + 1,
+    teams: teamResults.length,
+    starterValue: Math.round((mine?mine.starterValue:0)*10)/10,
+    spend: myPicks.reduce((s,p)=>s+p.price,0),
+    picks: myPicks.length,
+  };
+}
+function logMockRun(){
+  const stats = mockFinalStats();
+  if(!stats || stats.picks < 1) return;   // ended before doing anything real, not worth a row
+  const history = loadMockHistory();
+  history.push({ at: new Date().toISOString(), ...stats });
+  while(history.length > 20) history.shift();   // a rolling log, not an archive
+  saveMockHistory(history);
+}
+
+function renderMockHistory(){
+  const el = document.getElementById('mockHistoryBody');
+  if(!el) return;
+  const history = loadMockHistory();
+  if(!history.length){ el.innerHTML = ''; return; }
+  const rows = history.slice(-8).reverse().map(h=>{
+    const d = new Date(h.at);
+    const when = isNaN(d) ? '' : `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `<div class="budget-row">
+      <span class="b-name" style="color:var(--chalk-3);font-size:11px;">${when}</span>
+      <span class="b-nums"><strong>${h.rank} of ${h.teams}</strong><span style="color:var(--chalk-3);font-size:11px;margin-left:8px;">$${h.spend} spent &middot; ${h.starterValue} starter VOR &middot; ${h.picks} picks</span></span>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Recent mock drafts</div>${rows}
+    <span class="row-act" tabindex="0" role="button" id="clearMockHistoryBtn" style="display:inline-block;margin-top:6px;">clear history</span>`;
+  const clearBtn = document.getElementById('clearMockHistoryBtn');
+  if(clearBtn) clearBtn.addEventListener('click', ()=>{
+    if(!confirm('Clear your mock draft history? This only affects the practice log, never your real board.')) return;
+    saveMockHistory([]);
+    renderMockHistory();
+  });
+}
+
 function startMockDraft(){
   mockRealStateBackup = state;
   state = JSON.parse(JSON.stringify(mockRealStateBackup));
@@ -3747,6 +3821,7 @@ function startMockDraft(){
 
 function endMockDraft(){
   if(!mockModeActive) return;
+  logMockRun();   // snapshot final stats from the mock state before reverting it
   state = mockRealStateBackup;
   mockRealStateBackup = null;
   mockModeActive = false;
@@ -3816,6 +3891,7 @@ function mockFieldTakesHim(){
 }
 
 function bindMockDraftControls(){
+  renderMockHistory();
   const startBtn = document.getElementById('startMockDraftBtn');
   if(startBtn && !startBtn.dataset.bound){ startBtn.dataset.bound='1'; startBtn.addEventListener('click', startMockDraft); }
   const newBtn = document.getElementById('newMockDraftBtn');
