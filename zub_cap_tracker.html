@@ -547,12 +547,17 @@
     font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
     letter-spacing:.06em;border:1px solid transparent;
   }
-  .pos-QB{ color:#F0C782; background:rgba(229,181,103,.14); border-color:rgba(229,181,103,.30); }
-  .pos-RB{ color:#5FD3A3; background:rgba(63,182,139,.14);  border-color:rgba(63,182,139,.32); }
-  .pos-WR{ color:#94A6FF; background:rgba(123,143,247,.15); border-color:rgba(123,143,247,.32); }
-  .pos-TE{ color:#E8A0D8; background:rgba(214,124,196,.15); border-color:rgba(214,124,196,.32); }
-  .pos-PK{ color:#8FA3B8; background:rgba(143,163,184,.12); border-color:rgba(143,163,184,.28); }
-  .pos-DST{color:#C9A0F0; background:rgba(170,130,230,.14); border-color:rgba(170,130,230,.30); }
+  /* Compound selectors (.pos-tag.pos-QB, not .pos-QB alone) so these outrank
+     the later plain .pos-tag rule regardless of where either sits in the
+     file -- equal-specificity, later-source-order rules were silently
+     winning before this, which is why every position badge in the app
+     rendered in the same flat blue no matter what position it was. */
+  .pos-tag.pos-QB{ color:#F0C782; background:rgba(229,181,103,.14); border-color:rgba(229,181,103,.30); }
+  .pos-tag.pos-RB{ color:#5FD3A3; background:rgba(63,182,139,.14);  border-color:rgba(63,182,139,.32); }
+  .pos-tag.pos-WR{ color:#94A6FF; background:rgba(123,143,247,.15); border-color:rgba(123,143,247,.32); }
+  .pos-tag.pos-TE{ color:#E8A0D8; background:rgba(214,124,196,.15); border-color:rgba(214,124,196,.32); }
+  .pos-tag.pos-PK{ color:#8FA3B8; background:rgba(143,163,184,.12); border-color:rgba(143,163,184,.28); }
+  .pos-tag.pos-DST{color:#C9A0F0; background:rgba(170,130,230,.14); border-color:rgba(170,130,230,.30); }
 
   /* a thin colour rail on each row, so the eye can scan positions vertically
      without reading a single character */
@@ -561,6 +566,54 @@
     content:'';position:absolute;left:4px;top:9px;bottom:9px;width:3px;border-radius:2px;
     background:var(--rail, transparent);
   }
+
+  /* Your avoid-through-chase read used to render as a bare .pos-tag, the same
+     grey chip as a position -- so a rating and a position were visually the
+     same thing until you read the word. A dedicated pill with a status dot
+     keeps them from being confused at a glance, and a five-step colour ramp
+     (not just red/greeen) reads "fade" as different from "avoid". */
+  .rate-pill{
+    display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:.03em;padding:4px 11px;border-radius:999px;
+    white-space:nowrap;vertical-align:middle;
+  }
+  .rate-pill .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .rate-pill.avoid{background:rgba(229,103,95,.14);border:1px solid rgba(229,103,95,.5);color:#F0958E;}
+  .rate-pill.avoid .dot{background:var(--coral);}
+  .rate-pill.fade{background:rgba(229,103,95,.08);border:1px solid rgba(229,103,95,.28);color:#D9A199;}
+  .rate-pill.fade .dot{background:#C98A82;}
+  .rate-pill.maintain{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--chalk-2);}
+  .rate-pill.maintain .dot{background:var(--chalk-3);}
+  .rate-pill.target{background:rgba(63,182,139,.10);border:1px solid rgba(63,182,139,.35);color:#8FCFB4;}
+  .rate-pill.target .dot{background:var(--jade);}
+  .rate-pill.chase{background:rgba(63,182,139,.14);border:1px solid rgba(63,182,139,.5);color:#7FE0B8;}
+  .rate-pill.chase .dot{background:#5FE0A8;}
+  .rate-pill.mini{font-size:9px;padding:2.5px 8px;gap:4px;}
+  .rate-pill.mini .dot{width:5px;height:5px;}
+
+  /* Market / ceiling / legal max / VOR used to be one dense sentence in the
+     bid panel -- readable, but you had to parse it every single bid. Laid
+     out as a labelled row instead, the four numbers you actually check
+     before raising a hand land in one glance. */
+  .stat-strip{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));
+    border:1px solid var(--line);border-radius:8px;overflow:hidden;background:rgba(255,255,255,.015);
+    margin:10px 0 12px;
+  }
+  .stat-cell{padding:9px 12px;border-right:1px solid var(--line-soft);}
+  .stat-cell:last-child{border-right:none;}
+  .stat-cell-label{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--chalk-3);margin-bottom:4px;
+  }
+  .stat-cell-value{
+    font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:var(--chalk);
+    font-variant-numeric:tabular-nums;
+  }
+  .stat-cell-value.gold{color:var(--gold);}
+  .stat-cell-value.jade{color:var(--jade);}
+  .stat-cell-value.coral{color:var(--coral);}
+  .stat-cell-value.muted{color:var(--chalk-2);font-size:12.5px;font-weight:600;}
 
   /* The verdict is the one moment the interface should raise its voice. Give
      the lamp a real glow so a green or red call registers peripherally, before
@@ -3164,7 +3217,7 @@ function renderTradeLists(){
   document.getElementById('tradeBLabel').textContent = `${tB.team||tB.owner} sends`;
 
   const buildList = (team, side) => team.players.map((p,i)=>
-    `<li><label><input type="checkbox" data-side="${side}" data-pidx="${i}"> ${p.name} <span class="pos-tag">${p.pos||''}</span></label> <span>$${p.years[state.currentYear]||0} cap &middot; MV ${p.mv||0}</span></li>`
+    `<li><label><input type="checkbox" data-side="${side}" data-pidx="${i}"> ${p.name} <span class="pos-tag pos-${p.pos||''}">${p.pos||''}</span></label> <span>$${p.years[state.currentYear]||0} cap &middot; MV ${p.mv||0}</span></li>`
   ).join('') || '<li>No contracted players.</li>';
 
   document.getElementById('tradeAList').innerHTML = buildList(tA,'A');
@@ -4071,7 +4124,7 @@ function renderEndgame(){
   const lines = [];
   lines.push(`$${e.cap} left across ${e.slots} slot${e.slots===1?'':'s'}. Every slot needs a body, so the most you can put on any one player is <strong>$${e.maxOne}</strong> and only $${Math.max(0,e.spendable)} of your cap is really free.`);
   if(e.best){
-    lines.push(`Best you can still reach: <b data-plan-pick="${e.best.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.best.p.name}</b> <span class="pos-tag">${e.best.p.pos}</span> at $${e.best.d}, which would leave $${e.cap-e.best.d} for ${e.slots-1} slot${e.slots-1===1?'':'s'}.`);
+    lines.push(`Best you can still reach: <b data-plan-pick="${e.best.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.best.p.name}</b> <span class="pos-tag pos-${e.best.p.pos}">${e.best.p.pos}</span> at $${e.best.d}, which would leave $${e.cap-e.best.d} for ${e.slots-1} slot${e.slots-1===1?'':'s'}.`);
   }
   if(e.bestPair && e.best && e.bestPair.value > e.best.p.mv*1.15){
     lines.push(`Two beats one here: <b data-plan-pick="${e.bestPair.a.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.bestPair.a.p.name}</b> at $${e.bestPair.a.d} plus <b data-plan-pick="${e.bestPair.b.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.bestPair.b.p.name}</b> at $${e.bestPair.b.d} costs $${e.bestPair.cost} and gets you more than the single best player would.`);
@@ -4365,7 +4418,7 @@ function renderMyRoster(){
   const order = {QB:0,RB:1,WR:2,TE:3,PK:4,DST:5};
   all.sort((a,b)=> (order[a.pos]-order[b.pos]) || (b.price-a.price));
   const listHTML = all.length ? `<ul class="roster-player-list">${
-    all.map(p=>`<li><span><span class="pos-tag" style="margin-right:4px;">${p.pos}</span>${p.name}${p.live?' <span class="dead-tag" style="color:var(--gold);border-color:rgba(229,181,103,0.4);background:rgba(229,181,103,0.1);">this session</span>':''}</span><span class="p-price">$${p.price}</span></li>`).join('')
+    all.map(p=>`<li><span><span class="pos-tag pos-${p.pos}" style="margin-right:4px;">${p.pos}</span>${p.name}${p.live?' <span class="dead-tag" style="color:var(--gold);border-color:rgba(229,181,103,0.4);background:rgba(229,181,103,0.1);">this session</span>':''}</span><span class="p-price">$${p.price}</span></li>`).join('')
   }</ul>` : '<p class="panel-sub">No players yet. Anyone you win tonight appears here as you log them.</p>';
 
   wrap.innerHTML = `${slotsHTML}${listHTML}<p class="panel-sub" style="margin-top:8px;">${all.length}/18 roster spots filled${deadN?`, plus ${deadN} dead-cap ${deadN===1?'entry':'entries'} that cost money but no roster spot`:''}.</p>`;
@@ -4748,7 +4801,7 @@ function renderSearchMatches(keepHi){
   box.innerHTML = hits.map((p,i)=>{
     const d = suggestedDollar(p.mv,p.pos,p.name);
     const rd = myRead(p.name);
-    const tag = rd ? `<span class="pos-tag" style="margin-left:4px;">${READ_BY_KEY[rd].label}</span>` : '';
+    const tag = rd ? ` ${ratePillHTML(rd, true)}` : '';
     return `<div class="match-row ${i===searchHi?'on':''}" data-pick="${p.name.replace(/"/g,'&quot;')}">
       <span style="display:flex;align-items:center;gap:9px;min-width:0;">${faceHTML(p,24)}<span style="min-width:0;"><b>${p.name}</b> <span class="pos-tag pos-${p.pos}">${p.pos}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,13)} ${p.nfl}</span>${tag}</span></span>
@@ -4804,10 +4857,11 @@ function renderBidPanel(){
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
-      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${p.pos}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span></h4>
+      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${p.pos}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}</h4>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
     <p class="panel-sub" style="margin-top:2px;" id="bidStaticNote"></p>
+    <div class="stat-strip" id="bidStatStrip"></div>
 
     <p class="panel-sub" style="margin:8px 0 4px;font-size:12px;">
       Ordered by who is most likely to want him, dots for how likely, based on their roster holes and what they can still spend.
@@ -4952,6 +5006,21 @@ function updateBidDynamicParts(){
   const myBid = currentBidValue + 1;
   const V = bidVerdict(p, myBid, myIdx);
   const readoutClass = V.light==='green' ? 'safe' : (V.light==='yellow' ? 'warn' : 'over');
+
+  /* Market/ceiling/legal max/VOR used to only exist as prose you had to parse
+     under time pressure. Same four numbers, laid out so you check them in
+     one glance instead of a sentence. */
+  const stripBox = document.getElementById('bidStatStrip');
+  if(stripBox){
+    const rd = myRead(p.name);
+    stripBox.innerHTML = `
+      <div class="stat-cell"><div class="stat-cell-label">Market</div><div class="stat-cell-value">$${V.market}</div></div>
+      <div class="stat-cell"><div class="stat-cell-label">Ceiling</div><div class="stat-cell-value gold">$${V.ceiling}</div></div>
+      <div class="stat-cell"><div class="stat-cell-label">Legal max</div><div class="stat-cell-value muted">$${V.legalMax}</div></div>
+      <div class="stat-cell"><div class="stat-cell-label">VOR</div><div class="stat-cell-value">${vor(p).toFixed(1)}</div></div>
+      <div class="stat-cell"><div class="stat-cell-label">My read</div><div class="stat-cell-value ${rd?({avoid:'coral',fade:'coral',maintain:'muted',target:'jade',chase:'jade'})[rd]:'muted'}" style="font-size:12.5px;">${rd?READ_BY_KEY[rd].label:'None'}</div></div>
+    `;
+  }
 
   const vBox = document.getElementById('verdictBox');
   if(vBox){
@@ -5108,7 +5177,7 @@ function renderDraftHistory(){
     const diffLabel = diff===0 ? 'on the number' : (diff>0 ? `$${diff} over suggested` : `$${Math.abs(diff)} under suggested`);
     return `<div class="pick-row">
       <div class="pick-row-top">
-        <span class="pr-name">${pick.name} <span class="pos-tag">${pick.pos}</span></span>
+        <span class="pr-name">${pick.name} <span class="pos-tag pos-${pick.pos}">${pick.pos}</span></span>
         <span class="pr-price">$${pick.price}</span>
       </div>
       <div class="pick-row-diff">${diffLabel}</div>
@@ -5709,6 +5778,13 @@ function readMultiplier(name){
 function readLabel(name){
   const r = myRead(name);
   return r ? READ_BY_KEY[r].label : 'no read yet';
+}
+/* One markup source for the rating pill, so avoid/fade/maintain/target/chase
+   look identical everywhere they show up instead of drifting per call site. */
+function ratePillHTML(key, mini){
+  if(!key || !READ_BY_KEY[key]) return '';
+  const cls = mini ? `rate-pill ${key} mini` : `rate-pill ${key}`;
+  return `<span class="${cls}"><span class="dot"></span>${READ_BY_KEY[key].label}</span>`;
 }
 
 /* Kept so the older name still works everywhere it is called. */
@@ -9177,7 +9253,7 @@ function pickerHTML(slot, budget){
     const bye = byeWeek(o.x);
     return `<div class="pk-row">
       <span class="pk-rank ${rank>=0?'on':''}" data-tgt-slot="${slot.key}" data-tgt-name="${o.x.name.replace(/"/g,'&quot;')}">${rank>=0?rank+1:''}</span>
-      <span class="pk-nm" data-plan-pick="${o.x.name.replace(/"/g,'&quot;')}">${o.x.name} <span class="pos-tag">${o.x.pos}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${o.x.nfl}</span>${bye?` <span style="color:var(--chalk-3);font-size:11px;">bye ${bye}</span>`:''}</span>
+      <span class="pk-nm" data-plan-pick="${o.x.name.replace(/"/g,'&quot;')}">${o.x.name} <span class="pos-tag pos-${o.x.pos}">${o.x.pos}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${o.x.nfl}</span>${bye?` <span style="color:var(--chalk-3);font-size:11px;">bye ${bye}</span>`:''}</span>
       ${eTag}
       <span class="pk-pr ${o.d>budget?'over':''}">$${o.d}</span>
     </div>`;
