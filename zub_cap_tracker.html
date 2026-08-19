@@ -453,6 +453,33 @@
   .pcard-tab-body.active{display:block;}
   .pcard-tab-body .pcard-sec:first-child{margin-top:0;}
 
+  /* Even organized into tabs, a tab full of stacked headers-over-paragraphs
+     still reads as one grey wall of text. Chunking each idea into its own
+     bordered card, with the number that matters pulled out bold up top,
+     gives the eye somewhere to land before it has to start reading. */
+  .pcard-insight{
+    border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+    margin-bottom:10px;background:rgba(255,255,255,.015);
+  }
+  .pcard-insight:last-child{margin-bottom:0;}
+  .pcard-insight .pi-label{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--chalk-3);margin-bottom:7px;
+  }
+  .pcard-insight .pi-headline{font-size:15px;font-weight:700;color:var(--chalk);margin-bottom:5px;}
+  .pcard-insight .pi-headline.jade{color:var(--jade);}
+  .pcard-insight .pi-headline.coral{color:var(--coral);}
+  .pcard-insight .pi-headline.gold{color:var(--gold);}
+  .pcard-insight .pi-body{font-size:12.5px;color:var(--chalk-2);line-height:1.6;margin:0;}
+  .pcard-insight .pi-body.clamped{
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .pcard-insight .pi-more{
+    display:inline-block;margin-top:7px;color:var(--gold);cursor:pointer;
+    font-size:11px;font-weight:600;
+  }
+  .pcard-insight .pi-more:hover{text-decoration:underline;}
+
   /* ---- draft sidebar tabs ---- */
   .side-panel{position:sticky;top:16px;}
   .side-tabs{display:flex;gap:2px;margin:-4px -6px 14px;flex-wrap:wrap;}
@@ -491,14 +518,16 @@
     object-fit:contain;vertical-align:middle;flex-shrink:0;
     filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));
   }
-  /* A large, very faint club mark behind the card header. It reads as texture
-     rather than an image, which is the point: you should feel whose card this
-     is without the badge competing with a single number on it. */
+  /* The club nickname in huge ghosted type behind the header -- CSS text, not
+     a logo image, so it never depends on a network fetch succeeding and gives
+     the header real visual weight instead of competing with a single number
+     on it. Team-tinted so it still reads as "whose card this is" at a glance. */
   .pcard-head{position:relative;overflow:hidden;}
   .pcard-watermark{
-    position:absolute;right:-18px;top:50%;transform:translateY(-50%);
-    width:132px;height:132px;object-fit:contain;opacity:.10;
-    pointer-events:none;filter:saturate(1.2);
+    position:absolute;right:-10px;top:50%;transform:translateY(-50%);
+    font-family:'Archivo',sans-serif;font-weight:800;font-size:58px;letter-spacing:-.02em;
+    line-height:1;color:var(--tc1,var(--gold));opacity:.16;white-space:nowrap;
+    pointer-events:none;user-select:none;
   }
   .pcard-headrow{position:relative;z-index:1;}
   /* ---- faces ---- */
@@ -5830,16 +5859,33 @@ function renderPlayerCard(){
     return `<div class="read-btn ${cls} ${rd===o.key?'on':''}" data-read="${o.key}" title="${o.blurb}">${o.label}</div>`;
   }).join('');
 
+  /* One label+headline+body card per idea, instead of a header stacked over
+     a paragraph -- the number that matters is bold and up top, the sentence
+     explaining it is secondary. `clampId` makes long prose (the one thing
+     here genuinely wall-of-text-shaped) start truncated with a real
+     expand/collapse instead of just running on. */
+  const insight = (label, headline, body, opts) => {
+    opts = opts || {};
+    if(!body && !headline) return '';
+    const clampId = opts.clamp ? 'pi_'+Math.random().toString(36).slice(2,9) : null;
+    return `<div class="pcard-insight">
+      <div class="pi-label">${label}</div>
+      ${headline?`<div class="pi-headline ${opts.cls||''}">${headline}</div>`:''}
+      ${body?`<p class="pi-body${clampId?' clamped':''}" ${clampId?`id="${clampId}"`:''}>${body}</p>`:''}
+      ${clampId?`<span class="pi-more" data-clamp-toggle="${clampId}">show more</span>`:''}
+    </div>`;
+  };
+
   const [tc1, tc2] = teamColors(p.nfl);
   host.innerHTML = `<div class="card-scrim" id="cardScrim"><div class="pcard" id="pcardBody" tabindex="-1"
       style="--tc1:${tc1};--tc2:${tc2};--tc1-a:${tc1}2E;">
     <div class="pcard-head">
-      ${(()=>{const u=logoUrl(p.nfl);return u?`<img class="pcard-watermark" src="${u}" alt="" onerror="this.remove()">`:'';})()}
+      <span class="pcard-watermark">${teamNick(p.nfl)}</span>
       <div class="pcard-headrow">
         ${faceHTML(p, 56)}
         <div style="min-width:0;">
           <div class="pcard-name">${p.name}</div>
-          <div class="pcard-meta">${p.pos} &middot; ${logoHTML(p.nfl,14)} ${p.nfl}${bye?' &middot; bye '+bye:''}${typeof p.age==='number'?' &middot; age '+p.age:''}${ti?' &middot; tier '+ti.tier:''}</div>
+          <div class="pcard-meta"><span class="pos-tag pos-${p.pos}">${p.pos}</span> &middot; ${logoHTML(p.nfl,14)} ${p.nfl}${bye?' &middot; bye '+bye:''}${typeof p.age==='number'?' &middot; age '+p.age:''}${ti?' &middot; tier '+ti.tier:''}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -5850,20 +5896,19 @@ function renderPlayerCard(){
       </div>
     </div>
 
+    <!-- Trimmed to the six numbers you check on every player regardless of
+         context. Everything else (full contract math, 2025 pace, schedule)
+         moved into the tab it actually belongs to below, so it's not shown
+         twice and the header isn't twelve boxes deep before you've read a
+         word of analysis. -->
     <div class="pcard-grid">
       ${stat('Market', '$'+base, 'What the analyst auction board says he is worth')}
       ${stat('Worth to you', '$'+mine, 'The market figure bent by your own rating')}
       ${stat('Walk away above', w?'$'+w.walk:'--', 'Past this, the same money builds a better starting eight elsewhere')}
       ${stat('Points above repl.', vor(p).toFixed(1), 'Projects '+projectedPpg(p).toFixed(1)+' a game against a replacement of '+replacementLevel(p.pos).toFixed(1))}
-      ${stat('Sentiment', (sent.score>0?'+':'')+sent.score, sent.call)}
       ${stat('Tier', (()=>{const f=fpTierFor(p);return f?('T'+f):(ti?'T'+ti.tier:'--');})(),
         fpTierFor(p)?'FantasyPros expert tier':(ti&&ti.size>1?('Cheapest at this level is '+ti.cheapest.name):'Alone at this level'))}
       ${stat('Term', term.years+'yr', term.why)}
-      ${stat('Full contract', '$'+termEconomics(base, term.years).total, 'What the whole deal costs in cap, and the same again out of pocket')}
-      ${stat('Your ceiling', '$'+budgetAwareCeiling(myIdx, p), 'The most this slot is worth to you given your cap and holes')}
-      ${stat('2025', prod.ppg!==undefined?prod.ppg+' ppg':'--', prod.label)}
-      ${stat('2026 rank', ecr.e?ecr.e.posRank:'--', ecr.label)}
-      ${stat('Schedule', sos!==null?(sos+' of 32'):'--', sos!==null?('1 is the easiest 2026 schedule for a '+p.pos):'No rating for this position')}
     </div>
 
     <div class="pcard-sec">
@@ -5891,49 +5936,37 @@ function renderPlayerCard(){
 
     <div class="pcard-tab-body ${pcardTab==='rankings'?'active':''}" data-pcard-tab-body="rankings">
       ${(()=>{const fb=fpBoard(p.name), d=expertDisagreement(p.name);
-        if(!fb) return '<p class="panel-sub">No FantasyPros expert panel data for him.</p>';
-        return `<div class="pcard-sec" style="margin-top:0;">
-          <h4>The expert panel</h4>
-          <p class="panel-sub" style="margin:0 0 6px;">
-            Ranked <strong>${fb.best}</strong> at best and <strong>${fb.worst}</strong> at worst across the panel, averaging ${fb.avg||''}${fb.sd!=null?`, standard deviation ${fb.sd}`:''}.
-            ${d && d.level==='contested' ? '<span style="color:var(--gold)"> They are genuinely split on him, so the consensus number is hiding disagreement.</span>'
-              : (d && d.level==='settled' ? '<span style="color:var(--jade)"> Little argument about what he is.</span>' : '')}
-          </p>
-          ${fb.vsAdp!=null && fb.vsAdp!==0 ? `<p class="panel-sub" style="margin:0 0 6px;">He is going <strong>${Math.abs(fb.vsAdp)} picks ${fb.vsAdp>0?'later':'earlier'}</strong> than the panel ranks him.</p>` : ''}
-          ${fb.upside!=null ? `<p class="panel-sub" style="margin:0;">Upside ${fb.upside} of 5, bust risk ${fb.bust} of 5${fb.sos!=null?`, schedule ${fb.sos} of 5`:''}.</p>` : ''}
-        </div>`;})()}
+        if(!fb) return '';
+        const spread = d && d.level==='contested' ? '<span style="color:var(--gold)">They are genuinely split on him, so the consensus number is hiding disagreement.</span>'
+          : (d && d.level==='settled' ? '<span style="color:var(--jade)">Little argument about what he is.</span>' : '');
+        const adpLine = fb.vsAdp!=null && fb.vsAdp!==0 ? ` Going ${Math.abs(fb.vsAdp)} picks ${fb.vsAdp>0?'later':'earlier'} than the panel ranks him.` : '';
+        const riskLine = fb.upside!=null ? ` Upside ${fb.upside} of 5, bust risk ${fb.bust} of 5${fb.sos!=null?`, schedule ${fb.sos} of 5`:''}.` : '';
+        return insight('Expert panel', `${fb.best}&ndash;${fb.worst} range`,
+          `Averaging ${fb.avg||''}${fb.sd!=null?`, standard deviation ${fb.sd}`:''}. ${spread}${adpLine}${riskLine}`);
+      })()}
       ${(()=>{const n=fpNote(p.name);
-        return n ? `<div class="pcard-sec">
-          <h4>The analyst write-up</h4>
-          <p class="panel-sub" style="margin:0;line-height:1.65;">${n.replace(/</g,'&lt;')}</p>
-        </div>` : '';})()}
-      <div class="pcard-sec">
-        <h4>What the analysts say</h4>
-        <p class="panel-sub" style="margin:0 0 6px;">${cons.label}</p>
-        <p class="panel-sub" style="margin:0 0 6px;">${ecr.label}</p>
-        ${note?`<p class="panel-sub" style="margin:0 0 6px;color:${note.dir>0?'var(--jade)':(note.dir<0?'var(--coral)':'var(--gold)')}">${note.why} <span style="color:var(--chalk-3)">(${note.source})</span></p>`:''}
-        ${inj?`<p class="panel-sub" style="margin:0 0 6px;color:var(--coral)">On ESPN's injury watch for 2026: ${inj}.</p>`:''}
-      </div>
+        return n ? insight('Analyst write-up', null, n.replace(/</g,'&lt;'), {clamp:true}) : '';})()}
+      ${(()=>{
+        const sentCls = sent.score>4?'jade':(sent.score<-4?'coral':'');
+        const lines = [cons.label, ecr.label,
+          note?`<span style="color:${note.dir>0?'var(--jade)':(note.dir<0?'var(--coral)':'var(--gold)')}">${note.why} (${note.source})</span>`:'',
+          inj?`<span style="color:var(--coral)">On ESPN's injury watch for 2026: ${inj}.</span>`:''].filter(Boolean);
+        return insight('Sentiment &amp; consensus', `${sent.score>0?'+':''}${sent.score}`, lines.join('<br>'), {cls:sentCls});
+      })()}
     </div>
 
     <div class="pcard-tab-body ${pcardTab==='value'?'active':''}" data-pcard-tab-body="value">
-      <div class="pcard-sec" style="margin-top:0;">
-        <h4>Contract term</h4>
-        <p class="panel-sub" style="margin:0;">${term.why}</p>
-      </div>
+      ${insight('Contract', `${term.years}yr &middot; $${termEconomics(base, term.years).total} total`, term.why)}
+      ${insight('Your ceiling', '$'+budgetAwareCeiling(myIdx, p), 'The most this slot is worth to you given your cap and holes.', {cls:'gold'})}
       ${(()=>{const st=stashProfile(p);
-        return st ? `<div class="pcard-sec"><h4>As a long contract</h4>
-          <p class="panel-sub" style="margin:0;">Held the full ${st.term.years} years he costs $${st.totalCost} of cap and the same out of pocket. Dropped after a year, the penalty is about $${Math.max(1,Math.ceil((st.econ.vals[1]||1)*0.1))} a year for the rest of the term.</p>
-        </div>` : '';})()}
+        return st ? insight('As a long contract', `$${st.totalCost} held full term`,
+          `Dropped after a year, the penalty is about $${Math.max(1,Math.ceil((st.econ.vals[1]||1)*0.1))} a year for the rest of the term.`) : '';})()}
     </div>
 
     <div class="pcard-tab-body ${pcardTab==='outlook'?'active':''}" data-pcard-tab-body="outlook">
-      <div class="pcard-sec" style="margin-top:0;">
-        <h4>Form and situation</h4>
-        <p class="panel-sub" style="margin:0 0 6px;">${prod.label}</p>
-        <p class="panel-sub" style="margin:0 0 6px;">${run.label}</p>
-        ${sos!==null?`<p class="panel-sub" style="margin:0 0 6px;">2026 schedule ranks ${sos} of 32 for a ${p.pos}, where 1 is easiest.</p>`:''}
-      </div>
+      ${insight('Production', prod.ppg!==undefined?prod.ppg+' ppg (2025)':null, prod.label)}
+      ${insight('Positional runway', null, run.label)}
+      ${sos!==null?insight('Schedule', `${sos} of 32`, `Where 1 is the easiest 2026 schedule for a ${p.pos}.`):''}
     </div>
 
     <div class="pcard-sec pcard-links">
@@ -5978,6 +6011,13 @@ function renderPlayerCard(){
       host.querySelectorAll('[data-pcard-tab-body]').forEach(el=>
         el.classList.toggle('active', el.dataset.pcardTabBody === pcardTab));
     }));
+  host.querySelectorAll('[data-clamp-toggle]').forEach(btn=>
+    btn.addEventListener('click', ()=>{
+      const body = document.getElementById(btn.dataset.clampToggle);
+      if(!body) return;
+      const nowClamped = body.classList.toggle('clamped');
+      btn.textContent = nowClamped ? 'show more' : 'show less';
+    }));
 
   /* Arrow keys and 1-5 are read off document.addEventListener('keydown'),
      which only fires for keystrokes this frame actually receives. Rendered
@@ -6015,6 +6055,15 @@ const TEAM_COLOR = {
   TEN:['#0C2340','#4B92DB'], WAS:['#5A1414','#FFB612'], FA:['#2A3450','#8FA3B8'],
 };
 function teamColors(nfl){ return TEAM_COLOR[nfl] || TEAM_COLOR.FA; }
+const TEAM_NICK = {
+  ARI:'CARDINALS', ATL:'FALCONS', BAL:'RAVENS', BUF:'BILLS', CAR:'PANTHERS', CHI:'BEARS',
+  CIN:'BENGALS', CLE:'BROWNS', DAL:'COWBOYS', DEN:'BRONCOS', DET:'LIONS', GB:'PACKERS',
+  HOU:'TEXANS', IND:'COLTS', JAC:'JAGUARS', KC:'CHIEFS', LAC:'CHARGERS', LAR:'RAMS',
+  LV:'RAIDERS', MIA:'DOLPHINS', MIN:'VIKINGS', NE:'PATRIOTS', NO:'SAINTS', NYG:'GIANTS',
+  NYJ:'JETS', PHI:'EAGLES', PIT:'STEELERS', SEA:'SEAHAWKS', SF:'49ERS', TB:'BUCCANEERS',
+  TEN:'TITANS', WAS:'COMMANDERS', FA:'FREE AGENT',
+};
+function teamNick(nfl){ return TEAM_NICK[nfl] || ''; }
 
 /* Club marks, 500px from ESPN's CDN. Their codes match ours everywhere except
    a couple of aliases, and a free agent gets nothing rather than a placeholder
