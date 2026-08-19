@@ -1,0 +1,59 @@
+ZUB DRAFT SIMULATOR -- INSIGHTS REPORT
+2000 paired replicates x 4 strategies = 8000 simulated rooms
+Runtime: 0.0s (0ms/room)
+
+=== STRATEGY SCOREBOARD ===
+(starter VOR = Blake's best-8 starting lineup value above replacement; rank = of 12 teams)
+
+1. walkaway
+   starter VOR:  mean 24.55  (sd 2.81, 10th-90th pct: 20.1-27.4)
+   league rank:  mean 5.25 of 12   top-3 finish: 28%   bottom-3 finish: 8%
+   spend:        mean $84   VOR per dollar: 0.292
+
+2. efficiency_only
+   starter VOR:  mean 24.22  (sd 2.89, 10th-90th pct: 19.9-27.4)
+   league rank:  mean 5.45 of 12   top-3 finish: 25%   bottom-3 finish: 8%
+   spend:        mean $86   VOR per dollar: 0.282
+
+3. stars_and_scrubs
+   starter VOR:  mean 24.16  (sd 1.73, 10th-90th pct: 22.0-26.5)
+   league rank:  mean 5.25 of 12   top-3 finish: 17%   bottom-3 finish: 1%
+   spend:        mean $86   VOR per dollar: 0.281
+
+4. aggressive_yellow
+   starter VOR:  mean 22.85  (sd 2.40, 10th-90th pct: 19.6-26.0)
+   league rank:  mean 6.46 of 12   top-3 finish: 10%   bottom-3 finish: 9%
+   spend:        mean $86   VOR per dollar: 0.266
+
+=== HEAD-TO-HEAD vs BASELINE (paired) ===
+walkaway vs efficiency_only: mean diff +0.33 VOR in favor of walkaway, t=14.03 (>99% confidence)
+walkaway vs aggressive_yellow: mean diff +1.71 VOR in favor of walkaway, t=29.76 (>99% confidence)
+walkaway vs stars_and_scrubs: mean diff +0.40 VOR in favor of walkaway, t=6.72 (>99% confidence)
+
+=== WHERE THE MONEY WENT (Blake, by strategy) ===
+walkaway             QB $0  RB $42  WR $22  TE $12  PK $3  DST $5
+efficiency_only      QB $0  RB $44  WR $25  TE $13  PK $2  DST $2
+aggressive_yellow    QB $0  RB $40  WR $38  TE $5  PK $2  DST $2
+stars_and_scrubs     QB $0  RB $62  WR $15  TE $4  PK $2  DST $2
+
+=== ROSTER COMPOSITION & BENCH (Blake, by strategy) ===
+(counts are full 18-man roster, including held players; RB/WR floor is 3 each, no TE floor)
+walkaway             QB 2.0  RB 4.0  WR 4.8  TE 3.2  PK 2.0  DST 2.0   bench VOR: 0.45
+efficiency_only      QB 2.0  RB 4.2  WR 4.8  TE 3.0  PK 2.0  DST 2.0   bench VOR: 0.77
+aggressive_yellow    QB 2.0  RB 3.7  WR 5.3  TE 2.9  PK 2.0  DST 2.0   bench VOR: 0.44
+stars_and_scrubs     QB 2.0  RB 4.1  WR 4.9  TE 3.1  PK 2.0  DST 2.0   bench VOR: 0.41
+
+=== ROBUSTNESS ACROSS ROOM TYPES (baseline strategy: walkaway) ===
+namechaser   n=754  mean starter VOR 23.96   mean rank 5.62
+hoarder      n=749  mean starter VOR 24.18   mean rank 5.48
+passive      n=761  mean starter VOR 25.90   mean rank 4.31
+panicker     n=768  mean starter VOR 23.89   mean rank 5.74
+rational     n=776  mean starter VOR 24.78   mean rank 5.16
+(rooms with 3+ rivals of a given persona are rarer by chance, so these read directionally, not precisely)
+
+=== TAKEAWAYS ===
+- Best performer: walkaway (mean rank 5.3 of 12, top-3 in 28% of rooms).
+- Worst performer: aggressive_yellow (mean rank 6.5 of 12).
+- Spread between best and worst strategy: 1.71 starter VOR, a modest gap worth more replicates to pin down.
+- Most consistent (lowest variance) strategy: stars_and_scrubs (sd 1.73). Lower variance matters if the goal is a durable floor, not just the best average outcome.
+- Best value-per-dollar: walkaway (0.292 VOR/$).
