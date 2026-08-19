@@ -6577,10 +6577,18 @@ function targetBoard(perSlot){
       .filter(p=>slot.eligible.includes(p.pos) && !claimed.has(p.name))
       /* Walk-away is a full lineup solve, so it is computed AFTER the list is
          cut to the handful that actually make the board, not for every
-         eligible player on the way. */
+         eligible player on the way.
+
+         rm bends quality the same way bidVerdict() already bends price for a
+         rated player (see ratingMultiplier there): Chase inflates a guy's
+         effective quality so he clears the bar and ranks higher even if he
+         is not quite the top raw number; Avoid does the reverse. Otherwise
+         rating someone Chase in Prep never actually surfaced him here, only
+         in the live bid verdict once you'd already found him yourself. */
       .map(p=>{
         const d = Math.max(1, suggestedDollar(p.mv, p.pos, p.name));
-        return { p, d, v:vor(p), eff: vor(p)/d, walk: d, sent: sentimentFor(p) };
+        const rm = ratingMultiplier(p.name);
+        return { p, d, v:vor(p), eff: (vor(p)/d)*rm, rm, walk: d, sent: sentimentFor(p), read: myRead(p.name) };
       })
       .filter(o=>o.d <= effMaxLegalBid(myIdx));
 
@@ -6598,8 +6606,9 @@ function targetBoard(perSlot){
          worthless if he was never worth much. You start eight, so the target
          for a starting slot is the best player you can get. The walk-away
          price then tells you how far to chase him, which is the part that
-         stops you overpaying. Quality picks the target, price caps the bid. */
-      picked = pool.sort((a,b)=>(b.v-a.v)).slice(0, perSlot);
+         stops you overpaying. Quality picks the target, price caps the bid.
+         rm nudges that quality by your own read, same reasoning as above. */
+      picked = pool.sort((a,b)=>(b.v*b.rm-a.v*a.rm)).slice(0, perSlot);
     }
     /* No walk-away solve here. The panel never displayed the number, so all it
        bought was an eight second wait to draw the board. The card computes it
@@ -7162,6 +7171,17 @@ function bidVerdict(p, bid, myIdx){
 
   /* ---- WEIGHTED FACTORS ---- */
   let score = 0;
+
+  // Your own rating, if you've set one. This doesn't add its own score --
+  // it already bent `market` above (see the comment there), which flows into
+  // the price-vs-value factor below. This just makes that bend visible
+  // instead of silent, matching this function's own stated goal: a verdict
+  // you cannot audit mid-auction is worse than no verdict.
+  const myRd = myRead(p.name);
+  if(myRd && myRd !== 'maintain'){
+    reasons.push({ sign:0, text:
+      `You rated him ${READ_BY_KEY[myRd].label}: ${READ_BY_KEY[myRd].blurb} His $${suggested} market figure reads as $${market} to you here.` });
+  }
 
   // 0. Inflation. What he is worth tonight, not what he was worth before the
   //    room started bidding. If backs have gone 30% over all night, the next
@@ -8989,16 +9009,23 @@ function renderTargetBoard(){
   if(!el) return;
   const board = targetBoard(4);
   if(!board.length){ el.innerHTML = '<p class="panel-sub" style="margin:0;">Every slot is filled. Nothing left to buy.</p>'; return; }
+  // same short-code convention as the pool table, so a rated player's presence
+  // (or higher rank) here is visible, not a silent side-effect of the rating
+  const shortRead = { avoid:'AV', fade:'FD', maintain:'MT', target:'TG', chase:'CH' };
+  const readCol = { avoid:'var(--coral)', fade:'var(--coral)', maintain:'var(--chalk-2)',
+                    target:'var(--jade)', chase:'var(--jade)' };
   el.innerHTML = board.map(h=>{
     const rows = h.targets.map(o=>{
       const eff = o.eff >= EFFICIENCY_BAR;
       const col = eff ? 'var(--jade)' : 'var(--chalk-3)';
       const bye = byeWeek(o.p);
+      const readTag = o.read
+        ? `<strong style="color:${readCol[o.read]};font-size:10px;letter-spacing:.06em;margin-left:5px;" title="You rated him ${READ_BY_KEY[o.read].label}">${shortRead[o.read]}</strong>` : '';
       return `<div class="budget-row" title="${o.p.name} projects ${projectedPpg(o.p).toFixed(1)} a game against a replacement of ${replacementLevel(o.p.pos).toFixed(1)}, so ${o.v.toFixed(1)} above what a dollar body gives you in that slot.">
         <span class="b-name" style="flex:1;min-width:0;">
           <b data-plan-pick="${o.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;font-weight:600;">${o.p.name}</b>
           <span class="pos-tag pos-${o.p.pos}" style="margin-left:4px;">${o.p.pos}</span>
-          <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${o.p.nfl}${bye?' &middot; bye '+bye:''}</span>
+          <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${o.p.nfl}${bye?' &middot; bye '+bye:''}</span>${readTag}
         </span>
         <span class="b-nums"><strong>$${o.d}</strong><span style="color:${col};font-size:11px;margin-left:8px;">${h.cheapSlot?'':o.eff.toFixed(2)+'/$'}</span></span>
       </div>`;
@@ -9013,6 +9040,12 @@ function renderTargetBoard(){
 }
 
 function renderPlanView(){
+  /* renderTargetBoard() populates the "Target board" panel that sits above
+     Squad Plan in the same view -- it was defined but never actually called
+     anywhere in the app, so that panel has been rendering permanently blank
+     regardless of anything else here. Belongs with Squad Plan's own render
+     since they're the same view and meant to update together. */
+  renderTargetBoard();
   const plan = planBudget();
   const els = ['planBody','planBodyTab'].map(id=>document.getElementById(id)).filter(Boolean);
   if(!els.length) return;
