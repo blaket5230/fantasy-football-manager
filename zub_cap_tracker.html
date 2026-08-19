@@ -369,6 +369,31 @@
   .pcard-links a{color:var(--peri);text-decoration:none;font-size:12px;margin-right:16px;}
   .pcard-links a:hover{text-decoration:underline;}
 
+  /* The card used to be seven pcard-sec blocks stacked in one long scroll --
+     real content, no organization, so finding "what do the experts think"
+     meant scrolling past contract math to get to it. Identity (header) and
+     the numbers you check on every player (stat grid, your read) stay
+     visible above the fold; everything that's genuinely a different kind of
+     question -- outside opinion, the money math, situational context --
+     moves behind its own tab, same visual language as the sub-tabs
+     elsewhere in the app, scoped to this card only so the two never fight
+     over which buttons are "active". */
+  .pcard-tabs{
+    display:flex;gap:4px;margin:22px 0 16px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+  }
+  .pcard-tab{
+    background:none;border:none;border-bottom:2px solid transparent;
+    padding:8px 14px 8px 2px;cursor:pointer;font-family:'Archivo',sans-serif;
+    font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--chalk-3);
+    transition:all var(--fast) var(--ease);
+  }
+  .pcard-tab:hover{color:var(--chalk-2);}
+  .pcard-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+  .pcard-tab-body{display:none;}
+  .pcard-tab-body.active{display:block;}
+  .pcard-tab-body .pcard-sec:first-child{margin-top:0;}
+
   /* ---- draft sidebar tabs ---- */
   .side-panel{position:sticky;top:16px;}
   .side-tabs{display:flex;gap:2px;margin:-4px -6px 14px;flex-wrap:wrap;}
@@ -1367,6 +1392,11 @@
 
   <div class="status-strip" id="statusStrip"></div>
 
+  <!-- Everything below belongs to the currently active league. A league with
+       no working tools yet (anything that isn't this NFL auction-cap format)
+       shows the placeholder in #leaguePlaceholder instead -- see the LEAGUE
+       REGISTRY section for the switch. -->
+  <div id="appBody">
   <!-- Nine equal tabs told you nothing about what any of them were for or when
        you would want them. These are three different jobs done at three
        different times, so the navigation now says so: the mode picks the job,
@@ -1802,8 +1832,12 @@
   <div class="footnote">
     Editable ledger &middot; changes save automatically to your browser &middot; seeded from the ZUB Rosters sheet, last updated <span id="footerDate">1/5/2026</span>.
   </div>
+  </div>
+
+  <div id="leaguePlaceholder" hidden></div>
 </div>
 
+<div id="leagueModalHost"></div>
 <div class="save-toast" id="saveToast">Saved</div>
 
 <script>
@@ -5416,6 +5450,9 @@ function termEconomics(base, years){
    only you know. The rating sits next to the analyst view deliberately: the
    interesting number is not either one alone, it is the gap between them. */
 let cardOpen = null;
+/* Stays put across a re-render (rating a player, stepping to the next one)
+   so paging through a list doesn't keep bouncing you back to the first tab. */
+let pcardTab = 'rankings';
 
 /* The list you are looking at when you open a card is the list you want to
    walk through, so navigation follows the current filter and sort rather than
@@ -5561,45 +5598,62 @@ function renderPlayerCard(){
       </p>
     </div>
 
-    ${(()=>{const fb=fpBoard(p.name), d=expertDisagreement(p.name);
-      if(!fb) return '';
-      return `<div class="pcard-sec">
-        <h4>The expert panel</h4>
-        <p class="panel-sub" style="margin:0 0 6px;">
-          Ranked <strong>${fb.best}</strong> at best and <strong>${fb.worst}</strong> at worst across the panel, averaging ${fb.avg||''}${fb.sd!=null?`, standard deviation ${fb.sd}`:''}.
-          ${d && d.level==='contested' ? '<span style="color:var(--gold)"> They are genuinely split on him, so the consensus number is hiding disagreement.</span>'
-            : (d && d.level==='settled' ? '<span style="color:var(--jade)"> Little argument about what he is.</span>' : '')}
-        </p>
-        ${fb.vsAdp!=null && fb.vsAdp!==0 ? `<p class="panel-sub" style="margin:0 0 6px;">He is going <strong>${Math.abs(fb.vsAdp)} picks ${fb.vsAdp>0?'later':'earlier'}</strong> than the panel ranks him.</p>` : ''}
-        ${fb.upside!=null ? `<p class="panel-sub" style="margin:0;">Upside ${fb.upside} of 5, bust risk ${fb.bust} of 5${fb.sos!=null?`, schedule ${fb.sos} of 5`:''}.</p>` : ''}
-      </div>`;})()}
-
-    ${(()=>{const n=fpNote(p.name);
-      return n ? `<div class="pcard-sec">
-        <h4>The analyst write-up</h4>
-        <p class="panel-sub" style="margin:0;line-height:1.65;">${n.replace(/</g,'&lt;')}</p>
-      </div>` : '';})()}
-
-    <div class="pcard-sec">
-      <h4>What the analysts say</h4>
-      <p class="panel-sub" style="margin:0 0 6px;">${cons.label}</p>
-      <p class="panel-sub" style="margin:0 0 6px;">${ecr.label}</p>
-      ${note?`<p class="panel-sub" style="margin:0 0 6px;color:${note.dir>0?'var(--jade)':(note.dir<0?'var(--coral)':'var(--gold)')}">${note.why} <span style="color:var(--chalk-3)">(${note.source})</span></p>`:''}
-      ${inj?`<p class="panel-sub" style="margin:0 0 6px;color:var(--coral)">On ESPN's injury watch for 2026: ${inj}.</p>`:''}
+    <!-- Everything above is what you check on every player. Everything below
+         is a different KIND of question -- what outsiders think, what he
+         actually costs, how his situation is trending -- so it moves behind
+         a tab instead of one long scroll you have to page through every time. -->
+    <div class="pcard-tabs" id="pcardTabs">
+      <button class="pcard-tab ${pcardTab==='rankings'?'active':''}" data-pcard-tab="rankings">Rankings</button>
+      <button class="pcard-tab ${pcardTab==='value'?'active':''}" data-pcard-tab="value">Value</button>
+      <button class="pcard-tab ${pcardTab==='outlook'?'active':''}" data-pcard-tab="outlook">Outlook</button>
     </div>
 
-    <div class="pcard-sec">
-      <h4>Form and situation</h4>
-      <p class="panel-sub" style="margin:0 0 6px;">${prod.label}</p>
-      <p class="panel-sub" style="margin:0 0 6px;">${run.label}</p>
-      ${sos!==null?`<p class="panel-sub" style="margin:0 0 6px;">2026 schedule ranks ${sos} of 32 for a ${p.pos}, where 1 is easiest.</p>`:''}
+    <div class="pcard-tab-body ${pcardTab==='rankings'?'active':''}" data-pcard-tab-body="rankings">
+      ${(()=>{const fb=fpBoard(p.name), d=expertDisagreement(p.name);
+        if(!fb) return '<p class="panel-sub">No FantasyPros expert panel data for him.</p>';
+        return `<div class="pcard-sec" style="margin-top:0;">
+          <h4>The expert panel</h4>
+          <p class="panel-sub" style="margin:0 0 6px;">
+            Ranked <strong>${fb.best}</strong> at best and <strong>${fb.worst}</strong> at worst across the panel, averaging ${fb.avg||''}${fb.sd!=null?`, standard deviation ${fb.sd}`:''}.
+            ${d && d.level==='contested' ? '<span style="color:var(--gold)"> They are genuinely split on him, so the consensus number is hiding disagreement.</span>'
+              : (d && d.level==='settled' ? '<span style="color:var(--jade)"> Little argument about what he is.</span>' : '')}
+          </p>
+          ${fb.vsAdp!=null && fb.vsAdp!==0 ? `<p class="panel-sub" style="margin:0 0 6px;">He is going <strong>${Math.abs(fb.vsAdp)} picks ${fb.vsAdp>0?'later':'earlier'}</strong> than the panel ranks him.</p>` : ''}
+          ${fb.upside!=null ? `<p class="panel-sub" style="margin:0;">Upside ${fb.upside} of 5, bust risk ${fb.bust} of 5${fb.sos!=null?`, schedule ${fb.sos} of 5`:''}.</p>` : ''}
+        </div>`;})()}
+      ${(()=>{const n=fpNote(p.name);
+        return n ? `<div class="pcard-sec">
+          <h4>The analyst write-up</h4>
+          <p class="panel-sub" style="margin:0;line-height:1.65;">${n.replace(/</g,'&lt;')}</p>
+        </div>` : '';})()}
+      <div class="pcard-sec">
+        <h4>What the analysts say</h4>
+        <p class="panel-sub" style="margin:0 0 6px;">${cons.label}</p>
+        <p class="panel-sub" style="margin:0 0 6px;">${ecr.label}</p>
+        ${note?`<p class="panel-sub" style="margin:0 0 6px;color:${note.dir>0?'var(--jade)':(note.dir<0?'var(--coral)':'var(--gold)')}">${note.why} <span style="color:var(--chalk-3)">(${note.source})</span></p>`:''}
+        ${inj?`<p class="panel-sub" style="margin:0 0 6px;color:var(--coral)">On ESPN's injury watch for 2026: ${inj}.</p>`:''}
+      </div>
     </div>
 
-    ${(()=>{const st=stashProfile(p);
-      return st ? `<div class="pcard-sec"><h4>As a long contract</h4>
+    <div class="pcard-tab-body ${pcardTab==='value'?'active':''}" data-pcard-tab-body="value">
+      <div class="pcard-sec" style="margin-top:0;">
+        <h4>Contract term</h4>
         <p class="panel-sub" style="margin:0;">${term.why}</p>
-        <p class="panel-sub" style="margin:4px 0 0;">Held the full ${st.term.years} years he costs $${st.totalCost} of cap and the same out of pocket. Dropped after a year, the penalty is about $${Math.max(1,Math.ceil((st.econ.vals[1]||1)*0.1))} a year for the rest of the term.</p>
-      </div>` : '';})()}
+      </div>
+      ${(()=>{const st=stashProfile(p);
+        return st ? `<div class="pcard-sec"><h4>As a long contract</h4>
+          <p class="panel-sub" style="margin:0;">Held the full ${st.term.years} years he costs $${st.totalCost} of cap and the same out of pocket. Dropped after a year, the penalty is about $${Math.max(1,Math.ceil((st.econ.vals[1]||1)*0.1))} a year for the rest of the term.</p>
+        </div>` : '';})()}
+    </div>
+
+    <div class="pcard-tab-body ${pcardTab==='outlook'?'active':''}" data-pcard-tab-body="outlook">
+      <div class="pcard-sec" style="margin-top:0;">
+        <h4>Form and situation</h4>
+        <p class="panel-sub" style="margin:0 0 6px;">${prod.label}</p>
+        <p class="panel-sub" style="margin:0 0 6px;">${run.label}</p>
+        ${sos!==null?`<p class="panel-sub" style="margin:0 0 6px;">2026 schedule ranks ${sos} of 32 for a ${p.pos}, where 1 is easiest.</p>`:''}
+      </div>
+    </div>
 
     <div class="pcard-sec pcard-links">
       <h4>Read more</h4>
@@ -5631,6 +5685,17 @@ function renderPlayerCard(){
       setMyRead(p.name, myRead(p.name)===k ? null : k);
       renderPlayerCard();
       renderPoolView();
+    }));
+  /* Scoped to this card's own host, never document, so switching a tab here
+     can't touch the identically-styled sub-tabs elsewhere in the app and a
+     click on those can't touch this. */
+  host.querySelectorAll('[data-pcard-tab]').forEach(btn=>
+    btn.addEventListener('click', ()=>{
+      pcardTab = btn.dataset.pcardTab;
+      host.querySelectorAll('[data-pcard-tab]').forEach(b=>
+        b.classList.toggle('active', b.dataset.pcardTab === pcardTab));
+      host.querySelectorAll('[data-pcard-tab-body]').forEach(el=>
+        el.classList.toggle('active', el.dataset.pcardTabBody === pcardTab));
     }));
 
   /* Arrow keys and 1-5 are read off document.addEventListener('keydown'),
