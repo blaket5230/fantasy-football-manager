@@ -3891,6 +3891,14 @@ function renderDraftView(){
   bindSideTabs();
   bindDraftSubs();
   bindMockDraftControls();
+  /* The top status strip (cap space, active players, open slots, dead money)
+     otherwise only refreshes on the debounced ~900ms save cycle (see
+     flushSave()), which meant logging a pick, reassigning one, or editing its
+     price all left the header showing stale numbers for close to a second --
+     fine outside a live auction, disorienting during one. renderDraftView()
+     already runs after every one of those actions, so this is the one place
+     that covers all of them without needing to patch each call site. */
+  renderStatusStrip();
   const rows = state.teams.map((t,i)=>{
     const slots = effOpenSlots(i);
     const isMe = t.owner===MY_TEAM_OWNER;
