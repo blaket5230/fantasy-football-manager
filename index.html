@@ -1604,8 +1604,12 @@
             <span id="undoBar"></span>
             <span class="row-act" tabindex="0" role="button" id="exportBoardBtn" title="Copy the draft board as text">export board</span>
             <span class="row-act" tabindex="0" role="button" id="exportRosterBtn" title="Copy your roster as text">export my roster</span>
+            <span class="row-act" tabindex="0" role="button" id="downloadBoardBtn" title="Download every pick logged so far as a real file, so a crashed tab or cleared storage can't lose your draft">download board backup</span>
+            <span class="row-act" tabindex="0" role="button" id="restoreBoardBtn" title="Restore the draft board from a previously downloaded backup file">restore board backup</span>
+            <input type="file" id="restoreBoardFile" accept=".json,application/json" style="display:none;">
           </div>
           <p class="panel-sub" id="exportNote" style="margin:0 0 8px;"></p>
+          <p class="panel-sub" id="boardBackupNote" style="margin:0 0 8px;min-height:1.2em;"></p>
           <textarea id="exportBox" style="display:none;width:100%;height:140px;background:var(--ink);border:1px solid var(--line);border-radius:7px;color:var(--chalk-2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px;"></textarea>
           <div class="field-row" style="margin-top:16px;">
             <button class="primary" id="commitDraftBtn">Commit draft to rosters</button>
@@ -1668,7 +1672,7 @@
   </div>
 
   <div class="footnote">
-    Editable ledger &middot; changes save automatically to your browser &middot; seeded from the ZUB Rosters sheet, last updated 1/5/2026.
+    Editable ledger &middot; changes save automatically to your browser &middot; seeded from the ZUB Rosters sheet, last updated <span id="footerDate">1/5/2026</span>.
   </div>
 </div>
 
@@ -2640,10 +2644,6 @@ function moveTabIndicator(){
   ind.style.width = active.offsetWidth + 'px';
 }
 window.addEventListener('resize', moveTabIndicator);
-document.addEventListener('DOMContentLoaded', ()=>{
-  const rb = document.getElementById('reseedBtn');
-  if(rb) rb.addEventListener('click', reseedRosters);
-});
 { const rb = document.getElementById('reseedBtn'); if(rb) rb.addEventListener('click', reseedRosters); }
 if(document.fonts && document.fonts.ready){ document.fonts.ready.then(moveTabIndicator); }
 
@@ -3461,7 +3461,12 @@ function qualityCountAtPos(teamIdx, pos){
 }
 function demandStateFor(teamIdx, pos){
   if(!['QB','RB','WR','TE'].includes(pos)){
-    return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'stacked'; // PK/DST, simple case
+    // PK/DST: 1 starter + 1 earmarked bench cover (see BENCH_SLOTS below) is
+    // the intended full complement, not "stacked" -- planBudget() deliberately
+    // budgets for that 2nd one (bye-week cover). Only a genuine 3rd is excess.
+    const held = effPosCounts(teamIdx)[pos] || 0;
+    if(held >= 2) return 'stacked';
+    return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'moderate';
   }
   const q = qualityCountAtPos(teamIdx, pos);
   if(q>=2) return 'stacked';
@@ -4083,6 +4088,59 @@ function importRatingsCSV(file){
   reader.readAsText(file);
 }
 
+/* The picks logged so far -- who, for how much -- are the one thing that's
+   catastrophic to lose mid-auction and impossible to reconstruct from memory.
+   exportText('board')/doExport() above only copy tab-separated text to the
+   clipboard, useful for pasting into a league sheet but not a real backup:
+   nothing to load back in if this tab dies or storage gets cleared. Same
+   genuine-file-download pattern as the ratings CSV above, for the board. */
+function exportDraftBoardJSON(){
+  const payload = {
+    kind: 'zub-draft-board-backup',
+    version: 1,
+    savedAt: new Date().toISOString(),
+    currentYear: state.currentYear,
+    draftPicks: state.draftPicks || [],
+    planManual: state.planManual || {},
+    slotTargets: state.slotTargets || {}
+  };
+  downloadTextFile(JSON.stringify(payload, null, 2),
+    `zub-draft-board-${new Date().toISOString().slice(0,10)}-${Date.now()}.json`, 'application/json');
+  const n = document.getElementById('boardBackupNote');
+  if(n){
+    n.textContent = `Downloaded ${payload.draftPicks.length} pick${payload.draftPicks.length===1?'':'s'}.`;
+    setTimeout(()=>{ if(n.textContent.indexOf('Downloaded')===0) n.textContent=''; }, 4000);
+  }
+}
+
+function importDraftBoardJSON(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    let parsed;
+    try{
+      parsed = JSON.parse(String(reader.result));
+      if(!parsed || parsed.kind !== 'zub-draft-board-backup' || !Array.isArray(parsed.draftPicks)) throw new Error('bad shape');
+    }catch(e){
+      alert("Couldn't read that as a draft board backup. It needs to be a file this tool downloaded (Draft Day → History → download board backup).");
+      return;
+    }
+    const current = (state.draftPicks||[]).length;
+    if(!confirm(`Replace the current draft board (${current} pick${current===1?'':'s'}) with this backup (${parsed.draftPicks.length} pick${parsed.draftPicks.length===1?'':'s'}, saved ${parsed.savedAt||'unknown time'})? This can't be undone.`)) return;
+    pushUndo('restoring draft board backup');
+    state.draftPicks = parsed.draftPicks;
+    if(parsed.currentYear) state.currentYear = parsed.currentYear;
+    state.planManual = parsed.planManual || {};
+    state.slotTargets = parsed.slotTargets || {};
+    saveState();
+    renderDraftView();
+    renderLeagueGrid();
+    const n = document.getElementById('boardBackupNote');
+    if(n) n.textContent = `Restored ${parsed.draftPicks.length} pick${parsed.draftPicks.length===1?'':'s'} from backup.`;
+  };
+  reader.readAsText(file);
+}
+
 function doExport(kind){
   const text = exportText(kind);
   const box = document.getElementById('exportBox');
@@ -4103,14 +4161,31 @@ function doExport(kind){
 
 function renderDraftPool(){
   bindAddPlayer();
-  /* Skip the table build when its tab is not showing. It is the most expensive
-     thing on the page and you are usually looking at the bid panel. */
-  if(typeof draftSub !== 'undefined' && draftSub !== 'pool'){ renderUndo(); return; }
-  renderUndo();
+  /* These buttons live in the History sub-tab's markup, not Pool's -- they
+     used to be bound below the early-return guard, which meant they only
+     ever attached once Pool had been opened at least once in the session
+     (default sub-tab is 'bid', see draftSub's initial value). Same bug
+     pattern as the old keydown-listener one described in
+     HANDOFF_CLAUDE_CODE.md: a listener that's only ever registered if a
+     specific tab happened to render first. Kept unconditional here so they
+     work regardless of which Draft Day sub-tab loads first. */
   [['exportBoardBtn','board'],['exportRosterBtn','roster']].forEach(([id,kind])=>{
     const b = document.getElementById(id);
     if(b && !b.dataset.bound){ b.dataset.bound='1'; b.addEventListener('click', ()=>doExport(kind)); }
   });
+  const dbb = document.getElementById('downloadBoardBtn');
+  if(dbb && !dbb.dataset.bound){ dbb.dataset.bound='1'; dbb.addEventListener('click', exportDraftBoardJSON); }
+  const rbb = document.getElementById('restoreBoardBtn');
+  const rbf = document.getElementById('restoreBoardFile');
+  if(rbb && rbf && !rbb.dataset.bound){
+    rbb.dataset.bound='1';
+    rbb.addEventListener('click', ()=>rbf.click());
+    rbf.addEventListener('change', ()=>{ if(rbf.files[0]) importDraftBoardJSON(rbf.files[0]); rbf.value=''; });
+  }
+  /* Skip the table build when its tab is not showing. It is the most expensive
+     thing on the page and you are usually looking at the bid panel. */
+  if(typeof draftSub !== 'undefined' && draftSub !== 'pool'){ renderUndo(); return; }
+  renderUndo();
   const bar = document.getElementById('draftFilterBar');
   if(bar && bar.dataset.built !== '1'){ bar.innerHTML = poolFilterBar('draft'); bar.dataset.built='1'; }
   bindPoolFilters('draft', renderDraftPool);
@@ -4244,8 +4319,10 @@ function renderBidPanel(){
     </p>
     <div style="margin:4px 0;" id="bidderPillWrap">${bidderPills || '<span class="panel-sub">No other teams to track, so nobody can outbid you.</span>'}</div>
 
-    <div class="bid-slider-wrap">
-      <input type="range" id="bidSlider" min="1" max="20" value="1">
+    <div class="bid-slider-wrap" style="display:flex;align-items:center;gap:10px;">
+      <input type="range" id="bidSlider" min="1" max="20" value="1" style="flex:1;">
+      <span style="font-family:'JetBrains Mono',monospace;color:var(--chalk-3);">$</span>
+      <input type="number" id="bidNumberInput" min="1" max="20" value="1" style="width:64px;" title="Exact bid amount -- syncs with the slider">
     </div>
     <div class="bid-readout" id="bidReadout"></div>
 
@@ -4278,6 +4355,12 @@ function renderBidPanel(){
 
   document.getElementById('bidSlider').addEventListener('input', (e)=>{
     currentBidValue = Number(e.target.value);
+    updateBidDynamicParts();
+  });
+  document.getElementById('bidNumberInput').addEventListener('input', (e)=>{
+    const v = Math.round(Number(e.target.value));
+    if(!v || v<1) return;   // mid-typing (empty/partial), don't fight the field
+    currentBidValue = v;
     updateBidDynamicParts();
   });
   document.querySelectorAll('.bidder-pill').forEach(pill=>{
@@ -4352,10 +4435,16 @@ function updateBidDynamicParts(){
   });
 
   const slider = document.getElementById('bidSlider');
+  const numInput = document.getElementById('bidNumberInput');
   const sliderMax = Math.max(myMax, fieldBest, marketAdjusted, 20, currentBidValue);
   if(currentBidValue > sliderMax) currentBidValue = sliderMax;
   slider.max = sliderMax;
   slider.value = currentBidValue;
+  if(numInput){
+    numInput.max = sliderMax;
+    // Don't stomp on what's mid-typing in the field itself.
+    if(document.activeElement !== numInput) numInput.value = currentBidValue;
+  }
 
   // The verdict drives everything below, including the colour of the big number.
   /* The slider follows the bidding in the room, so the number on it is what
@@ -9057,9 +9146,16 @@ function render(){
    disconnected: a hung cross-origin fetch here used to leave the whole page
    permanently blank, since render() waited on it before running at all. */
 loadState().then(()=>{
+  // loadState() already runs render() once internally (see its own definition
+  // above) -- this used to call render() a second time here for no reason
+  // beyond setting the two badges below.
   const badge = document.getElementById('valuesBadge');
   if(badge) badge.textContent = `Market values: ${VALUES_SNAPSHOT_DATE} snapshot`;
-  render();
+  const footerDateEl = document.getElementById('footerDate');
+  if(footerDateEl){
+    const [y,m,d] = VALUES_SNAPSHOT_DATE.split('-').map(Number);
+    footerDateEl.textContent = `${m}/${d}/${y}`;
+  }
 });
 </script>
 </body>
