@@ -749,13 +749,26 @@
   .trade-verdict strong{color:var(--chalk);}
 
   /* ---------- DRAFT LAYOUT ---------- */
-  .draft-layout{display:grid;grid-template-columns:380px 1fr;gap:18px;align-items:start;}
+  /* Three columns wide: reference panels, the actual bid/nominate/plan/pool
+     work, and the draft board -- always visible, not a tab you leave the bid
+     panel to check. Two intermediate breakpoints before the full single-
+     column mobile stack: first the history column drops below (still full
+     width, still on screen without much scrolling), then at the existing
+     mobile breakpoint everything stacks the way it always has. */
+  .draft-layout{display:grid;grid-template-columns:380px 1fr 340px;gap:18px;align-items:start;}
   .draft-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px;min-width:0;}
   .draft-sidebar .panel{margin-bottom:0;min-width:0;overflow:hidden;}
   .draft-main{min-width:0;}
+  .draft-history-col{position:sticky;top:16px;min-width:0;}
+  .draft-history-col .panel{margin-bottom:0;min-width:0;}
+  @media (max-width:1400px){
+    .draft-layout{grid-template-columns:340px 1fr;}
+    .draft-history-col{grid-column:1 / -1;position:static;}
+  }
   @media (max-width:920px){
     .draft-layout{grid-template-columns:1fr;}
     .draft-sidebar{position:static;}
+    .draft-history-col{position:static;}
   }
 
   .budget-row{
@@ -773,6 +786,26 @@
     white-space:nowrap;flex-shrink:0;
   }
   .budget-row .b-nums strong{color:var(--gold);font-size:13.5px;}
+
+  /* Draft board picks stack as compact two-line cards, not a table --
+     the column that hosts them is a fixed 340px and a real 5-column
+     table (name, team, price, diff, remove) simply doesn't fit without
+     either truncating team names into unreadable slivers or forcing
+     a sideways scroll on a panel meant to be glanced at mid-bid. */
+  .pick-row{padding:8px 0;border-bottom:1px solid var(--line-soft);}
+  .pick-row:last-child{border-bottom:none;}
+  .pick-row-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;}
+  .pick-row-top .pr-name{color:var(--chalk);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pick-row-top .pr-price{font-family:'JetBrains Mono',monospace;color:var(--gold);flex-shrink:0;}
+  .pick-row-diff{font-size:10.5px;color:var(--chalk-3);margin-top:1px;}
+  .pick-row-bottom{display:flex;align-items:center;gap:6px;margin-top:5px;}
+  .pick-row-bottom select.pick-team-select{
+    flex:1;min-width:0;padding:5px 6px;font-size:11px;
+  }
+  .pick-row-bottom input.pick-price-input{
+    width:52px;flex-shrink:0;padding:5px 6px;font-size:11px;
+  }
+  .pick-row-bottom .icon-btn{flex-shrink:0;padding:5px 7px;font-size:10.5px;}
 
   /* ---------- ROSTER SLOTS ---------- */
   .slot-chip-row{display:flex;flex-wrap:wrap;gap:6px;}
@@ -1512,6 +1545,30 @@
       </div>
 
       <div class="draft-main">
+        <div class="panel" id="mockDraftPanel" style="border:1px solid var(--line);">
+          <div id="mockDraftIdle">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <span class="panel-sub" style="margin:0;">Want to rehearse before the real thing? Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.</span>
+              <button class="row-act" tabindex="0" role="button" id="startMockDraftBtn">start mock draft</button>
+            </div>
+            <div id="mockHistoryBody" style="margin-top:10px;"></div>
+          </div>
+          <div id="mockDraftActive" style="display:none;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#3a2a0a;border:1px solid #7a5a10;border-radius:7px;padding:8px 12px;">
+              <strong style="color:#ffcf5c;">MOCK DRAFT IN PROGRESS</strong>
+              <span class="panel-sub" style="margin:0;">Practice only -- nothing here is saved, and it never touches your real board.</span>
+              <span style="flex:1;"></span>
+              <span class="row-act" tabindex="0" role="button" id="newMockDraftBtn" title="Reshuffle rival personalities and start over from your real current roster">new mock draft</span>
+              <span class="row-act" tabindex="0" role="button" id="endMockDraftBtn" title="Exit back to your real draft board, unchanged">end mock draft</span>
+            </div>
+            <p class="panel-sub" id="mockAnnounce" style="margin:8px 0 4px;min-height:1.4em;"></p>
+            <div class="field-row" style="margin-top:4px;">
+              <button class="primary" id="mockNextNomBtn">Next nomination</button>
+              <span class="row-act" tabindex="0" role="button" id="mockFieldTakesBtn" title="Let the highest simulated rival bid win this player at the resolved price">field takes him</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Four different jobs used to sit on one scroll. They are now four
              sub-tabs: you are bidding, or planning what to put up, or checking
              your board, or looking back at what has gone. Only one at a time. -->
@@ -1520,9 +1577,9 @@
           <button class="sub-tab" data-sub="nominate">Nominate</button>
           <button class="sub-tab" data-sub="plan">My plan</button>
           <button class="sub-tab" data-sub="pool">Pool</button>
-          <button class="sub-tab" data-sub="history">Board</button>
         </nav>
 
+        <div id="situationStrip" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em;color:var(--chalk-2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:7px 12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px 14px;"></div>
         <div id="endgameAlert"></div>
         <div id="runAlert"></div>
 
@@ -1594,18 +1651,28 @@
         </div>
 
         </div>
+      </div>
 
-        <div class="sub-body" data-sub="history" hidden>
+      <!-- Draft board used to be a fifth sub-tab, meaning checking it meant
+           losing sight of whatever you were bidding on. It's the one thing
+           you want visible the entire time, the same way a live auction
+           room's own running sheet always is, so it's its own persistent
+           third column instead -- always on screen, no click required. -->
+      <div class="draft-history-col">
         <div class="panel">
           <h3>Draft board</h3>
           <p class="panel-sub">Live and fully editable. Reassign the team, change the price, or remove a pick entirely. Contract length isn't a factor here, that gets set after the draft per the rules, everything logs as a placeholder until you commit.</p>
-          <div class="table-scroll"><table class="result-table" id="draftHistoryTable"></table></div>
+          <div id="draftHistoryTable"></div>
           <div class="field-row" style="margin-top:12px;align-items:center;">
             <span id="undoBar"></span>
             <span class="row-act" tabindex="0" role="button" id="exportBoardBtn" title="Copy the draft board as text">export board</span>
             <span class="row-act" tabindex="0" role="button" id="exportRosterBtn" title="Copy your roster as text">export my roster</span>
+            <span class="row-act" tabindex="0" role="button" id="downloadBoardBtn" title="Download every pick logged so far as a real file, so a crashed tab or cleared storage can't lose your draft">download board backup</span>
+            <span class="row-act" tabindex="0" role="button" id="restoreBoardBtn" title="Restore the draft board from a previously downloaded backup file">restore board backup</span>
+            <input type="file" id="restoreBoardFile" accept=".json,application/json" style="display:none;">
           </div>
           <p class="panel-sub" id="exportNote" style="margin:0 0 8px;"></p>
+          <p class="panel-sub" id="boardBackupNote" style="margin:0 0 8px;min-height:1.2em;"></p>
           <textarea id="exportBox" style="display:none;width:100%;height:140px;background:var(--ink);border:1px solid var(--line);border-radius:7px;color:var(--chalk-2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px;"></textarea>
           <div class="field-row" style="margin-top:16px;">
             <button class="primary" id="commitDraftBtn">Commit draft to rosters</button>
@@ -1628,8 +1695,20 @@
       <p class="panel-sub">Set what you want to spend at each slot and see who that money buys. Type over any figure to pin it and the rest rebalance around it. <span class="th-help" title="Two kicker and defence slots are included on purpose: covering a bye at the draft costs $1 of cap, while patching it in season costs $5 out of pocket. Leave the figures alone and the split weights itself toward the slots that decide seasons. This is the same panel you get on Draft Day.">Why two kickers?</span></p>
       <div id="planBodyTab"></div>
     </div>
-          </div>
+    <div class="panel">
+      <h3>Positional scarcity</h3>
+      <p class="panel-sub">Who's actually thinning out, position by position, so you're not finding out for the first time mid-bid. Same read the sidebar gives you once the draft is live.</p>
+      <div id="boardStateBodyPlan"></div>
+    </div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
+        <h3 style="margin-bottom:0;font-size:13.5px;">Ideal team from here</h3>
+        <span class="backlink" id="solverTogglePlan" style="margin:0;font-size:11px;">show</span>
       </div>
+      <p class="panel-sub" style="margin-top:4px;">The strongest team your money could still buy, given who's gone and what the room is paying. Best case, not forecast.</p>
+      <div id="solverBodyPlan"></div>
+    </div>
+          </div>
   <!-- PLAYER POOL -->
   <div class="view" id="view-pool">
     <div class="panel">
@@ -1668,7 +1747,7 @@
   </div>
 
   <div class="footnote">
-    Editable ledger &middot; changes save automatically to your browser &middot; seeded from the ZUB Rosters sheet, last updated 1/5/2026.
+    Editable ledger &middot; changes save automatically to your browser &middot; seeded from the ZUB Rosters sheet, last updated <span id="footerDate">1/5/2026</span>.
   </div>
 </div>
 
@@ -2215,7 +2294,8 @@ const DRAFT_POOL = [
   {name:"Jaret Patterson",pos:"RB",nfl:"LAC",mv:40},
   {name:"Trey Lance",pos:"QB",nfl:"LAC",mv:40},
   {name:"JuJu Smith-Schuster",pos:"WR",nfl:"NYG",mv:40},
-  {name:"Lil'Jordan Humphrey",pos:"WR",nfl:"DEN",mv:40}
+  {name:"Lil'Jordan Humphrey",pos:"WR",nfl:"DEN",mv:40},
+  {name:"Arizona Cardinals",pos:"DST",nfl:"ARI",mv:40}
 ];
 
 const FP_BOARD = {"Jahmyr Gibbs":[1,5,1,5,0,1,3,0.9],"Bijan Robinson":[1,5,1,2,0,1,5,1.0],"Ja'Marr Chase":[1,5,1,4,0,2,6,0.9],"Jaxon Smith-Njigba":[2,5,2,3,3,2,18,1.8],"Amon-Ra St. Brown":[2,5,1,4,5,4,12,1.1],"Jonathan Taylor":[2,4,3,4,-2,2,17,3.4],"CeeDee Lamb":[2,4,2,2,7,7,21,2.7],"Christian McCaffrey":[2,4,4,2,-5,3,37,5.9],"James Cook III":[2,4,2,2,-3,4,20,3.3],"Justin Jefferson":[2,4,2,5,5,6,38,5.2],"Derrick Henry":[3,4,2,3,1,6,30,4.2],"Drake London":[3,5,2,3,8,9,37,4.8],"A.J. Brown":[3,5,2,2,14,7,35,6.1],"Saquon Barkley":[3,4,3,4,-2,5,37,6.1],"Ashton Jeanty":[3,5,2,2,-7,5,42,7.4],"Brock Bowers":[3,5,2,3,7,16,56,6.4],"George Pickens":[3,4,4,2,7,11,46,6.3],"Chase Brown":[4,5,2,2,-3,8,45,7.7],"Omarion Hampton":[4,5,3,3,-9,13,45,7.9],"Josh Allen":[4,5,2,3,-4,25,28,0.6],"Trey McBride":[4,4,2,2,-3,16,67,10.1],"De'Von Achane":[4,4,4,3,-16,8,42,8.4],"Chris Olave":[4,4,4,3,3,19,46,7.3],"Rashee Rice":[4,5,4,2,6,9,65,11.6],"Lamar Jackson":[4,4,3,3,6,25,58,7.7],"Malik Nabers":[4,4,4,4,3,9,70,12.9],"Zay Flowers":[4,5,2,4,13,14,50,8.6],"Tee Higgins":[4,5,2,4,11,19,51,6.7],"DeVonta Smith":[4,4,2,4,12,11,61,9.6],"Emeka Egbuka":[4,5,3,4,12,10,59,9.3],"Josh Jacobs":[4,4,3,4,-11,15,57,8.7],"Drake Maye":[4,5,2,2,18,25,90,13.7],"Tetairoa McMillan":[5,3,4,2,1,18,61,7.6],"Javonte Williams":[5,4,4,4,-8,20,52,7.6],"Colston Loveland":[5,5,2,2,8,16,96,14.3],"Breece Hall":[5,4,3,3,-9,28,60,5.4],"Jeremiyah Love":[5,5,2,2,-18,20,66,7.5],"Joe Burrow":[5,4,3,3,13,27,68,12.1],"Jaylen Waddle":[5,4,3,2,6,21,69,10.4],"Davante Adams":[5,3,4,1,10,31,80,9.2],"Terry McLaurin":[5,4,2,2,12,31,74,8.4],"Jameson Williams":[5,4,3,4,10,31,81,10.8],"Christian Watson":[5,4,4,5,18,31,89,11.2],"Travis Etienne Jr.":[5,4,4,3,-13,28,66,7.1],"Cam Skattebo":[6,4,4,4,-16,40,72,7.8],"Quinshon Judkins":[6,4,4,3,-13,31,71,8.5],"Bucky Irving":[6,3,4,2,-19,30,72,7.6],"D'Andre Swift":[6,3,3,2,-2,32,71,7.0],"Jalen Hurts":[6,4,4,5,14,27,79,11.1],"Luther Burden III":[6,4,4,3,-16,35,91,9.9],"David Montgomery":[6,4,2,4,-7,30,72,7.8],"Rome Odunze":[6,4,3,3,7,35,80,10.0],"Mike Evans":[6,4,3,2,1,38,81,9.6],"Tucker Kraft":[6,5,2,2,13,22,94,13.8],"TreVeyon Henderson":[6,4,4,2,-19,40,92,9.9],"Tyler Warren":[6,5,2,3,-5,16,84,12.5],"Bhayshul Tuten":[6,4,3,4,-17,45,92,9.0],"Jadarian Price":[6,4,4,4,3,28,113,12.1],"Justin Herbert":[6,5,2,2,22,36,100,11.9],"Marvin Harrison Jr.":[7,4,4,2,16,51,98,10.0],"Carnell Tate":[7,4,2,3,1,44,183,15.9],"Brian Thomas Jr.":[7,3,4,4,5,44,98,9.3],"Parker Washington":[7,4,2,4,5,51,125,15.8],"Tony Pollard":[7,4,2,3,-2,52,99,10.1],"Sam LaPorta":[7,4,2,3,12,56,95,7.6],"DK Metcalf":[7,3,3,3,8,50,91,9.1],"Trevor Lawrence":[7,5,2,4,11,58,107,12.6],"Dak Prescott":[7,4,2,2,15,36,107,13.5],"Rhamondre Stevenson":[7,3,3,2,-14,57,108,10.1],"Alec Pierce":[7,4,4,4,16,48,153,15.6],"Rico Dowdle":[7,4,4,2,-13,64,127,11.8],"J.K. Dobbins":[7,4,4,2,-3,60,151,15.7],"Courtland Sutton":[7,2,4,2,-1,54,114,10.8],"Chuba Hubbard":[7,2,4,1,-3,57,127,13.9],"Harold Fannin Jr.":[7,4,3,3,-21,34,172,14.8],"Blake Corum":[7,4,4,5,-3,66,126,12.3],"Kyle Pitts Sr.":[7,4,4,3,-9,66,110,7.2],"Jordyn Tyson":[7,4,4,3,-8,59,169,15.6],"Kyle Monangai":[7,4,4,2,-18,66,148,12.8],"Brock Purdy":[7,4,2,1,22,62,128,9.9],"Chris Godwin Jr.":[7,4,4,4,-4,69,142,13.0],"Jordan Addison":[8,4,4,5,9,69,139,13.0],"Jacory Croskey-Merritt":[8,3,4,4,3,72,143,11.9],"Patrick Mahomes II":[8,3,4,2,10,62,127,11.7],"Michael Wilson":[8,null,null,2,-23,69,150,16.1],"George Kittle":[8,4,4,3,5,67,228,25.0],"Jonathon Brooks":[8,4,4,1,25,66,230,29.0],"Makai Lemon":[8,4,3,4,96,65,139,15.3],"Jordan Mason":[8,4,4,4,-5,77,134,13.2],"RJ Harvey":[8,2,4,2,-41,64,143,18.9],"Dalton Kincaid":[8,3,4,3,-5,76,154,15.2],"Matthew Stafford":[8,4,2,3,15,62,136,14.9],"Jared Goff":[8,4,2,5,20,58,124,13.0],"Travis Kelce":[8,3,3,4,-6,76,154,12.5],"Jayden Reed":[8,4,4,5,14,80,147,13.6],"Michael Pittman Jr.":[8,3,4,3,-4,70,139,15.6],"Rachaad White":[8,4,2,4,8,77,143,13.9],"Dallas Goedert":[8,4,4,4,5,76,157,16.0],"Isaiah Likely":[8,4,4,3,-10,84,228,25.6],"Kyler Murray":[8,4,3,5,41,90,151,11.4],"Mark Andrews":[8,4,4,4,-6,76,195,22.2],"Jakobi Meyers":[8,2,3,4,-21,74,153,15.0],"Kenny Gainwell":[8,4,3,2,-21,85,156,13.0],"Aaron Jones Sr.":[8,1,4,4,-17,82,143,12.5],"Baker Mayfield":[8,3,4,2,24,73,136,11.5],"Xavier Worthy":[8,4,4,2,11,88,183,16.0],"Chris Rodriguez Jr.":[8,3,4,4,29,87,218,20.0],"Josh Downs":[8,4,3,4,-11,80,149,15.1],"Jordan Love":[8,4,3,4,18,90,152,11.0],"Jayden Higgins":[8,4,2,3,18,98,179,14.3],"Tyler Shough":[8,4,2,3,24,103,278,20.3],"Wan'Dale Robinson":[8,4,3,3,-33,80,183,15.2],"Jake Ferguson":[9,2,4,2,-20,93,157,15.4],"Tyrone Tracy Jr.":[9,4,4,4,-6,108,176,9.8],"Romeo Doubs":[9,4,3,2,-1,101,194,16.7],"Woody Marks":[9,3,4,4,-19,95,167,13.3],"Jalen Coker":[9,4,3,2,11,109,169,14.0],"Malik Willis":[9,4,4,3,18,100,310,31.7],"Stefon Diggs":[9,4,2,2,-12,75,246,35.6],"KC Concepcion":[9,4,4,3,3,98,302,29.1],"Khalil Shakir":[9,1,4,4,-1,114,173,14.0],"Isiah Pacheco":[9,3,4,5,19,113,176,12.1],"C.J. Stroud":[9,3,4,4,31,102,241,19.2],"Deebo Samuel Sr.":[9,4,3,2,2,81,238,36.7],"Sam Darnold":[9,2,4,4,28,124,213,15.0],"Tank Bigsby":[9,4,4,4,20,108,218,18.4],"Brian Robinson Jr.":[9,2,4,2,-30,126,207,12.8],"Juwan Johnson":[9,4,4,2,-29,110,225,21.4],"Alvin Kamara":[9,3,4,3,-19,117,221,15.7],"Hunter Henry":[9,2,4,4,-24,110,202,19.7],"Tyjae Spears":[9,3,4,3,-17,119,227,17.8],"Brenton Strange":[9,4,3,3,-19,111,245,27.1],"Dylan Sampson":[9,4,2,3,0,121,220,18.6],"Cam Ward":[9,4,4,3,38,124,255,26.0],"Oronde Gadsden II":[9,3,4,4,-20,96,255,32.3],"Chig Okonkwo":[9,4,4,1,-8,111,251,31.3],"Houston Texans":[9,null,null,2,-20,149,170,5.1],"Jonah Coleman":[9,3,4,2,-22,126,310,30.4],"Daniel Jones":[9,4,4,4,41,112,330,38.9],"Denzel Boston":[10,4,4,3,11,116,311,31.3],"Jerry Jeudy":[10,2,4,3,13,125,226,19.9],"Jauan Jennings":[10,2,4,5,-8,100,292,28.0],"Jalen McMillan":[10,4,4,4,15,116,295,26.6],"Denver Broncos":[10,null,null,4,-8,150,182,4.9],"De'Zhaun Stribling":[10,4,4,2,37,98,287,45.1],"Seattle Seahawks":[10,null,null,2,-19,150,182,4.1],"Omar Cooper Jr.":[10,4,4,4,6,139,310,30.4],"Los Angeles Rams":[10,null,null,2,-32,150,190,7.4],"Bryce Young":[10,2,4,2,34,136,284,28.0],"Tre Tucker":[10,4,2,2,42,116,288,27.6],"Travis Hunter":[10,3,4,4,15,125,292,30.7],"Philadelphia Eagles":[10,null,null,0,-12,166,234,8.7],"Ray Davis":[10,4,4,2,33,140,258,30.4],"Tre' Harris":[10,4,3,2,40,129,302,29.1],"Emmett Johnson":[10,4,4,3,-11,145,308,35.8],"Sean Tucker":[10,4,4,2,4,134,294,36.8],"Emanuel Wilson":[10,2,4,4,47,130,282,31.9],"AJ Barner":[10,4,3,3,1,137,260,23.8],"Pittsburgh Steelers":[10,null,null,5,37,166,273,11.0],"Kayshon Boutte":[10,3,4,2,-7,149,272,25.4],"New England Patriots":[10,null,null,3,-7,166,234,8.8],"Minnesota Vikings":[10,null,null,1,-1,170,234,8.2],"Jacksonville Jaguars":[10,null,null,3,12,166,278,12.7],"Jalen Nailor":[10,null,null,2,2,115,305,42.5],"Mike Washington Jr.":[10,3,4,2,-20,143,293,31.8],"Brandon Aubrey":[10,5,1,2,-58,169,197,2.5],"Ryan Flournoy":[10,4,3,2,61,153,327,26.5],"Los Angeles Chargers":[10,null,null,3,37,170,279,13.3],"Terrance Ferguson":[10,4,4,4,1,123,391,40.5],"Calvin Ridley":[10,2,4,3,-12,115,318,33.1],"Nicholas Singleton":[10,3,4,3,-3,131,320,39.5],"Dalton Schultz":[10,3,2,4,-48,122,245,29.3],"Cameron Dicker":[10,5,1,2,-33,186,332,15.9],"Dontayvion Wicks":[10,4,4,4,66,138,274,31.4],"Ka'imi Fairbairn":[10,5,1,2,-20,186,224,4.1],"Rashod Bateman":[10,2,4,4,94,142,287,26.6],"Cam Little":[10,null,null,4,-21,186,251,8.5],"Baltimore Ravens":[10,null,null,5,-4,170,279,16.4],"MarShawn Lloyd":[10,4,4,4,32,121,316,52.0],"Kenyon Sadiq":[10,3,4,4,-63,111,381,40.3],"James Conner":[10,2,4,2,-43,117,309,41.6],"Jason Myers":[11,4,1,4,-36,191,252,9.8],"Green Bay Packers":[11,null,null,2,35,182,278,20.7],"Jacoby Brissett":[11,3,5,2,9,136,342,40.5],"Kaytron Allen":[11,3,4,4,-1,145,320,36.0],"Isaac TeSlaa":[11,3,4,4,17,149,287,23.6],"Troy Franklin":[11,1,4,2,46,142,339,36.8],"Tyler Loop":[11,null,null,3,-24,197,249,9.4],"Kansas City Chiefs":[11,null,null,3,52,150,278,19.4],"Eddy Pineiro":[11,4,2,5,12,199,249,9.6],"Pat Bryant":[11,null,null,2,34,149,345,33.4],"Darnell Mooney":[11,3,4,4,44,135,292,24.6],"T.J. Hockenson":[11,3,4,4,-64,115,255,21.9],"Jaylin Noel":[11,4,4,3,63,162,314,29.1],"Malik Washington":[11,3,4,3,22,153,312,37.0],"Jaydon Blue":[11,4,4,4,-9,134,321,44.7],"Tank Dell":[11,4,4,3,-14,149,285,29.6],"Cairo Santos":[11,null,null,0,40,206,281,12.6],"Jaylen Wright":[11,null,null,3,1,148,282,27.1],"Evan McPherson":[11,4,2,2,57,197,262,13.5],"Detroit Lions":[11,null,null,5,12,184,278,21.9],"Pat Freiermuth":[11,3,3,2,39,137,323,31.8],"Jake Bates":[11,null,null,5,-19,191,281,14.9],"Gunnar Helm":[11,3,4,3,-42,154,294,23.3],"Antonio Williams":[11,4,3,2,-14,135,340,41.1],"Chase McLaughlin":[11,null,null,3,20,197,281,16.6],"Buffalo Bills":[11,null,null,3,38,189,340,23.2],"Cleveland Browns":[11,null,null,5,65,175,316,31.1],"Andy Borregales":[11,null,null,1,-21,207,284,18.4],"Zachariah Branch":[11,3,4,3,-16,162,322,30.3],"Cooper Kupp":[11,3,4,3,32,162,306,30.6],"Geno Smith":[11,2,4,4,6,152,306,30.1],"Harrison Mevis":[11,null,null,2,-41,196,281,19.9],"David Njoku":[11,4,4,4,-79,172,290,24.9],"Elic Ayomanor":[11,1,5,3,33,164,350,35.7],"Aaron Rodgers":[11,1,4,2,-4,152,343,40.3],"Chimere Dike":[11,1,5,3,21,163,330,35.3],"Cade Otton":[11,3,4,2,-52,155,290,22.4],"Demond Claiborne":[11,3,4,4,-21,156,329,33.9],"George Holani":[11,3,4,4,11,155,311,37.5],"Greg Dulcich":[11,4,4,5,-1,130,304,44.9],"Harrison Butker":[12,null,null,5,-25,199,332,22.0],"Chris Boswell":[12,null,null,4,-27,192,281,16.4],"Germie Bernard":[12,2,4,3,34,179,324,30.8],"Colby Parkinson":[12,null,null,4,-55,180,351,22.7],"Jordan James":[12,2,4,2,20,155,369,38.1],"Tory Horton":[12,4,4,3,22,200,322,24.1],"Evan Engram":[12,null,null,4,39,154,308,23.8],"Justice Hill":[12,null,null,3,-22,148,312,39.5],"Kaelon Black":[12,4,4,2,-6,148,321,47.6],"Isaiah Davis":[12,2,4,3,90,163,317,30.6],"Malik Davis":[12,null,null,4,0,174,309,27.8],"Tyquan Thornton":[12,2,4,2,85,153,361,34.4],"Elijah Sarratt":[12,3,4,4,37,208,359,24.8],"Ty Johnson":[12,null,null,2,-2,163,359,34.6],"Eli Stowers":[12,4,4,4,-58,172,376,36.7],"Chris Brooks":[12,2,4,4,73,174,306,27.7],"Jack Bech":[12,3,4,2,40,200,349,22.7],"Fernando Mendoza":[12,4,3,1,-53,178,345,32.7],"Chris Bell":[12,3,4,3,33,172,317,29.5],"Christian Kirk":[12,2,4,2,9,169,333,29.3],"Ted Hurst III":[12,4,4,4,11,193,368,35.1],"Theo Johnson":[12,1,4,3,-39,195,324,25.4],"Samaje Perine":[12,1,4,2,33,159,388,39.0],"DJ Giddens":[12,3,4,4,70,188,328,22.5],"Tua Tagovailoa":[12,1,4,4,-32,136,346,38.8],"Ja'Kobi Lane":[12,3,4,4,-71,142,329,44.5],"Malachi Fields":[12,4,3,4,-42,209,350,28.2],"Will Reichard":[12,null,null,2,-41,192,332,31.1],"Wil Lutz":[12,null,null,1,-37,206,332,29.7],"Darius Slayton":[12,3,4,4,0,179,361,28.4],"Mason Taylor":[12,2,4,4,-55,228,348,24.4],"Devin Neal":[12,2,4,3,-27,155,359,34.6],"Xavier Legette":[12,2,4,2,32,198,330,29.7],"Atlanta Falcons":[12,null,null,4,29,189,355,31.3],"San Francisco 49ers":[12,null,null,3,5,193,355,29.9],"Emari Demercado":[12,1,5,3,60,161,337,31.9],"Brandon Aiyuk":[12,2,5,2,-50,114,346,58.5],"Devaughn Vele":[12,null,null,3,14,231,321,19.4],"Kaleb Johnson":[12,2,5,2,-27,151,331,32.3],"Devin Singletary":[12,null,null,4,-3,155,316,25.9],"Adam Randall":[12,4,4,3,52,178,319,27.1],"Mike Gesicki":[12,null,null,3,16,195,347,28.8],"Kyle Williams":[12,null,null,2,0,194,333,32.6],"Kendre Miller":[12,2,4,3,-24,145,365,40.4],"Seth McGowan":[12,3,4,4,52,221,331,28.3],"Michael Penix Jr.":[12,2,5,4,-51,226,347,22.1],"Oscar Delp":[12,4,4,2,0,192,371,36.3],"Keenan Allen":[12,2,4,2,-9,169,301,27.2],"LeQuint Allen Jr.":[12,3,4,4,2,240,388,23.9],"Hollywood Brown":[12,null,null,4,19,217,373,24.8],"Shedeur Sanders":[12,3,4,4,-54,239,358,24.6],"Kirk Cousins":[12,2,4,1,-43,238,349,25.7],"Brashard Smith":[12,null,null,3,-31,240,337,20.2],"Deshaun Watson":[13,1,5,4,-29,244,348,22.3],"Najee Harris":[13,1,5,3,-49,155,321,34.1],"Mack Hollins":[13,null,null,2,0,221,384,31.3],"Tyreek Hill":[13,1,5,null,-111,135,346,47.9],"Caleb Douglas":[13,null,null,3,-1,153,375,54.3],"New Orleans Saints":[13,null,null,5,3,182,355,41.6],"Jerome Ford":[13,null,null,4,25,167,325,29.2],"Jake Tonges":[13,null,null,3,-79,157,341,35.3],"Skyler Bell":[13,null,null,4,27,205,378,32.4],"Isaac Guerendo":[13,null,null,2,0,181,366,30.5],"Trevor Etienne":[13,null,null,1,0,242,328,19.2],"Indianapolis Colts":[13,null,null,5,-4,170,355,39.1],"Isaiah Bond":[13,null,null,3,0,243,376,26.4],"Andrei Iosivas":[13,null,null,4,-11,201,358,30.0],"Cyrus Allen":[13,null,null,2,-27,153,377,56.4],"Charlie Smyth":[13,null,null,5,7,211,332,36.2],"Tahj Brooks":[13,null,null,2,0,259,375,19.1],"Chicago Bears":[13,null,null,2,-29,184,342,44.9],"Jarquez Hunter":[13,null,null,5,-36,259,392,22.2],"Darnell Washington":[13,null,null,2,15,230,376,28.4],"Jaleel McLaughlin":[13,null,null,2,0,247,386,25.0],"Jalen Tolbert":[13,null,null,3,-48,191,373,43.1],"Luke McCaffrey":[13,null,null,2,0,248,379,27.3],"Will Shipley":[13,null,null,4,0,256,369,21.8],"Tez Johnson":[13,null,null,4,0,244,375,29.8],"Joe Mixon":[13,null,null,null,-83,161,357,36.0],"Chris Brazzell II":[13,null,null,2,0,209,368,36.2],"Elijah Arroyo":[13,null,null,3,0,216,363,29.6],"Konata Mumpfield":[13,null,null,1,0,246,370,29.4],"Calvin Austin III":[13,null,null,4,0,261,379,32.9],"Max Klare":[13,null,null,4,-28,262,366,25.4],"J.J. McCarthy":[13,null,null,5,-70,288,364,18.5],"Tyler Higbee":[13,null,null,4,0,229,356,28.6],"Michael Mayer":[13,null,null,3,-15,266,376,27.1],"Cole Kmet":[13,null,null,2,0,255,359,27.2],"DeMario Douglas":[13,null,null,2,0,203,375,40.0],"Ja'Tavion Sanders":[13,null,null,2,-15,222,387,39.0],"Jalen Royals":[13,null,null,2,0,251,372,26.0],"Noah Gray":[14,null,null,4,0,225,371,29.0],"Dawson Knox":[14,null,null,3,0,252,366,29.8],"Carson Beck":[14,null,null,2,-64,285,380,21.2],"Olamide Zaccheaus":[14,null,null,3,0,256,375,30.5],"Joshua Palmer":[14,null,null,4,0,217,396,42.0],"Mac Jones":[14,null,null,1,0,311,397,22.3],"Dallas Cowboys":[14,null,null,1,-103,185,350,54.1],"Carolina Panthers":[14,null,null,3,-36,171,355,48.1],"Brenen Thompson":[14,null,null,2,-11,238,384,39.3],"Kendrick Bourne":[14,null,null,2,0,238,375,43.2],"Eli Raridon":[14,null,null,4,-16,260,382,33.3],"Erick All Jr.":[14,null,null,3,0,255,381,30.3],"Michael Carter":[14,null,null,3,0,286,365,21.6],"Eli Heidenreich":[14,null,null,2,0,269,386,32.5],"Bryce Lance":[14,null,null,3,0,278,383,28.5],"Tyler Bass":[14,null,null,2,-46,224,332,30.8],"Tampa Bay Buccaneers":[14,null,null,4,-46,189,355,58.4],"Darren Waller":[14,null,null,2,0,180,379,62.1],"Justin Joly":[14,null,null,4,0,260,380,27.5],"Bam Knight":[14,null,null,2,0,293,382,25.8],"Ty Simpson":[14,null,null,3,-41,289,387,24.8],"New York Giants":[14,null,null,1,-115,185,353,40.3],"Jake Elliott":[14,null,null,5,-73,231,320,31.9],"Dont'e Thornton Jr.":[14,null,null,2,0,271,383,33.5],"Jawhar Jordan":[14,null,null,4,0,283,364,24.5],"Savion Williams":[14,null,null,5,0,285,372,25.4],"Tutu Atwell":[14,null,null,3,-52,266,378,32.6],"Cincinnati Bengals":[14,null,null,4,-55,211,355,49.7],"Raheim Sanders":[14,null,null,3,0,277,365,29.7],"KaVontae Turpin":[14,null,null,2,0,229,396,48.0],"Trey Smack":[14,null,null,4,-64,216,305,28.4],"Jaylin Lane":[14,null,null,2,0,295,382,25.8],"Nick Chubb":[14,null,null,null,0,301,382,22.5],"John Metchie III":[14,null,null,2,0,289,395,32.8],"J'Mari Taylor":[14,null,null,4,0,274,392,27.3],"Xavier Hutchinson":[14,null,null,3,0,297,395,26.3],"Noah Fant":[14,null,null,2,0,287,394,29.7],"Kevin Coleman Jr.":[14,null,null,3,0,255,379,38.8],"Charlie Kolar":[14,null,null,4,0,253,366,40.5],"Zane Gonzalez":[14,null,null,2,0,212,332,51.4],"Anthony Richardson Sr.":[14,null,null,4,0,315,385,21.8],"Luke Musgrave":[14,null,null,2,0,290,383,25.4],"Tennessee Titans":[14,null,null,2,-60,193,355,66.5],"Kalif Raymond":[14,null,null,3,0,285,395,35.0],"Nick Folk":[14,null,null,0,-64,198,319,36.7],"Nick Westbrook-Ikhine":[14,null,null,4,0,263,375,37.3],"Ben Sinnott":[14,null,null,1,0,319,382,17.4],"Austin Ekeler":[14,null,null,null,-116,295,368,19.3],"Zavion Thomas":[14,null,null,3,0,264,383,36.7],"Tommy Tremble":[14,null,null,2,0,290,389,27.5],"Blake Grupe":[14,null,null,4,0,215,281,22.9],"Phil Mafah":[14,null,null,4,0,277,393,39.8],"Dameon Pierce":[14,null,null,4,0,307,382,22.5],"Ashton Dulin":[14,null,null,4,0,276,340,20.0],"Chad Ryland":[14,null,null,2,0,192,332,61.1],"Mitchell Evans":[14,null,null,2,0,288,384,22.6],"Rasheen Ali":[14,null,null,3,0,296,353,16.1],"Daniel Carlson":[14,null,null,1,0,211,313,43.1],"Joe Flacco":[14,null,null,3,0,307,387,25.9],"Miami Dolphins":[14,null,null,3,-72,187,343,65.2],"Brandon McManus":[14,null,null,null,0,196,316,49.2],"Ben Sauls":[14,null,null,2,0,191,280,39.3],"Jordan Whittington":[14,null,null,1,0,288,382,27.8],"Devontez Walker":[15,null,null,4,0,288,384,34.5],"John Bates":[15,null,null,1,0,267,344,26.6],"Daniel Bellinger":[15,null,null,3,0,301,391,29.4],"Joey Slye":[15,null,null,4,0,213,332,47.8],"Jake Moody":[15,null,null,5,0,249,332,29.8],"Jam Miller":[15,null,null,2,0,282,386,30.4],"CJ Daniels":[15,null,null,1,0,317,390,23.6],"Kyle Juszczyk":[15,null,null,2,0,250,379,41.7],"Damien Martinez":[15,null,null,4,0,312,380,21.2],"Ryan Fitzgerald":[15,null,null,0,0,210,247,15.6],"Dyami Brown":[15,null,null,2,0,300,396,34.6],"Zach Ertz":[15,null,null,null,0,224,394,48.2],"Terrell Jennings":[15,null,null,2,0,309,357,14.6],"Malik Benson":[15,null,null,2,0,249,363,50.1],"Jameis Winston":[15,null,null,4,0,323,376,18.5],"Sione Vaki":[15,null,null,5,0,312,382,23.1],"Roman Wilson":[15,null,null,3,0,287,365,29.4],"Marcus Mariota":[15,null,null,2,0,325,393,25.3],"Spencer Shrader":[15,null,null,4,0,212,281,28.3],"Tommy Myers":[15,null,null,null,0,245,391,61.0],"Austin Hooper":[15,null,null,3,0,309,381,24.7],"New York Jets":[15,null,null,4,-100,190,190,0.0],"Washington Commanders":[15,null,null,2,0,189,205,8.0],"Xavier Restrepo":[15,null,null,3,0,238,334,39.3],"Greg Dortch":[15,null,null,4,0,275,361,29.4],"Cade Klubnik":[15,null,null,4,0,302,367,26.0],"Jonnu Smith":[15,null,null,null,0,266,389,45.6],"Zavier Scott":[15,null,null,4,0,309,373,25.1],"Joe Milton III":[15,null,null,2,0,326,397,24.5],"Jeremy McNichols":[15,null,null,4,0,286,388,32.9],"Antonio Gibson":[15,null,null,null,0,221,369,55.3],"Demarcus Robinson":[15,null,null,2,0,303,378,34.3],"Las Vegas Raiders":[15,null,null,4,-112,187,279,46.0],"Deion Burks":[15,null,null,4,0,318,396,26.6],"Khalil Herbert":[15,null,null,2,0,240,381,54.8],"Marlin Klein":[15,null,null,4,0,208,356,68.2],"Brandin Cooks":[15,null,null,null,0,287,341,25.5],"Taysom Hill":[15,null,null,null,0,195,324,64.5],"Tyler Lockett":[15,null,null,2,0,237,383,59.8],"Tyler Goodson":[15,null,null,2,0,312,393,29.5],"DeAndre Hopkins":[15,null,null,4,0,243,377,54.7],"Dylan Laube":[15,null,null,2,0,296,353,23.5],"Mitch Tinsley":[15,null,null,4,0,271,395,48.9],"Jahdae Walker":[15,null,null,3,0,309,370,22.4],"Will Kacmarek":[15,null,null,5,0,318,320,0.8],"Colbie Young":[15,null,null,4,0,313,370,22.6],"Miles Sanders":[15,null,null,null,0,262,299,18.5],"Raheem Mostert":[15,null,null,2,0,274,293,9.5],"Theo Wease Jr.":[15,null,null,3,0,246,384,57.3],"Elijah Moore":[15,null,null,4,0,269,374,43.0],"Odell Beckham Jr.":[15,null,null,4,0,302,367,28.2],"Robert Henry Jr.":[15,null,null,4,0,326,364,18.5],"Josh Oliver":[15,null,null,4,0,307,374,24.4],"Tai Felton":[15,null,null,5,0,289,369,32.8],"Xavier Smith":[15,null,null,1,0,295,302,3.5],"Diontae Johnson":[15,null,null,null,0,231,368,68.5],"Jermaine Burton":[15,null,null,null,0,295,309,7.0],"Hunter Luepke":[15,null,null,4,0,300,379,33.0],"Adam Trautman":[15,null,null,4,0,305,391,29.8],"Sincere McCormick":[15,null,null,2,0,247,386,64.2],"Jackson Hawes":[15,null,null,3,0,356,371,5.7],"Kalel Mullings":[15,null,null,3,0,300,369,29.5],"Marquez Valdes-Scantling":[15,null,null,2,0,304,372,28.3],"Jalen Milroe":[15,null,null,4,0,275,360,42.5],"Mo Alie-Cox":[15,null,null,3,0,298,389,37.5],"Nate Boerkircher":[16,null,null,3,0,303,390,35.9],"David Sills V":[16,null,null,4,0,308,349,20.5],"Quinn Ewers":[16,null,null,3,0,311,380,29.9],"Tanner Koziol":[16,null,null,3,0,360,384,8.0],"Elijah Higgins":[16,null,null,2,0,352,381,10.3],"Frank Gore Jr.":[16,null,null,2,0,336,337,0.5],"Michael Woods II":[16,null,null,2,0,293,384,45.5],"Myles Montgomery":[16,null,null,null,0,328,353,12.5],"Van Jefferson":[16,null,null,2,0,314,373,29.5],"AJ Dillon":[16,null,null,1,0,303,388,42.5],"Riley Leonard":[16,null,null,4,0,345,387,17.2],"Jimmy Horn Jr.":[16,null,null,2,0,345,384,17.5],"Tim Patrick":[16,null,null,4,0,327,392,32.5],"Gardner Minshew II":[16,null,null,2,0,347,373,13.0],"Roman Hemby":[16,null,null,2,0,359,363,2.0],"Luke Schoonmaker":[16,null,null,2,0,370,381,4.5],"Jaydn Ott":[16,null,null,3,0,357,373,8.0],"Miles Davis":[16,null,null,1,0,353,380,13.5],"Reggie Gilliam":[16,null,null,2,0,359,377,9.0],"Jaret Patterson":[16,null,null,3,0,357,392,17.5],"Trey Lance":[16,null,null,2,0,377,378,0.5],"JuJu Smith-Schuster":[16,null,null,4,0,379,383,2.0],"Lil'Jordan Humphrey":[16,null,null,2,0,378,391,6.5]};
@@ -2322,7 +2402,7 @@ function suggestedDollar(mv, pos, name){
   return derivedDollar(mv, pos);
 }
 const MY_TEAM_OWNER = "Blake Taylor";
-const VALUES_SNAPSHOT_DATE = "2026-07-24";
+const VALUES_SNAPSHOT_DATE = "2026-08-18";
 /* Market values (mv) are a same-day snapshot baked into SEED_TEAMS/DRAFT_POOL
    above, refreshed by hand from FantasyPros and other sources as needed --
    there used to be a live DynastyProcess fetch here on every load, removed
@@ -2489,6 +2569,12 @@ function savePayload(){
 }
 
 async function flushSave(){
+  /* A mock draft runs on a full deep-clone swapped into `state` (see the
+     MOCK DRAFT section further down) specifically so nothing it does can
+     ever reach the real save file -- this is the other half of that: never
+     write while state points at the clone, even if the tab closes mid-mock-
+     draft via the beforeunload/visibilitychange handlers below. */
+  if(mockModeActive) return;
   if(savePending) return;                 // one write in flight at a time
   const payload = savePayload();
   if(payload === lastSaved){ renderStatusStrip(); return; }   // nothing changed
@@ -2640,10 +2726,6 @@ function moveTabIndicator(){
   ind.style.width = active.offsetWidth + 'px';
 }
 window.addEventListener('resize', moveTabIndicator);
-document.addEventListener('DOMContentLoaded', ()=>{
-  const rb = document.getElementById('reseedBtn');
-  if(rb) rb.addEventListener('click', reseedRosters);
-});
 { const rb = document.getElementById('reseedBtn'); if(rb) rb.addEventListener('click', reseedRosters); }
 if(document.fonts && document.fonts.ready){ document.fonts.ready.then(moveTabIndicator); }
 
@@ -3289,6 +3371,19 @@ function resetBiddingState(player){
   activeBidders = new Set();
   biddersArePredicted = false;
   currentBidValue = player ? suggestedDollar(player.mv, player.pos, player.name) : 1;
+  /* Mock draft: the pills aren't a guess to correct, they're the real answer.
+     Compute every rival's actual simulated ceiling for this player right now
+     and tag exactly the teams who'd genuinely be bidding. */
+  if(mockModeActive && player){
+    mockRivalCeilings = {};
+    const myIdx = teamIdxOf(MY_TEAM_OWNER);
+    state.teams.forEach((t,i)=>{
+      if(i===myIdx) return;
+      const c = mockRivalCeilingFor(i, player);
+      if(c >= 1){ mockRivalCeilings[i] = c; activeBidders.add(i); }
+    });
+    biddersArePredicted = true;
+  }
 }
 let biddersArePredicted = false;
 let verdictDetailOpen = false;
@@ -3461,7 +3556,12 @@ function qualityCountAtPos(teamIdx, pos){
 }
 function demandStateFor(teamIdx, pos){
   if(!['QB','RB','WR','TE'].includes(pos)){
-    return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'stacked'; // PK/DST, simple case
+    // PK/DST: 1 starter + 1 earmarked bench cover (see BENCH_SLOTS below) is
+    // the intended full complement, not "stacked" -- planBudget() deliberately
+    // budgets for that 2nd one (bye-week cover). Only a genuine 3rd is excess.
+    const held = effPosCounts(teamIdx)[pos] || 0;
+    if(held >= 2) return 'stacked';
+    return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'moderate';
   }
   const q = qualityCountAtPos(teamIdx, pos);
   if(q>=2) return 'stacked';
@@ -3472,6 +3572,13 @@ function demandStateFor(teamIdx, pos){
    the answer only moves when the board or a roster does. Memoise it. */
 let _ceilCache = null, _ceilKey = '';
 function budgetAwareCeiling(teamIdx, player){
+  /* In a mock draft, rival "ceilings" aren't a guess about a real opponent --
+     they're the actual number our own simulated persona for that team just
+     computed (see mockRivalCeilingFor below). Use that directly instead of
+     the heuristic meant for predicting real humans in a live auction. */
+  if(mockModeActive && teamIdx !== teamIdxOf(MY_TEAM_OWNER)){
+    return mockRivalCeilings[teamIdx] || 0;
+  }
   const ck = (state.draftPicks||[]).length + '#' + DRAFT_POOL.length + '#' + state.currentYear;
   if(_ceilKey !== ck){ _ceilCache = {}; _ceilKey = ck; }
   const mk = teamIdx + '|' + player.name;
@@ -3510,6 +3617,328 @@ function budgetAwareCeilingRaw(teamIdx, player){
   const spendCapGuard = Math.max(1, Math.round(cap*spendPct));
 
   return Math.max(0, Math.min(legalMax, valueBasedCeiling, spendCapGuard));
+}
+
+
+/* ---------- MOCK DRAFT ----------
+   Practice against 11 AI-controlled rivals on the exact same bid panel/log-pick
+   UI used for the real thing. The rival-persona logic here is a browser-side
+   port of sim/sim-core.js's validated model (rational/namechaser/hoarder/
+   passive/panicker, each individually jittered) -- simplified to skip that
+   file's pace-urgency and per-bid wildcard mechanics for a first version, and
+   using this tool's own lineupValue()/vor()/suggestedDollar() directly rather
+   than reimplementing them, so a rival's read of a player is the same read
+   the live tool would give Blake.
+
+   The whole thing works by temporarily swapping the global `state` for a
+   deep clone: every existing function (effCapLeft, effOpenSlots, vor,
+   suggestedDollar, bidVerdict, renderDraftView, the entire bid panel) keeps
+   working completely unmodified, just reading/writing the clone instead of
+   the real ledger. flushSave() below is guarded to never write while a mock
+   draft is active, so the real save file is untouched no matter what happens
+   in here, even if the tab closes mid-mock-draft. */
+let mockModeActive = false;
+let mockRealStateBackup = null;
+let mockPersonalities = {};
+let mockRivalCeilings = {};
+let mockNominatorPtr = 0;
+
+const MOCK_PERSONAS = ['rational','namechaser','hoarder','passive','panicker'];
+const MOCK_PERSONA_PARAMS = {
+  rational:   { bar:0.32, noiseSd:0.08, marketBlend:0.10 },
+  namechaser: { bar:0.18, noiseSd:0.15, marketBlend:0.65 }, // pays for the name
+  hoarder:    { bar:0.30, noiseSd:0.12, marketBlend:0.15 }, // loosens further if already stacked
+  passive:    { bar:0.55, noiseSd:0.10, marketBlend:0.05 },
+  panicker:   { bar:0.30, noiseSd:0.10, marketBlend:0.10 }, // occasional max-bid spike
+};
+
+function mockGaussian(mean, sd){
+  const u1 = Math.max(1e-9, Math.random()), u2 = Math.random();
+  const z = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+  return mean + z*sd;
+}
+function mockDrawPersonality(personaKey){
+  const base = MOCK_PERSONA_PARAMS[personaKey];
+  const r = Math.random();
+  return {
+    personaKey,
+    bar: Math.max(0.08, mockGaussian(base.bar, base.bar*0.20)),
+    noiseSd: Math.max(0.03, mockGaussian(base.noiseSd, base.noiseSd*0.30)),
+    marketBlend: Math.min(1, Math.max(0, mockGaussian(base.marketBlend, 0.07))),
+    nominationStyle: r<0.55 ? 'value' : (r<0.80 ? 'need' : 'gut'),
+  };
+}
+
+function mockHeldFor(teamIdx){
+  return state.teams[teamIdx].players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
+    .concat(picksForTeam(teamIdx).map(p=>({name:p.name,pos:p.pos})));
+}
+
+/* How many RB/WR/TE slots a roster has total to work with: the 5 skill
+   starters (RBWR_FLEX_TOTAL) plus whatever bench slots aren't earmarked for
+   a PK/DST cover (see BENCH_SLOTS further down the file). */
+function mockFlexBudgetAllows(teamIdx, pos){
+  const held = mockHeldFor(teamIdx);
+  const counts = {RB:0,WR:0,TE:0};
+  held.forEach(p=>{ if(counts[p.pos]!==undefined) counts[p.pos]++; });
+  const used = counts.RB+counts.WR+counts.TE;
+  const budget = RBWR_FLEX_TOTAL + BENCH_SLOTS.filter(s=>!s.earmark).length;
+  return used < budget;
+}
+
+/* A rival's willingness to pay: marginal starting-lineup value above what
+   they'd have without him (same "walk-away" philosophy the live tool itself
+   uses), blended with market price by however name-driven that persona is,
+   then noised and capped at their real legal max. */
+function mockRivalCeilingFor(teamIdx, player){
+  const personality = mockPersonalities[teamIdx];
+  if(!personality || effOpenSlots(teamIdx) <= 0) return 0;
+
+  const held = mockHeldFor(teamIdx);
+  if(player.pos==='PK' || player.pos==='DST' || player.pos==='QB'){
+    if(held.filter(p=>p.pos===player.pos).length >= 2) return 0;   // 1 starter + 1 bench cover, same as the live tool's cap
+  } else if(player.pos==='RB' || player.pos==='WR' || player.pos==='TE'){
+    if(!mockFlexBudgetAllows(teamIdx, player.pos)) return 0;
+  }
+
+  const before = lineupValue(held).starters;
+  const after = lineupValue(held.concat([{name:player.name,pos:player.pos}])).starters;
+  let marginal = after - before;
+  if(marginal < 0.05) marginal = vor(player) * BENCH_WEIGHT;   // doesn't crack the 8, still worth bench depth
+
+  let bar = personality.bar;
+  if(personality.personaKey==='hoarder'){
+    bar = bar / (1 + 0.18*held.filter(p=>p.pos===player.pos).length);
+  }
+  const ceilingFromValue = bar>0 ? marginal/bar : 0;
+
+  const market = suggestedDollar(player.mv, player.pos, player.name);
+  const marketAnchor = market * (0.9 + 0.2*Math.random());
+  let ceiling = ceilingFromValue*(1-personality.marketBlend) + marketAnchor*personality.marketBlend;
+  ceiling *= Math.max(0.5, 1 + mockGaussian(0, personality.noiseSd));
+
+  if(personality.personaKey==='panicker' && Math.random()<0.12){
+    ceiling = Math.max(ceiling, effMaxLegalBid(teamIdx)*0.9);   // rare max-bid spike
+  }
+
+  ceiling = Math.max(0, Math.round(ceiling));
+  ceiling = Math.min(ceiling, 38);   // room-wide behavioral ceiling, matches the validated sim
+  return Math.min(ceiling, effMaxLegalBid(teamIdx));
+}
+
+function mockChooseNominee(teamIdx, style){
+  const pool = availablePool().slice().sort((a,b)=>vorRaw(b)-vorRaw(a));
+  if(!pool.length) return null;
+  if(style==='need'){
+    const held = mockHeldFor(teamIdx);
+    const counts = {QB:0,RB:0,WR:0,TE:0,PK:0,DST:0};
+    held.forEach(p=>{ if(counts[p.pos]!==undefined) counts[p.pos]++; });
+    const needs = [];
+    if(counts.QB<1) needs.push('QB');
+    if(counts.PK<1) needs.push('PK');
+    if(counts.DST<1) needs.push('DST');
+    if(counts.RB<3) needs.push('RB');
+    if(counts.WR<3) needs.push('WR');
+    const match = needs.length ? pool.find(p=>needs.includes(p.pos)) : null;
+    return match || pool[0];
+  }
+  if(style==='gut'){
+    const band = pool.slice(0, Math.min(25,pool.length));
+    const weights = band.map((_,i)=>1/(i+2));
+    const total = weights.reduce((a,b)=>a+b,0);
+    let r = Math.random()*total;
+    for(let i=0;i<band.length;i++){ r-=weights[i]; if(r<=0) return band[i]; }
+    return band[band.length-1];
+  }
+  return pool[0];   // 'value': best player left, the common case
+}
+
+function mockAnnounce(text){
+  const el = document.getElementById('mockAnnounce');
+  if(el) el.textContent = text;
+}
+
+/* Mock draft history: a lightweight practice log, completely separate from
+   the real save file. Written to its own localStorage key so it survives
+   across mock drafts (and across page reloads) precisely BECAUSE it's not
+   part of STORAGE_KEY/flushSave() -- nothing here ever touches, or could
+   corrupt, the real ledger. The point is letting Blake see whether he's
+   actually improving run over run, not just rehearsing once and forgetting. */
+const MOCK_HISTORY_KEY = 'zub_mock_history_v1';
+function loadMockHistory(){
+  try{ const raw = localStorage.getItem(MOCK_HISTORY_KEY); return raw ? JSON.parse(raw) : []; }
+  catch(e){ return []; }
+}
+function saveMockHistory(history){
+  try{ localStorage.setItem(MOCK_HISTORY_KEY, JSON.stringify(history)); }
+  catch(e){ /* storage full or blocked -- this is a nice-to-have log, fail silently */ }
+}
+
+/* Snapshot of how the mock draft actually went, read from the still-active
+   mock `state` right before endMockDraft() reverts it back to the real one.
+   Ranks Blake the same way the room itself would: best starting-8 value,
+   same as sim/sim-core.js's own final accounting. */
+function mockFinalStats(){
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  if(myIdx < 0) return null;
+  const teamResults = state.teams.map((t,i)=>{
+    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}));
+    const won = picksForTeam(i).map(p=>({name:p.name,pos:p.pos}));
+    return { teamIdx:i, starterValue: lineupValue(held.concat(won)).starters };
+  });
+  teamResults.sort((a,b)=>b.starterValue-a.starterValue);
+  const mine = teamResults.find(r=>r.teamIdx===myIdx);
+  const myPicks = picksForTeam(myIdx);
+  return {
+    rank: teamResults.findIndex(r=>r.teamIdx===myIdx) + 1,
+    teams: teamResults.length,
+    starterValue: Math.round((mine?mine.starterValue:0)*10)/10,
+    spend: myPicks.reduce((s,p)=>s+p.price,0),
+    picks: myPicks.length,
+  };
+}
+function logMockRun(){
+  const stats = mockFinalStats();
+  if(!stats || stats.picks < 1) return;   // ended before doing anything real, not worth a row
+  const history = loadMockHistory();
+  history.push({ at: new Date().toISOString(), ...stats });
+  while(history.length > 20) history.shift();   // a rolling log, not an archive
+  saveMockHistory(history);
+}
+
+function renderMockHistory(){
+  const el = document.getElementById('mockHistoryBody');
+  if(!el) return;
+  const history = loadMockHistory();
+  if(!history.length){ el.innerHTML = ''; return; }
+  const rows = history.slice(-8).reverse().map(h=>{
+    const d = new Date(h.at);
+    const when = isNaN(d) ? '' : `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    return `<div class="budget-row">
+      <span class="b-name" style="color:var(--chalk-3);font-size:11px;">${when}</span>
+      <span class="b-nums"><strong>${h.rank} of ${h.teams}</strong><span style="color:var(--chalk-3);font-size:11px;margin-left:8px;">$${h.spend} spent &middot; ${h.starterValue} starter VOR &middot; ${h.picks} picks</span></span>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Recent mock drafts</div>${rows}
+    <span class="row-act" tabindex="0" role="button" id="clearMockHistoryBtn" style="display:inline-block;margin-top:6px;">clear history</span>`;
+  const clearBtn = document.getElementById('clearMockHistoryBtn');
+  if(clearBtn) clearBtn.addEventListener('click', ()=>{
+    if(!confirm('Clear your mock draft history? This only affects the practice log, never your real board.')) return;
+    saveMockHistory([]);
+    renderMockHistory();
+  });
+}
+
+function startMockDraft(){
+  mockRealStateBackup = state;
+  state = JSON.parse(JSON.stringify(mockRealStateBackup));
+  mockModeActive = true;
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  mockPersonalities = {};
+  state.teams.forEach((t,i)=>{
+    if(i===myIdx) return;
+    mockPersonalities[i] = mockDrawPersonality(MOCK_PERSONAS[Math.floor(Math.random()*MOCK_PERSONAS.length)]);
+  });
+  mockRivalCeilings = {};
+  mockNominatorPtr = 0;
+  selectedDraftPlayer = null;
+  /* Reset each cache's key alongside its cache -- not just the cache -- or a
+     recomputed key that happens to match the stale one (very likely right
+     after a state swap, since draftPicks-length/pool-length/year can easily
+     be identical) skips reinitialization and leaves the cache variable null
+     while the lookup code assumes it's a live object. */
+  _ceilCache = null; _ceilKey = '';
+  _solveCache = null; _solveKey = '';
+  _pricedCache = null; _pricedKey = '';
+  document.getElementById('mockDraftIdle').style.display = 'none';
+  document.getElementById('mockDraftActive').style.display = '';
+  mockAnnounce('Mock draft started from your real current rosters. Click "Next nomination" to begin.');
+  renderDraftView();
+}
+
+function endMockDraft(){
+  if(!mockModeActive) return;
+  logMockRun();   // snapshot final stats from the mock state before reverting it
+  state = mockRealStateBackup;
+  mockRealStateBackup = null;
+  mockModeActive = false;
+  mockPersonalities = {};
+  mockRivalCeilings = {};
+  selectedDraftPlayer = null;
+  /* Reset each cache's key alongside its cache -- not just the cache -- or a
+     recomputed key that happens to match the stale one (very likely right
+     after a state swap, since draftPicks-length/pool-length/year can easily
+     be identical) skips reinitialization and leaves the cache variable null
+     while the lookup code assumes it's a live object. */
+  _ceilCache = null; _ceilKey = '';
+  _solveCache = null; _solveKey = '';
+  _pricedCache = null; _pricedKey = '';
+  document.getElementById('mockDraftIdle').style.display = '';
+  document.getElementById('mockDraftActive').style.display = 'none';
+  renderDraftView();
+  renderLeagueGrid();
+}
+
+function mockNextNominatorIdx(){
+  const n = state.teams.length;
+  for(let step=0; step<n; step++){
+    const idx = (mockNominatorPtr+step) % n;
+    if(effOpenSlots(idx) > 0) return idx;
+  }
+  return -1;
+}
+
+function mockAdvanceNomination(){
+  if(!mockModeActive) return;
+  selectedDraftPlayer = null;
+  const idx = mockNextNominatorIdx();
+  if(idx < 0){ mockAnnounce('Every roster is full -- mock draft complete. Start a new one to run it again.'); return; }
+  mockNominatorPtr = idx + 1;
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  if(idx === myIdx){
+    mockAnnounce('Your turn to nominate -- search for a player below to put him on the clock.');
+    renderBidPanel();
+    return;
+  }
+  const nominee = mockChooseNominee(idx, mockPersonalities[idx].nominationStyle);
+  if(!nominee){ mockAnnounce('No players left that anyone can use -- mock draft complete.'); return; }
+  mockAnnounce(`${state.teams[idx].owner} nominates ${nominee.name} (${nominee.pos}). Bid, or pass and let the field take him.`);
+  putOnTheClock(nominee.name);
+}
+
+/* Resolves the current nomination to whichever rival has the highest
+   computed ceiling, at the standard second-price (2nd-highest + 1, or $1 if
+   only one bidder). Mirrors sim/sim-core.js's resolveAuction pricing rule. */
+function mockFieldTakesHim(){
+  if(!mockModeActive || !selectedDraftPlayer) return;
+  const entries = Object.entries(mockRivalCeilings)
+    .map(([idx,c])=>({idx:Number(idx), c})).filter(e=>e.c>=1).sort((a,b)=>b.c-a.c);
+  if(!entries.length){
+    mockAnnounce(`Nobody else wants ${selectedDraftPlayer.name} right now -- he goes unclaimed this round.`);
+    selectedDraftPlayer = null;
+    return;
+  }
+  const winner = entries[0];
+  const second = entries.length>1 ? entries[1].c : 0;
+  const price = Math.max(1, Math.min(winner.c, second+1, effMaxLegalBid(winner.idx)));
+  const sel = document.getElementById('pickTeamSelect');
+  if(sel) sel.value = String(winner.idx);
+  currentBidValue = price;
+  logCurrentPick();
+}
+
+function bindMockDraftControls(){
+  renderMockHistory();
+  const startBtn = document.getElementById('startMockDraftBtn');
+  if(startBtn && !startBtn.dataset.bound){ startBtn.dataset.bound='1'; startBtn.addEventListener('click', startMockDraft); }
+  const newBtn = document.getElementById('newMockDraftBtn');
+  if(newBtn && !newBtn.dataset.bound){ newBtn.dataset.bound='1'; newBtn.addEventListener('click', ()=>{ endMockDraft(); startMockDraft(); }); }
+  const endBtn = document.getElementById('endMockDraftBtn');
+  if(endBtn && !endBtn.dataset.bound){ endBtn.dataset.bound='1'; endBtn.addEventListener('click', endMockDraft); }
+  const nextBtn = document.getElementById('mockNextNomBtn');
+  if(nextBtn && !nextBtn.dataset.bound){ nextBtn.dataset.bound='1'; nextBtn.addEventListener('click', mockAdvanceNomination); }
+  const fieldBtn = document.getElementById('mockFieldTakesBtn');
+  if(fieldBtn && !fieldBtn.dataset.bound){ fieldBtn.dataset.bound='1'; fieldBtn.addEventListener('click', mockFieldTakesHim); }
 }
 
 
@@ -3588,6 +4017,15 @@ function bindDraftSubs(){
 function renderDraftView(){
   bindSideTabs();
   bindDraftSubs();
+  bindMockDraftControls();
+  /* The top status strip (cap space, active players, open slots, dead money)
+     otherwise only refreshes on the debounced ~900ms save cycle (see
+     flushSave()), which meant logging a pick, reassigning one, or editing its
+     price all left the header showing stale numbers for close to a second --
+     fine outside a live auction, disorienting during one. renderDraftView()
+     already runs after every one of those actions, so this is the one place
+     that covers all of them without needing to patch each call site. */
+  renderStatusStrip();
   const rows = state.teams.map((t,i)=>{
     const slots = effOpenSlots(i);
     const isMe = t.owner===MY_TEAM_OWNER;
@@ -3599,6 +4037,7 @@ function renderDraftView(){
   renderEndgame();
   markSideAlerts();
   renderBoardState();
+  renderSituationStrip();
   renderRunAlert();
   renderSolver();
   renderInflation();
@@ -3613,7 +4052,11 @@ function renderDraftView(){
 
 
 
-let solverOpen = false;
+/* Keyed by suffix so the Draft Day sidebar instance ('') and the Squad Plan
+   instance ('Plan', added so this panel is visible in Prep too, not just
+   during the live draft) each remember their own open/collapsed state
+   independently -- opening one shouldn't force the other open. */
+let solverOpenMap = { '': false };
 
 
 
@@ -3644,12 +4087,19 @@ function renderEndgame(){
   el.querySelectorAll('[data-plan-pick]').forEach(b=>
     b.addEventListener('click', ()=>putOnTheClock(b.dataset.planPick)));
   el.querySelectorAll('[data-tag-cycle]').forEach(b=>
-    b.addEventListener('click', e=>{ e.stopPropagation(); cycleTag(b.dataset.tagCycle); renderSolver(); }));
+    b.addEventListener('click', e=>{ e.stopPropagation(); cycleTag(b.dataset.tagCycle);
+      // re-render both instances -- the click could have happened in either
+      // one, and a star/avoid tag set in one should be reflected in both.
+      renderSolver(); renderSolver('Plan'); }));
 }
 
 function renderBoardState(){
-  const el = document.getElementById('boardStateBody');
-  if(!el) return;
+  /* Shows in the Draft Day sidebar and, so scarcity is visible while
+     planning too (not just live), in Squad Plan's Prep panel. Cheap to
+     compute -- no reason to gate this one the way the solver is gated. */
+  const els = ['boardStateBody','boardStateBodyPlan'].map(id=>document.getElementById(id)).filter(Boolean);
+  if(!els.length) return;
+  const el = { set innerHTML(v){ els.forEach(e=>e.innerHTML=v); } };
   const dep = tierDepletion();
   const fm = forcedMoney();
 
@@ -3706,6 +4156,50 @@ function renderBoardState(){
     <p class="panel-sub" style="margin:8px 0 0;">${money}</p>`;
 }
 
+/* Everything else in this sidebar (run alert, board scarcity, inflation,
+   forced money) is real intelligence that requires a tab click to see --
+   fine when you have time, not when a bid is closing in seconds. This pulls
+   the single highest-signal fact out of each of those four systems into one
+   persistent line that's visible no matter which sub-tab is open, so
+   reading the room doesn't cost a click. The full detail is still one tab
+   away for whichever signal is worth digging into. */
+function renderSituationStrip(){
+  const el = document.getElementById('situationStrip');
+  if(!el) return;
+
+  const r = runState();
+  let runChip;
+  if(r.active) runChip = `<span style="color:var(--coral)">&#128293; Run on ${r.active.pos}s</span>`;
+  else if(r.coming) runChip = `<span style="color:var(--gold)">&#9888; ${r.coming.pos}s thinning</span>`;
+  else runChip = `<span style="color:var(--chalk-3)">No run</span>`;
+
+  const infl = inflationState();
+  let inflChip;
+  if(infl.picks >= 5){
+    const pct = Math.round((infl.rate||1)*100);
+    const c = pct>=112 ? 'var(--coral)' : (pct<=90 ? 'var(--jade)' : 'var(--chalk-2)');
+    inflChip = `<span style="color:${c}">${pct}% of value</span>`;
+  } else {
+    inflChip = `<span style="color:var(--chalk-3)">Inflation warming up (${infl.picks}/5)</span>`;
+  }
+
+  const fm = forcedMoney();
+  let moneyChip;
+  if(fm.mustSpend) moneyChip = `<span style="color:var(--coral)">${fm.mustSpend} forced to spend</span>`;
+  else if(fm.scraping) moneyChip = `<span style="color:var(--jade)">${fm.scraping} scraping</span>`;
+  else moneyChip = `<span style="color:var(--chalk-3)">No spend pressure</span>`;
+
+  const dep = tierDepletion().filter(d=>!['PK','DST'].includes(d.pos));
+  const gone = dep.find(d=>d.state==='gone');
+  const thin = dep.find(d=>d.state==='thinnest');
+  let boardChip;
+  if(gone) boardChip = `<span style="color:var(--coral)">&#128683; ${gone.pos}s gone</span>`;
+  else if(thin) boardChip = `<span style="color:var(--gold)">${thin.pos}s thin</span>`;
+  else boardChip = `<span style="color:var(--chalk-3)">Board balanced</span>`;
+
+  el.innerHTML = [runChip, inflChip, moneyChip, boardChip].join('<span style="color:var(--line);">&middot;</span>');
+}
+
 function renderRunAlert(){
   const el = document.getElementById('runAlert');
   if(!el) return;
@@ -3727,18 +4221,25 @@ function renderRunAlert(){
   el.innerHTML = blocks.join('');
 }
 
-function renderSolver(){
-  const el = document.getElementById('solverBody');
+function renderSolver(suffix){
+  suffix = suffix || '';
+  if(solverOpenMap[suffix] === undefined) solverOpenMap[suffix] = false;
+  const el = document.getElementById('solverBody'+suffix);
   if(!el) return;
-  /* A full roster solve is over a second of work. Doing it for a pane that is
-     not on screen was pure waste on every single render. */
-  if(typeof sidePane !== 'undefined' && sidePane !== 'ideal'){ return; }
-  const tg = document.getElementById('solverToggle');
+  /* A cold full roster solve is over a second of work, though achievableRoster()
+     leans on lineupTable()'s own cache so a repeat call against unchanged
+     draft state is cheap. Still skip the sidebar instance outright while its
+     own pane isn't the one on screen -- no reason to even hit the cache
+     lookup for a hidden tab. The Squad Plan instance (suffix 'Plan') has no
+     such concept of "on screen", it's just part of that view, so it always
+     computes and relies on the cache for cheapness. */
+  if(suffix === '' && typeof sidePane !== 'undefined' && sidePane !== 'ideal'){ return; }
+  const tg = document.getElementById('solverToggle'+suffix);
   if(tg && !tg.dataset.bound){
     tg.dataset.bound='1';
-    tg.addEventListener('click', ()=>{ solverOpen=!solverOpen; renderSolver(); });
+    tg.addEventListener('click', ()=>{ solverOpenMap[suffix]=!solverOpenMap[suffix]; renderSolver(suffix); });
   }
-  if(tg) tg.textContent = solverOpen ? 'hide' : 'show';
+  if(tg) tg.textContent = solverOpenMap[suffix] ? 'hide' : 'show';
 
   const r = achievableRoster();
   if(!r){ el.innerHTML = '<p class="panel-sub" style="margin:0;">Nothing to solve.</p>'; return; }
@@ -3765,7 +4266,7 @@ function renderSolver(){
                   : '<span style="color:var(--jade)">Your plan is tracking close to this.</span>')) : ''}
     </p>`;
 
-  if(!solverOpen){ el.innerHTML = head; return; }
+  if(!solverOpenMap[suffix]){ el.innerHTML = head; return; }
 
   const line = x => {
     if(!x.p) return `<div class="budget-row"><span class="b-name" style="color:var(--chalk-3)">${x.slot.label}</span><span class="b-nums" style="color:var(--chalk-3)">nothing fits</span></div>`;
@@ -4083,6 +4584,59 @@ function importRatingsCSV(file){
   reader.readAsText(file);
 }
 
+/* The picks logged so far -- who, for how much -- are the one thing that's
+   catastrophic to lose mid-auction and impossible to reconstruct from memory.
+   exportText('board')/doExport() above only copy tab-separated text to the
+   clipboard, useful for pasting into a league sheet but not a real backup:
+   nothing to load back in if this tab dies or storage gets cleared. Same
+   genuine-file-download pattern as the ratings CSV above, for the board. */
+function exportDraftBoardJSON(){
+  const payload = {
+    kind: 'zub-draft-board-backup',
+    version: 1,
+    savedAt: new Date().toISOString(),
+    currentYear: state.currentYear,
+    draftPicks: state.draftPicks || [],
+    planManual: state.planManual || {},
+    slotTargets: state.slotTargets || {}
+  };
+  downloadTextFile(JSON.stringify(payload, null, 2),
+    `zub-draft-board-${new Date().toISOString().slice(0,10)}-${Date.now()}.json`, 'application/json');
+  const n = document.getElementById('boardBackupNote');
+  if(n){
+    n.textContent = `Downloaded ${payload.draftPicks.length} pick${payload.draftPicks.length===1?'':'s'}.`;
+    setTimeout(()=>{ if(n.textContent.indexOf('Downloaded')===0) n.textContent=''; }, 4000);
+  }
+}
+
+function importDraftBoardJSON(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    let parsed;
+    try{
+      parsed = JSON.parse(String(reader.result));
+      if(!parsed || parsed.kind !== 'zub-draft-board-backup' || !Array.isArray(parsed.draftPicks)) throw new Error('bad shape');
+    }catch(e){
+      alert("Couldn't read that as a draft board backup. It needs to be a file this tool downloaded (Draft Day → History → download board backup).");
+      return;
+    }
+    const current = (state.draftPicks||[]).length;
+    if(!confirm(`Replace the current draft board (${current} pick${current===1?'':'s'}) with this backup (${parsed.draftPicks.length} pick${parsed.draftPicks.length===1?'':'s'}, saved ${parsed.savedAt||'unknown time'})? This can't be undone.`)) return;
+    pushUndo('restoring draft board backup');
+    state.draftPicks = parsed.draftPicks;
+    if(parsed.currentYear) state.currentYear = parsed.currentYear;
+    state.planManual = parsed.planManual || {};
+    state.slotTargets = parsed.slotTargets || {};
+    saveState();
+    renderDraftView();
+    renderLeagueGrid();
+    const n = document.getElementById('boardBackupNote');
+    if(n) n.textContent = `Restored ${parsed.draftPicks.length} pick${parsed.draftPicks.length===1?'':'s'} from backup.`;
+  };
+  reader.readAsText(file);
+}
+
 function doExport(kind){
   const text = exportText(kind);
   const box = document.getElementById('exportBox');
@@ -4103,14 +4657,31 @@ function doExport(kind){
 
 function renderDraftPool(){
   bindAddPlayer();
-  /* Skip the table build when its tab is not showing. It is the most expensive
-     thing on the page and you are usually looking at the bid panel. */
-  if(typeof draftSub !== 'undefined' && draftSub !== 'pool'){ renderUndo(); return; }
-  renderUndo();
+  /* These buttons live in the History sub-tab's markup, not Pool's -- they
+     used to be bound below the early-return guard, which meant they only
+     ever attached once Pool had been opened at least once in the session
+     (default sub-tab is 'bid', see draftSub's initial value). Same bug
+     pattern as the old keydown-listener one described in
+     HANDOFF_CLAUDE_CODE.md: a listener that's only ever registered if a
+     specific tab happened to render first. Kept unconditional here so they
+     work regardless of which Draft Day sub-tab loads first. */
   [['exportBoardBtn','board'],['exportRosterBtn','roster']].forEach(([id,kind])=>{
     const b = document.getElementById(id);
     if(b && !b.dataset.bound){ b.dataset.bound='1'; b.addEventListener('click', ()=>doExport(kind)); }
   });
+  const dbb = document.getElementById('downloadBoardBtn');
+  if(dbb && !dbb.dataset.bound){ dbb.dataset.bound='1'; dbb.addEventListener('click', exportDraftBoardJSON); }
+  const rbb = document.getElementById('restoreBoardBtn');
+  const rbf = document.getElementById('restoreBoardFile');
+  if(rbb && rbf && !rbb.dataset.bound){
+    rbb.dataset.bound='1';
+    rbb.addEventListener('click', ()=>rbf.click());
+    rbf.addEventListener('change', ()=>{ if(rbf.files[0]) importDraftBoardJSON(rbf.files[0]); rbf.value=''; });
+  }
+  /* Skip the table build when its tab is not showing. It is the most expensive
+     thing on the page and you are usually looking at the bid panel. */
+  if(typeof draftSub !== 'undefined' && draftSub !== 'pool'){ renderUndo(); return; }
+  renderUndo();
   const bar = document.getElementById('draftFilterBar');
   if(bar && bar.dataset.built !== '1'){ bar.innerHTML = poolFilterBar('draft'); bar.dataset.built='1'; }
   bindPoolFilters('draft', renderDraftPool);
@@ -4244,8 +4815,10 @@ function renderBidPanel(){
     </p>
     <div style="margin:4px 0;" id="bidderPillWrap">${bidderPills || '<span class="panel-sub">No other teams to track, so nobody can outbid you.</span>'}</div>
 
-    <div class="bid-slider-wrap">
-      <input type="range" id="bidSlider" min="1" max="20" value="1">
+    <div class="bid-slider-wrap" style="display:flex;align-items:center;gap:10px;">
+      <input type="range" id="bidSlider" min="1" max="20" value="1" style="flex:1;">
+      <span style="font-family:'JetBrains Mono',monospace;color:var(--chalk-3);">$</span>
+      <input type="number" id="bidNumberInput" min="1" max="20" value="1" style="width:64px;" title="Exact bid amount -- syncs with the slider">
     </div>
     <div class="bid-readout" id="bidReadout"></div>
 
@@ -4278,6 +4851,12 @@ function renderBidPanel(){
 
   document.getElementById('bidSlider').addEventListener('input', (e)=>{
     currentBidValue = Number(e.target.value);
+    updateBidDynamicParts();
+  });
+  document.getElementById('bidNumberInput').addEventListener('input', (e)=>{
+    const v = Math.round(Number(e.target.value));
+    if(!v || v<1) return;   // mid-typing (empty/partial), don't fight the field
+    currentBidValue = v;
     updateBidDynamicParts();
   });
   document.querySelectorAll('.bidder-pill').forEach(pill=>{
@@ -4352,10 +4931,16 @@ function updateBidDynamicParts(){
   });
 
   const slider = document.getElementById('bidSlider');
+  const numInput = document.getElementById('bidNumberInput');
   const sliderMax = Math.max(myMax, fieldBest, marketAdjusted, 20, currentBidValue);
   if(currentBidValue > sliderMax) currentBidValue = sliderMax;
   slider.max = sliderMax;
   slider.value = currentBidValue;
+  if(numInput){
+    numInput.max = sliderMax;
+    // Don't stomp on what's mid-typing in the field itself.
+    if(document.activeElement !== numInput) numInput.value = currentBidValue;
+  }
 
   // The verdict drives everything below, including the colour of the big number.
   /* The slider follows the bidding in the room, so the number on it is what
@@ -4514,23 +5099,27 @@ function updateBidDynamicParts(){
 function renderDraftHistory(){
   const picks = state.draftPicks;
   if(!picks.length){
-    document.getElementById('draftHistoryTable').innerHTML = `<tbody><tr><td>No picks logged yet this session.</td></tr></tbody>`;
+    document.getElementById('draftHistoryTable').innerHTML = `<p class="panel-sub" style="margin:0;">No picks logged yet this session.</p>`;
     return;
   }
   const teamOptions = state.teams.map((t,i)=>`<option value="${i}">${t.owner}</option>`).join('');
   const rows = [...picks].reverse().map(pick=>{
     const diff = pick.price - pick.suggested;
-    const diffLabel = diff===0 ? 'on the number' : (diff>0 ? `$${diff} over` : `$${Math.abs(diff)} under`);
-    return `<tr>
-      <td>${pick.name} <span class="pos-tag">${pick.pos}</span></td>
-      <td><select data-pick-id="${pick.id}" class="pick-team-select">${teamOptions}</select></td>
-      <td><input type="number" min="1" value="${pick.price}" data-pick-id="${pick.id}" class="pick-price-input" style="width:60px;"></td>
-      <td>${diffLabel}</td>
-      <td class="actions"><button class="icon-btn" data-remove-pick="${pick.id}">Remove</button></td>
-    </tr>`;
+    const diffLabel = diff===0 ? 'on the number' : (diff>0 ? `$${diff} over suggested` : `$${Math.abs(diff)} under suggested`);
+    return `<div class="pick-row">
+      <div class="pick-row-top">
+        <span class="pr-name">${pick.name} <span class="pos-tag">${pick.pos}</span></span>
+        <span class="pr-price">$${pick.price}</span>
+      </div>
+      <div class="pick-row-diff">${diffLabel}</div>
+      <div class="pick-row-bottom">
+        <select data-pick-id="${pick.id}" class="pick-team-select">${teamOptions}</select>
+        <input type="number" min="1" value="${pick.price}" data-pick-id="${pick.id}" class="pick-price-input">
+        <button class="icon-btn" data-remove-pick="${pick.id}" title="Remove this pick">&times;</button>
+      </div>
+    </div>`;
   }).join('');
-  document.getElementById('draftHistoryTable').innerHTML =
-    `<thead><tr><th>Player</th><th>Team</th><th>Price</th><th>vs suggested</th><th></th></tr></thead><tbody>${rows}</tbody>`;
+  document.getElementById('draftHistoryTable').innerHTML = rows;
 
   // set current team selection (can't do via template above cleanly since select needs selected attr per option)
   document.querySelectorAll('.pick-team-select').forEach(sel=>{
@@ -6182,10 +6771,18 @@ function targetBoard(perSlot){
       .filter(p=>slot.eligible.includes(p.pos) && !claimed.has(p.name))
       /* Walk-away is a full lineup solve, so it is computed AFTER the list is
          cut to the handful that actually make the board, not for every
-         eligible player on the way. */
+         eligible player on the way.
+
+         rm bends quality the same way bidVerdict() already bends price for a
+         rated player (see ratingMultiplier there): Chase inflates a guy's
+         effective quality so he clears the bar and ranks higher even if he
+         is not quite the top raw number; Avoid does the reverse. Otherwise
+         rating someone Chase in Prep never actually surfaced him here, only
+         in the live bid verdict once you'd already found him yourself. */
       .map(p=>{
         const d = Math.max(1, suggestedDollar(p.mv, p.pos, p.name));
-        return { p, d, v:vor(p), eff: vor(p)/d, walk: d, sent: sentimentFor(p) };
+        const rm = ratingMultiplier(p.name);
+        return { p, d, v:vor(p), eff: (vor(p)/d)*rm, rm, walk: d, sent: sentimentFor(p), read: myRead(p.name) };
       })
       .filter(o=>o.d <= effMaxLegalBid(myIdx));
 
@@ -6203,8 +6800,9 @@ function targetBoard(perSlot){
          worthless if he was never worth much. You start eight, so the target
          for a starting slot is the best player you can get. The walk-away
          price then tells you how far to chase him, which is the part that
-         stops you overpaying. Quality picks the target, price caps the bid. */
-      picked = pool.sort((a,b)=>(b.v-a.v)).slice(0, perSlot);
+         stops you overpaying. Quality picks the target, price caps the bid.
+         rm nudges that quality by your own read, same reasoning as above. */
+      picked = pool.sort((a,b)=>(b.v*b.rm-a.v*a.rm)).slice(0, perSlot);
     }
     /* No walk-away solve here. The panel never displayed the number, so all it
        bought was an eight second wait to draw the board. The card computes it
@@ -6767,6 +7365,17 @@ function bidVerdict(p, bid, myIdx){
 
   /* ---- WEIGHTED FACTORS ---- */
   let score = 0;
+
+  // Your own rating, if you've set one. This doesn't add its own score --
+  // it already bent `market` above (see the comment there), which flows into
+  // the price-vs-value factor below. This just makes that bend visible
+  // instead of silent, matching this function's own stated goal: a verdict
+  // you cannot audit mid-auction is worse than no verdict.
+  const myRd = myRead(p.name);
+  if(myRd && myRd !== 'maintain'){
+    reasons.push({ sign:0, text:
+      `You rated him ${READ_BY_KEY[myRd].label}: ${READ_BY_KEY[myRd].blurb} His $${suggested} market figure reads as $${market} to you here.` });
+  }
 
   // 0. Inflation. What he is worth tonight, not what he was worth before the
   //    room started bidding. If backs have gone 30% over all night, the next
@@ -7459,7 +8068,7 @@ const DST_TARGET_TEAMS = ["CIN", "DAL", "DEN", "DET", "HOU", "LAR", "PHI", "SEA"
 const DST_AVOID_TEAMS = ["ARI", "ATL", "LV", "MIA", "SF"];
 const INJURY_WATCH = {"Patrick Mahomes II":"left ACL/LCL","Lamar Jackson":"right hamstring","Kyler Murray":"left foot","Daniel Jones":"right Achilles","Bo Nix":"right ankle","Michael Penix Jr.":"left ACL","Quinshon Judkins":"right ankle","Cam Skattebo":"right ankle","Zach Charbonnet":"left ACL","Malik Nabers":"right ACL/meniscus","George Kittle":"right Achilles","Brock Bowers":"left PCL","Tucker Kraft":"right ACL"};
 
-const CBS_AUCTION = {"Ja'Marr Chase":30,"Jaxon Smith-Njigba":27,"Bijan Robinson":33,"Justin Jefferson":20,"Jahmyr Gibbs":34,"Amon-Ra St. Brown":26,"CeeDee Lamb":23,"Ashton Jeanty":20,"Malik Nabers":14,"Jeremiyah Love":14,"Drake London":19,"Omarion Hampton":18,"Tetairoa McMillan":10,"Josh Allen":13,"James Cook III":26,"Jonathan Taylor":31,"De'Von Achane":22,"Emeka Egbuka":14,"Breece Hall":12,"Chris Olave":14,"Brock Bowers":15,"A.J. Brown":17,"Drake Maye":10,"Carnell Tate":4,"Trey McBride":15,"DeVonta Smith":15,"George Pickens":18,"Lamar Jackson":10,"Marvin Harrison Jr.":3,"Jaylen Waddle":8,"Colston Loveland":11,"Luther Burden III":9,"Jordyn Tyson":2,"Rome Odunze":5,"Christian McCaffrey":27,"Zay Flowers":12,"Chase Brown":21,"Makai Lemon":1,"Sam LaPorta":6,"Joe Burrow":9,"Jalen Hurts":6,"Tyler Warren":7,"Tee Higgins":15,"Rashee Rice":20,"Saquon Barkley":19,"TreVeyon Henderson":6,"Quinshon Judkins":11,"Justin Herbert":3,"Tucker Kraft":6,"Harold Fannin Jr.":4,"Brian Thomas Jr.":3,"Trevor Lawrence":2,"DK Metcalf":2,"Cam Skattebo":12,"Bucky Irving":7,"Christian Watson":5,"Javonte Williams":12,"Jadarian Price":6,"Terry McLaurin":11,"Alec Pierce":5,"Derrick Henry":21,"Josh Jacobs":16,"Jordan Addison":2,"Dak Prescott":5,"Bhayshul Tuten":7,"Michael Wilson":2,"D'Andre Swift":10,"Parker Washington":3,"David Montgomery":8,"Jonathon Brooks":2,"Davante Adams":6,"Mike Evans":5,"Josh Downs":2,"Isaiah Likely":3,"Courtland Sutton":3,"George Kittle":2,"RJ Harvey":3,"Jakobi Meyers":2,"Kyle Monangai":2,"Chuba Hubbard":3,"Blake Corum":2,"Rhamondre Stevenson":5,"Rico Dowdle":4,"Tony Pollard":7,"J.K. Dobbins":4,"Travis Kelce":2,"Jacory Croskey-Merritt":3,"Rachaad White":2,"Jordan Mason":2,"Kyren Williams":16,"Kenneth Walker III":19,"DJ Moore":7,"Ladd McConkey":10,"Caleb Williams":2,"Jayden Daniels":8,"Quentin Johnston":2,"Nico Collins":17,"Jaxson Dart":2,"Puka Nacua":27,"Garrett Wilson":9,"Jaylen Warren":5};
+const CBS_AUCTION = {"Jahmyr Gibbs":27,"Bijan Robinson":26,"Jonathan Taylor":23,"Christian McCaffrey":21,"Derrick Henry":21,"Puka Nacua":21,"Ja'Marr Chase":20,"Jaxon Smith-Njigba":20,"James Cook III":19,"Amon-Ra St. Brown":18,"De'Von Achane":17,"Saquon Barkley":17,"Ashton Jeanty":16,"Chase Brown":16,"Josh Jacobs":16,"Josh Allen":15,"Kenneth Walker III":15,"Kyren Williams":15,"Drake London":15,"Omarion Hampton":14,"Javonte Williams":14,"Jeremiyah Love":14,"Breece Hall":14,"Cam Skattebo":13,"CeeDee Lamb":13,"Rashee Rice":13,"Justin Jefferson":13,"D'Andre Swift":12,"Travis Etienne Jr.":12,"Bucky Irving":12,"Quinshon Judkins":12,"George Pickens":12,"A.J. Brown":12,"Bhayshul Tuten":11,"Nico Collins":11,"Chris Olave":11,"Zay Flowers":10,"Malik Nabers":10,"Lamar Jackson":9,"David Montgomery":9,"Jadarian Price":9,"Emeka Egbuka":9,"Davante Adams":9,"Jameson Williams":9,"Tetairoa McMillan":9,"Tee Higgins":9,"Drake Maye":8,"Joe Burrow":8,"TreVeyon Henderson":8,"J.K. Dobbins":8,"Tony Pollard":8,"Jaylen Warren":8,"Rhamondre Stevenson":8,"DeVonta Smith":8,"Brock Bowers":8,"Garrett Wilson":8,"Trey McBride":8,"Jalen Hurts":7,"Jayden Daniels":7,"Dak Prescott":7,"Rico Dowdle":7,"Chuba Hubbard":7,"Rome Odunze":7,"Alec Pierce":7,"Ladd McConkey":7,"Terry McLaurin":7,"Matthew Stafford":6,"Jacory Croskey-Merritt":6,"Kyle Monangai":6,"Jordan Mason":6,"Jonathon Brooks":6,"Rachaad White":6,"DJ Moore":6,"Christian Watson":6,"Mike Evans":6,"Jaylen Waddle":6,"Luther Burden III":6,"Brock Purdy":5,"Patrick Mahomes II":5,"Trevor Lawrence":5,"Caleb Williams":5,"Jaxson Dart":5,"Jared Goff":5,"Bo Nix":5,"Justin Herbert":5,"Blake Corum":5,"RJ Harvey":5,"Aaron Jones Sr.":5,"Kenny Gainwell":5,"Colston Loveland":5,"Courtland Sutton":5,"DK Metcalf":5,"Marvin Harrison Jr.":5,"Zach Charbonnet":4,"Woody Marks":4,"Alvin Kamara":4,"Isiah Pacheco":4,"Tyrone Tracy Jr.":4,"Tyjae Spears":4,"Chris Rodriguez Jr.":4,"Brian Thomas Jr.":4,"Parker Washington":4,"Tyler Warren":4,"Baker Mayfield":3,"Tyler Shough":3,"Brian Robinson Jr.":3,"Braelon Allen":3,"AJ Dillon":3,"Justice Hill":3,"Tank Bigsby":3,"Samaje Perine":3,"Tyler Allgeier":3,"Jordan James":3,"Dylan Sampson":3,"Ty Johnson":3,"Keaton Mitchell":3,"Mike Washington Jr.":3,"Emari Demercado":3,"Tucker Kraft":3,"Quentin Johnston":3,"Kyle Pitts Sr.":3,"Dallas Goedert":3,"Jordan Addison":3,"Sam LaPorta":3,"Jayden Reed":3,"Carnell Tate":3,"Harold Fannin Jr.":3,"Xavier Worthy":3,"Deebo Samuel Sr.":3,"Jakobi Meyers":3,"Michael Pittman Jr.":3,"George Kittle":3,"Michael Wilson":3,"Matthew Golden":3,"Chris Godwin Jr.":3,"Mark Andrews":3,"Travis Kelce":3,"Rashid Shaheed":3,"Kyler Murray":2,"Jordan Love":2,"Daniel Jones":2,"Sam Darnold":2,"Kaelon Black":2,"Adam Randall":2,"Chris Brooks":2,"Kimani Vidal":2,"Jaydon Blue":2,"MarShawn Lloyd":2,"Emanuel Wilson":2,"Jaylen Wright":2,"James Conner":2,"Dalton Kincaid":2,"Isaiah Likely":2,"Calvin Ridley":2,"Romeo Doubs":2,"Wan'Dale Robinson":2,"Josh Downs":2,"De'Zhaun Stribling":2,"KC Concepcion":2,"Stefon Diggs":2,"Makai Lemon":2,"Jalen Coker":2,"Rashod Bateman":2,"Khalil Shakir":2,"Hunter Henry":2,"Jayden Higgins":2,"Jake Ferguson":2,"Denzel Boston":2,"Tre Tucker":2,"Brenton Strange":2,"Tank Dell":2,"Jerry Jeudy":2,"Juwan Johnson":2,"C.J. Stroud":1,"Malik Willis":1,"Bryce Young":1,"Malik Davis":1,"Jonah Coleman":1,"Jawhar Jordan":1,"Isaiah Davis":1,"George Holani":1,"Frank Gore Jr.":1,"Roschon Johnson":1,"Kyle Juszczyk":1,"Ja'Kobi Lane":1,"Jalen McMillan":1,"Jalen Nailor":1,"Jauan Jennings":1,"Dalton Schultz":1,"Pat Freiermuth":1,"Houston Texans":1,"Denver Broncos":1,"Minnesota Vikings":1,"Pittsburgh Steelers":1,"Seattle Seahawks":1,"Los Angeles Chargers":1,"Los Angeles Rams":1,"Detroit Lions":1,"Buffalo Bills":1,"Philadelphia Eagles":1,"Baltimore Ravens":1,"Atlanta Falcons":1,"Geno Smith":0,"Cam Ward":0,"Jacoby Brissett":0,"Aaron Rodgers":0,"Fernando Mendoza":0,"Tua Tagovailoa":0,"Deshaun Watson":0,"Ollie Gordon II":0,"Sean Tucker":0,"Emmett Johnson":0,"LeQuint Allen Jr.":0,"Ray Davis":0,"Trayveon Williams":0,"DJ Giddens":0,"Austin Ekeler":0,"Ty Chandler":0,"Phil Mafah":0,"Jordyn Tyson":0,"Devaughn Vele":0,"Cooper Kupp":0,"Kayshon Boutte":0,"Adonai Mitchell":0,"Travis Hunter":0,"Antonio Williams":0,"Bub Means":0,"Dontayvion Wicks":0,"Germie Bernard":0,"Tyquan Thornton":0,"Malik Washington":0,"Caleb Douglas":0,"Darius Slayton":0,"Tory Horton":0,"Troy Franklin":0,"Isaac TeSlaa":0,"Chris Bell":0,"Omar Cooper Jr.":0,"Xavier Legette":0,"Jahan Dotson":0,"Ashton Dulin":0,"Christian Kirk":0,"Ryan Flournoy":0,"Tre' Harris":0,"Elic Ayomanor":0,"Ted Hurst III":0,"Hollywood Brown":0,"Andrei Iosivas":0,"Jalen Tolbert":0,"Chimere Dike":0,"Malik Benson":0,"Keon Coleman":0,"Terrance Ferguson":0,"Greg Dulcich":0,"Kenyon Sadiq":0,"T.J. Hockenson":0,"AJ Barner":0,"Cade Otton":0,"Chig Okonkwo":0,"Oronde Gadsden II":0,"Darren Waller":0,"Mike Gesicki":0,"Evan Engram":0,"Gunnar Helm":0,"David Njoku":0,"Colby Parkinson":0,"Mason Taylor":0,"Dawson Knox":0,"Michael Mayer":0,"Cleveland Browns":0,"Chicago Bears":0,"New Orleans Saints":0,"Jacksonville Jaguars":0,"Cincinnati Bengals":0,"New England Patriots":0,"Tampa Bay Buccaneers":0,"Tennessee Titans":0,"Green Bay Packers":0,"Washington Commanders":0,"Indianapolis Colts":0,"Kansas City Chiefs":0,"Dallas Cowboys":0,"New York Giants":0,"Miami Dolphins":0,"Las Vegas Raiders":0,"Arizona Cardinals":0,"San Francisco 49ers":0,"Carolina Panthers":0,"New York Jets":0};
 
 const SOS_2026 = {"DET":{"RB":1,"WR":7,"TE":13,"DST":1},"LAR":{"RB":2,"WR":32,"TE":2,"DST":27},"PHI":{"RB":3,"WR":6,"TE":4,"DST":32},"SEA":{"RB":4,"WR":21,"TE":15,"DST":24},"IND":{"RB":5,"WR":11,"TE":21,"DST":2},"WAS":{"RB":6,"WR":29,"TE":32,"DST":26},"DAL":{"RB":7,"WR":31,"TE":29,"DST":31},"NYG":{"RB":8,"WR":5,"TE":20,"DST":29},"JAC":{"RB":9,"WR":4,"TE":16,"DST":19},"GB":{"RB":10,"WR":2,"TE":25,"DST":23},"HOU":{"RB":11,"WR":20,"TE":10,"DST":22},"MIN":{"RB":12,"WR":1,"TE":11,"DST":30},"NO":{"RB":13,"WR":13,"TE":24,"DST":6},"BAL":{"RB":14,"WR":12,"TE":7,"DST":3},"MIA":{"RB":15,"WR":19,"TE":1,"DST":16},"TEN":{"RB":16,"WR":17,"TE":17,"DST":21},"CLE":{"RB":17,"WR":16,"TE":12,"DST":4},"NYJ":{"RB":18,"WR":8,"TE":9,"DST":7},"KC":{"RB":19,"WR":26,"TE":3,"DST":14},"LAC":{"RB":20,"WR":23,"TE":8,"DST":18},"NE":{"RB":21,"WR":25,"TE":5,"DST":13},"CHI":{"RB":22,"WR":15,"TE":26,"DST":25},"TB":{"RB":23,"WR":3,"TE":31,"DST":11},"PIT":{"RB":24,"WR":18,"TE":27,"DST":5},"SF":{"RB":25,"WR":30,"TE":23,"DST":20},"ATL":{"RB":26,"WR":14,"TE":19,"DST":12},"LV":{"RB":27,"WR":24,"TE":14,"DST":8},"CIN":{"RB":28,"WR":10,"TE":22,"DST":10},"DEN":{"RB":29,"WR":28,"TE":6,"DST":9},"BUF":{"RB":30,"WR":9,"TE":18,"DST":15},"ARI":{"RB":31,"WR":27,"TE":28,"DST":28},"CAR":{"RB":32,"WR":22,"TE":30,"DST":17}};
 const RB_HANDCUFF = {"Tyler Allgeier":"Jeremiyah Love","Brian Robinson Jr.":"Bijan Robinson","Justice Hill":"Derrick Henry","Ray Davis":"James Cook III","Jonathon Brooks":"Chuba Hubbard","Kyle Monangai":"D'Andre Swift","Samaje Perine":"Chase Brown","Dylan Sampson":"Quinshon Judkins","Jaydon Blue":"Javonte Williams","RJ Harvey":"J.K. Dobbins","Isiah Pacheco":"Jahmyr Gibbs","MarShawn Lloyd":"Josh Jacobs","Woody Marks":"David Montgomery","DJ Giddens":"Jonathan Taylor","Chris Rodriguez Jr.":"Bhayshul Tuten","Emmett Johnson":"Kenneth Walker III","Kimani Vidal":"Omarion Hampton","Blake Corum":"Kyren Williams","Mike Washington Jr.":"Ashton Jeanty","Ollie Gordon II":"De'Von Achane","Aaron Jones Sr.":"Jordan Mason","Rhamondre Stevenson":"TreVeyon Henderson","Alvin Kamara":"Travis Etienne Jr.","Tyrone Tracy Jr.":"Cam Skattebo","Braelon Allen":"Breece Hall","Tank Bigsby":"Saquon Barkley","Jaylen Warren":"Rico Dowdle","Emanuel Wilson":"Jadarian Price","Jordan James":"Christian McCaffrey","Kenny Gainwell":"Bucky Irving","Tyjae Spears":"Tony Pollard","Jacory Croskey-Merritt":"Rachaad White"};
@@ -8594,16 +9203,23 @@ function renderTargetBoard(){
   if(!el) return;
   const board = targetBoard(4);
   if(!board.length){ el.innerHTML = '<p class="panel-sub" style="margin:0;">Every slot is filled. Nothing left to buy.</p>'; return; }
+  // same short-code convention as the pool table, so a rated player's presence
+  // (or higher rank) here is visible, not a silent side-effect of the rating
+  const shortRead = { avoid:'AV', fade:'FD', maintain:'MT', target:'TG', chase:'CH' };
+  const readCol = { avoid:'var(--coral)', fade:'var(--coral)', maintain:'var(--chalk-2)',
+                    target:'var(--jade)', chase:'var(--jade)' };
   el.innerHTML = board.map(h=>{
     const rows = h.targets.map(o=>{
       const eff = o.eff >= EFFICIENCY_BAR;
       const col = eff ? 'var(--jade)' : 'var(--chalk-3)';
       const bye = byeWeek(o.p);
+      const readTag = o.read
+        ? `<strong style="color:${readCol[o.read]};font-size:10px;letter-spacing:.06em;margin-left:5px;" title="You rated him ${READ_BY_KEY[o.read].label}">${shortRead[o.read]}</strong>` : '';
       return `<div class="budget-row" title="${o.p.name} projects ${projectedPpg(o.p).toFixed(1)} a game against a replacement of ${replacementLevel(o.p.pos).toFixed(1)}, so ${o.v.toFixed(1)} above what a dollar body gives you in that slot.">
         <span class="b-name" style="flex:1;min-width:0;">
           <b data-plan-pick="${o.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;font-weight:600;">${o.p.name}</b>
           <span class="pos-tag pos-${o.p.pos}" style="margin-left:4px;">${o.p.pos}</span>
-          <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${o.p.nfl}${bye?' &middot; bye '+bye:''}</span>
+          <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${o.p.nfl}${bye?' &middot; bye '+bye:''}</span>${readTag}
         </span>
         <span class="b-nums"><strong>$${o.d}</strong><span style="color:${col};font-size:11px;margin-left:8px;">${h.cheapSlot?'':o.eff.toFixed(2)+'/$'}</span></span>
       </div>`;
@@ -8618,6 +9234,17 @@ function renderTargetBoard(){
 }
 
 function renderPlanView(){
+  /* renderTargetBoard() populates the "Target board" panel that sits above
+     Squad Plan in the same view -- it was defined but never actually called
+     anywhere in the app, so that panel has been rendering permanently blank
+     regardless of anything else here. Belongs with Squad Plan's own render
+     since they're the same view and meant to update together. Same reasoning
+     for the two below: positional scarcity and the Ideal Team solver used to
+     only exist in Draft Day's sidebar, so Prep planning had no visibility
+     into either until the draft was already live. */
+  renderTargetBoard();
+  renderBoardState();
+  renderSolver('Plan');
   const plan = planBudget();
   const els = ['planBody','planBodyTab'].map(id=>document.getElementById(id)).filter(Boolean);
   if(!els.length) return;
@@ -9057,9 +9684,16 @@ function render(){
    disconnected: a hung cross-origin fetch here used to leave the whole page
    permanently blank, since render() waited on it before running at all. */
 loadState().then(()=>{
+  // loadState() already runs render() once internally (see its own definition
+  // above) -- this used to call render() a second time here for no reason
+  // beyond setting the two badges below.
   const badge = document.getElementById('valuesBadge');
   if(badge) badge.textContent = `Market values: ${VALUES_SNAPSHOT_DATE} snapshot`;
-  render();
+  const footerDateEl = document.getElementById('footerDate');
+  if(footerDateEl){
+    const [y,m,d] = VALUES_SNAPSHOT_DATE.split('-').map(Number);
+    footerDateEl.textContent = `${m}/${d}/${y}`;
+  }
 });
 </script>
 </body>
