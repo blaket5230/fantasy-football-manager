@@ -1544,6 +1544,7 @@
           <button class="sub-tab" data-sub="history">Board</button>
         </nav>
 
+        <div id="situationStrip" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em;color:var(--chalk-2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:7px 12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px 14px;"></div>
         <div id="endgameAlert"></div>
         <div id="runAlert"></div>
 
@@ -3923,6 +3924,7 @@ function renderDraftView(){
   renderEndgame();
   markSideAlerts();
   renderBoardState();
+  renderSituationStrip();
   renderRunAlert();
   renderSolver();
   renderInflation();
@@ -4039,6 +4041,50 @@ function renderBoardState(){
     <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Spending pressure</div>
     ${pressureRows}
     <p class="panel-sub" style="margin:8px 0 0;">${money}</p>`;
+}
+
+/* Everything else in this sidebar (run alert, board scarcity, inflation,
+   forced money) is real intelligence that requires a tab click to see --
+   fine when you have time, not when a bid is closing in seconds. This pulls
+   the single highest-signal fact out of each of those four systems into one
+   persistent line that's visible no matter which sub-tab is open, so
+   reading the room doesn't cost a click. The full detail is still one tab
+   away for whichever signal is worth digging into. */
+function renderSituationStrip(){
+  const el = document.getElementById('situationStrip');
+  if(!el) return;
+
+  const r = runState();
+  let runChip;
+  if(r.active) runChip = `<span style="color:var(--coral)">&#128293; Run on ${r.active.pos}s</span>`;
+  else if(r.coming) runChip = `<span style="color:var(--gold)">&#9888; ${r.coming.pos}s thinning</span>`;
+  else runChip = `<span style="color:var(--chalk-3)">No run</span>`;
+
+  const infl = inflationState();
+  let inflChip;
+  if(infl.picks >= 5){
+    const pct = Math.round((infl.rate||1)*100);
+    const c = pct>=112 ? 'var(--coral)' : (pct<=90 ? 'var(--jade)' : 'var(--chalk-2)');
+    inflChip = `<span style="color:${c}">${pct}% of value</span>`;
+  } else {
+    inflChip = `<span style="color:var(--chalk-3)">Inflation warming up (${infl.picks}/5)</span>`;
+  }
+
+  const fm = forcedMoney();
+  let moneyChip;
+  if(fm.mustSpend) moneyChip = `<span style="color:var(--coral)">${fm.mustSpend} forced to spend</span>`;
+  else if(fm.scraping) moneyChip = `<span style="color:var(--jade)">${fm.scraping} scraping</span>`;
+  else moneyChip = `<span style="color:var(--chalk-3)">No spend pressure</span>`;
+
+  const dep = tierDepletion().filter(d=>!['PK','DST'].includes(d.pos));
+  const gone = dep.find(d=>d.state==='gone');
+  const thin = dep.find(d=>d.state==='thinnest');
+  let boardChip;
+  if(gone) boardChip = `<span style="color:var(--coral)">&#128683; ${gone.pos}s gone</span>`;
+  else if(thin) boardChip = `<span style="color:var(--gold)">${thin.pos}s thin</span>`;
+  else boardChip = `<span style="color:var(--chalk-3)">Board balanced</span>`;
+
+  el.innerHTML = [runChip, inflChip, moneyChip, boardChip].join('<span style="color:var(--line);">&middot;</span>');
 }
 
 function renderRunAlert(){
