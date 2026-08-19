@@ -405,6 +405,25 @@
   .pcard-name{font-family:'Archivo',sans-serif;font-weight:800;font-size:28px;letter-spacing:-.03em;line-height:1.05;}
   .pcard-meta{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;
     text-transform:uppercase;color:var(--chalk-3);margin-top:4px;}
+  /* Triage before you've read a word: a chip you can register in your
+     peripheral vision, plus one sentence synthesizing what the tabs below
+     go into detail on. Same green/gold/coral vocabulary as the rest of the
+     app, not a new color language to learn. */
+  .pcard-verdict-chip{
+    display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;
+    font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    padding:4px 10px;border-radius:999px;margin-top:8px;
+  }
+  .pcard-verdict-chip .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .pcard-verdict-chip.jade{background:rgba(63,182,139,.14);border:1px solid rgba(63,182,139,.5);color:#7FE0B8;}
+  .pcard-verdict-chip.jade .dot{background:var(--jade);}
+  .pcard-verdict-chip.gold{background:rgba(229,181,103,.14);border:1px solid rgba(229,181,103,.5);color:#F0C782;}
+  .pcard-verdict-chip.gold .dot{background:var(--gold);}
+  .pcard-verdict-chip.coral{background:rgba(229,103,95,.14);border:1px solid rgba(229,103,95,.5);color:#F0958E;}
+  .pcard-verdict-chip.coral .dot{background:var(--coral);}
+  .pcard-verdict-chip.gray{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--chalk-2);}
+  .pcard-verdict-chip.gray .dot{background:var(--chalk-3);}
+  .pcard-verdict-line{font-size:13px;color:var(--chalk-2);margin:9px 0 0;line-height:1.5;}
   .pcard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0;}
   .pcard-stat{background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:12px 13px;}
   .pcard-stat .k{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;
@@ -5852,6 +5871,30 @@ function renderPlayerCard(){
   const bye = byeWeek(p);
   const q = encodeURIComponent(p.name);
   const nb = cardNeighbours(p.name);
+  const fb = fpBoard(p.name);
+  const dis = expertDisagreement(p.name);
+
+  /* One glance, before reading a single tab: is he worth what the market
+     wants, and is there anything else worth knowing right away. Built
+     entirely from signals already computed above -- no new data, just a
+     synthesis of what's already on the card, surfaced first instead of
+     buried three tabs deep. */
+  const verdict = (()=>{
+    const parts = [];
+    let light = 'gray';
+    const diff = mine - base;
+    const bar = Math.max(2, base*0.08);
+    if(diff >= bar){ parts.push('Good value'); light = 'jade'; }
+    else if(diff <= -bar){ parts.push('Below your number'); light = 'coral'; }
+    else { parts.push('Fairly priced'); }
+    if(fb && fb.upside!=null){
+      if(fb.upside>=4 && fb.bust<=2) parts.push('high upside, low bust risk');
+      else if(fb.bust>=4) parts.push('real bust risk');
+    }
+    if(dis && dis.level==='contested') parts.push('experts split on him');
+    if(inj){ parts.push('banged up'); if(light==='jade') light='gold'; }
+    return { light, text: parts.join(' — ') };
+  })();
 
   const stat = (k,v,t) => `<div class="pcard-stat" title="${(t||'').replace(/"/g,'')}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const dots = READ_SCALE.map(o=>{
@@ -5886,6 +5929,7 @@ function renderPlayerCard(){
         <div style="min-width:0;">
           <div class="pcard-name">${p.name}</div>
           <div class="pcard-meta"><span class="pos-tag pos-${p.pos}">${p.pos}</span> &middot; ${logoHTML(p.nfl,14)} ${p.nfl}${bye?' &middot; bye '+bye:''}${typeof p.age==='number'?' &middot; age '+p.age:''}${ti?' &middot; tier '+ti.tier:''}</div>
+          <span class="pcard-verdict-chip ${verdict.light}"><span class="dot"></span>${verdict.text.split(' — ')[0]}</span>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -5895,6 +5939,8 @@ function renderPlayerCard(){
         <span class="row-act" tabindex="0" role="button" id="cardClose">&times;</span>
       </div>
     </div>
+
+    <p class="pcard-verdict-line">${verdict.text}.</p>
 
     <!-- Trimmed to the six numbers you check on every player regardless of
          context. Everything else (full contract math, 2025 pace, schedule)
@@ -5935,8 +5981,9 @@ function renderPlayerCard(){
     </div>
 
     <div class="pcard-tab-body ${pcardTab==='rankings'?'active':''}" data-pcard-tab-body="rankings">
-      ${(()=>{const fb=fpBoard(p.name), d=expertDisagreement(p.name);
+      ${(()=>{
         if(!fb) return '';
+        const d = dis;
         const spread = d && d.level==='contested' ? '<span style="color:var(--gold)">They are genuinely split on him, so the consensus number is hiding disagreement.</span>'
           : (d && d.level==='settled' ? '<span style="color:var(--jade)">Little argument about what he is.</span>' : '');
         const adpLine = fb.vsAdp!=null && fb.vsAdp!==0 ? ` Going ${Math.abs(fb.vsAdp)} picks ${fb.vsAdp>0?'later':'earlier'} than the panel ranks him.` : '';
