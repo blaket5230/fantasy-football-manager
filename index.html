@@ -1800,7 +1800,7 @@
               <div><label>NFL team</label><input type="text" id="newPoolTeam" placeholder="e.g. DAL" style="width:90px;"></div>
               <div><label>Worth about</label><input type="number" id="newPoolPrice" min="1" value="1" style="width:80px;"></div>
               <div><label>Age</label><input type="number" id="newPoolAge" min="18" max="45" placeholder="opt" style="width:70px;"></div>
-              <button class="primary" id="addPlayerBtn">Add to pool</button>
+              <button class="primary" id="addPoolPlayerBtn">Add to pool</button>
             </div>
             <p class="panel-sub" id="addPlayerNote" style="margin:0;"></p>
           </div>
@@ -4788,9 +4788,14 @@ function renderMyRoster(){
 }
 
 function bindAddPlayer(){
+  /* This id used to collide with the League/Rosters "Add player" button
+     (view-team, same literal id="addPlayerBtn") -- getElementById always
+     resolves to the first match in the document, so this bound the League
+     button's listener a second time and the real "Add to pool" button here
+     never got one at all. Clicking it during a live draft did nothing. */
   const tg = document.getElementById('addPlayerToggle');
   const form = document.getElementById('addPlayerForm');
-  const btn = document.getElementById('addPlayerBtn');
+  const btn = document.getElementById('addPoolPlayerBtn');
   const note = document.getElementById('addPlayerNote');
   if(!tg || !form || !btn) return;
   if(!tg.dataset.bound){
