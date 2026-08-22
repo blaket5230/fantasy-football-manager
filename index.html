@@ -3979,7 +3979,18 @@ function demandStateFor(teamIdx, pos){
     if(held >= 2) return 'stacked';
     return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'moderate';
   }
-  const q = qualityCountAtPos(teamIdx, pos);
+  /* WR and TE share the same 2 WR/TE starter slots (plus the flex) --
+     STARTER_REQ has no dedicated TE slot at all, only QB/PK/DST do. Reading
+     TE demand off TE-only supply called a team "hungry" at TE the moment it
+     held zero TEs, even sitting on two elite WRs already covering both
+     shared slots. Sum quality across the same substitutePositions() group
+     tierInfoFor() already uses for this exact reason (a WR and a TE are
+     genuine substitutes here), so a team well-stocked in one correctly
+     reads as covered in the other, not as two independent needs. */
+  const group = substitutePositions(pos);
+  const q = group.length > 1
+    ? group.reduce((sum,gp)=>sum + qualityCountAtPos(teamIdx, gp), 0)
+    : qualityCountAtPos(teamIdx, pos);
   if(q>=2) return 'stacked';
   if(q===0) return 'hungry';
   return 'moderate';
@@ -8145,8 +8156,15 @@ function bidVerdict(p, bid, myIdx){
       }
     }
   } else if(typeof activeBidders !== 'undefined' && !activeBidders.size && bid > market){
-    score += 8;
-    reasons.push({sign:1, text:`Nobody tagged as still bidding. If that is right, you are bidding against yourself above $${market}.`});
+    /* Was score += 8 with sign:1 -- rewarding a bid for exceeding market
+       specifically when nobody is tagged as still fighting for him, which is
+       backwards from what the sentence itself says. With no real competition
+       there is no pressure to pay above market at all; this should argue
+       against going higher, not for it. Caught by an automated sweep as a
+       genuine score-monotonicity violation (identical player, $1 more,
+       higher score) on six elite players -- not just a wording mismatch. */
+    score -= 8;
+    reasons.push({sign:-1, text:`Nobody tagged as still bidding. If that is right, you are bidding against yourself above $${market} for no reason.`});
   }
 
   /* 13. The question every other factor is a proxy for: does winning him at
