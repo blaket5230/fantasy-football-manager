@@ -1757,9 +1757,9 @@
               <span class="row-act" tabindex="0" role="button" id="endMockDraftBtn" title="Exit back to your real draft board, unchanged">end mock draft</span>
             </div>
             <p class="panel-sub" id="mockAnnounce" style="margin:8px 0 4px;min-height:1.4em;"></p>
-            <div class="field-row" style="margin-top:4px;">
+            <div id="mockAuctionBox" style="display:none;margin:8px 0 4px;"></div>
+            <div class="field-row" style="margin-top:4px;" id="mockManualRow">
               <button class="primary" id="mockNextNomBtn">Next nomination</button>
-              <span class="row-act" tabindex="0" role="button" id="mockFieldTakesBtn" title="Let the highest simulated rival bid win this player at the resolved price">field takes him</span>
             </div>
           </div>
         </div>
@@ -3799,6 +3799,13 @@ function resetBiddingState(player){
       if(c >= 1){ mockRivalCeilings[i] = c; activeBidders.add(i); }
     });
     biddersArePredicted = true;
+    /* This is the single hook point that covers every way a player lands on
+       the clock in mock mode -- an AI nomination, Blake's own search-select,
+       and the "+ player not listed" custom add -- so the real-time auction
+       always starts here rather than needing to be wired into each caller. */
+    const nomIdx = mockCurrentNominatorIdx >= 0 ? mockCurrentNominatorIdx : myIdx;
+    mockCurrentNominatorIdx = -1;
+    mockAuctionStart(player, nomIdx);
   }
 }
 let biddersArePredicted = false;
@@ -4068,7 +4075,20 @@ let mockModeActive = false;
 let mockRealStateBackup = null;
 let mockPersonalities = {};
 let mockRivalCeilings = {};
-let mockNominatorPtr = 0;
+let mockSnakeRound = 0;
+let mockSnakePos = 0;
+let mockCurrentNominatorIdx = -1;
+
+/* The live ticking auction for the current nomination: null between
+   nominations, `{playerName,pos,mv,price,leaderIdx,nominatorIdx,quietTicks,
+   status}` while one is running or showing its recap. Kept entirely separate
+   from `currentBidValue`/`activeBidders` (the advisory bid-panel state) --
+   those still describe what the panel is showing, this describes what the
+   room is actually doing right now. */
+let mockAuction = null;
+let mockAuctionTimerId = null;
+const MOCK_TICK_MS = 1400;     // pace between AI bid-consideration ticks
+const MOCK_RECAP_MS = 3200;    // how long "SOLD" sits before auto-advancing
 
 const MOCK_PERSONAS = ['rational','namechaser','hoarder','passive','panicker'];
 const MOCK_PERSONA_PARAMS = {
@@ -4267,7 +4287,11 @@ function startMockDraft(){
     mockPersonalities[i] = mockDrawPersonality(MOCK_PERSONAS[Math.floor(Math.random()*MOCK_PERSONAS.length)]);
   });
   mockRivalCeilings = {};
-  mockNominatorPtr = 0;
+  mockSnakeRound = 0;
+  mockSnakePos = 0;
+  mockCurrentNominatorIdx = -1;
+  if(mockAuctionTimerId){ clearTimeout(mockAuctionTimerId); mockAuctionTimerId = null; }
+  mockAuction = null;
   selectedDraftPlayer = null;
   /* Reset each cache's key alongside its cache -- not just the cache -- or a
      recomputed key that happens to match the stale one (very likely right
@@ -4285,6 +4309,11 @@ function startMockDraft(){
 
 function endMockDraft(){
   if(!mockModeActive) return;
+  /* A tick or the recap-then-advance timer left running past this point
+     would fire against the real state this function is about to restore --
+     kill it first, before anything else. */
+  if(mockAuctionTimerId){ clearTimeout(mockAuctionTimerId); mockAuctionTimerId = null; }
+  mockAuction = null;
   logMockRun();   // snapshot final stats from the mock state before reverting it
   state = mockRealStateBackup;
   mockRealStateBackup = null;
@@ -4306,22 +4335,39 @@ function endMockDraft(){
   renderLeagueGrid();
 }
 
+/* True snake order: round 0 goes 0..n-1, round 1 goes n-1..0, round 2 goes
+   0..n-1 again, and so on -- the team at each end nominates twice in a row
+   at the turn, exactly like a snake draft's pick order, just applied to who
+   nominates rather than who picks. A team with a full roster is skipped by
+   walking the sequence (up to two full laps) rather than by breaking the
+   pattern for everyone else. */
+function mockTeamAtSnake(round, pos){
+  const n = state.teams.length;
+  return round % 2 === 0 ? pos : (n-1-pos);
+}
 function mockNextNominatorIdx(){
   const n = state.teams.length;
-  for(let step=0; step<n; step++){
-    const idx = (mockNominatorPtr+step) % n;
-    if(effOpenSlots(idx) > 0) return idx;
+  let round = mockSnakeRound, pos = mockSnakePos;
+  for(let step=0; step<2*n; step++){
+    const idx = mockTeamAtSnake(round, pos);
+    if(effOpenSlots(idx) > 0) return { idx, round, pos };
+    pos++;
+    if(pos>=n){ pos=0; round++; }
   }
-  return -1;
+  return null;
 }
 
 function mockAdvanceNomination(){
   if(!mockModeActive) return;
   selectedDraftPlayer = null;
-  const idx = mockNextNominatorIdx();
-  if(idx < 0){ mockAnnounce('Every roster is full -- mock draft complete. Start a new one to run it again.'); return; }
-  mockNominatorPtr = idx + 1;
+  const nxt = mockNextNominatorIdx();
+  if(!nxt){ mockAnnounce('Every roster is full -- mock draft complete. Start a new one to run it again.'); return; }
+  mockSnakeRound = nxt.round;
+  mockSnakePos = nxt.pos + 1;
+  if(mockSnakePos >= state.teams.length){ mockSnakePos = 0; mockSnakeRound = nxt.round + 1; }
+  const idx = nxt.idx;
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  mockCurrentNominatorIdx = idx;
   if(idx === myIdx){
     mockAnnounce('Your turn to nominate -- search for a player below to put him on the clock.');
     renderBidPanel();
@@ -4329,29 +4375,206 @@ function mockAdvanceNomination(){
   }
   const nominee = mockChooseNominee(idx, mockPersonalities[idx].nominationStyle);
   if(!nominee){ mockAnnounce('No players left that anyone can use -- mock draft complete.'); return; }
-  mockAnnounce(`${state.teams[idx].owner} nominates ${nominee.name} (${nominee.pos}). Bid, or pass and let the field take him.`);
+  mockAnnounce(`${state.teams[idx].owner} nominates ${nominee.name} (${nominee.pos}) -- opening bid $1.`);
   putOnTheClock(nominee.name);
 }
 
-/* Resolves the current nomination to whichever rival has the highest
-   computed ceiling, at the standard second-price (2nd-highest + 1, or $1 if
-   only one bidder). Mirrors sim/sim-core.js's resolveAuction pricing rule. */
-function mockFieldTakesHim(){
-  if(!mockModeActive || !selectedDraftPlayer) return;
-  const entries = Object.entries(mockRivalCeilings)
-    .map(([idx,c])=>({idx:Number(idx), c})).filter(e=>e.c>=1).sort((a,b)=>b.c-a.c);
-  if(!entries.length){
-    mockAnnounce(`Nobody else wants ${selectedDraftPlayer.name} right now -- he goes unclaimed this round.`);
-    selectedDraftPlayer = null;
+/* ---------- THE LIVE TICKING AUCTION ----------
+   One nomination = one `mockAuction`. The nominator opens at $1 as its
+   leader. Every MOCK_TICK_MS, each rival still eligible (open roster slot,
+   snapshotted ceiling still above the next dollar, not already the leader)
+   rolls to raise -- more likely early, more reluctant as the price closes in
+   on their own ceiling -- and the strongest of anyone who rolls in gets that
+   tick's raise, so at most one bid lands per tick and it reads as bidding
+   climbing a dollar at a time rather than jumping. Three consecutive ticks
+   with nobody raising -- going once, going twice, sold -- ends it. Blake's
+   own raise (mockAuctionRaiseByMe) is never gated by the tick timer: it
+   lands the instant he clicks, then reschedules the next tick so the field
+   gets a fresh reaction window. */
+function mockAuctionStart(player, nominatorIdx){
+  if(mockAuctionTimerId){ clearTimeout(mockAuctionTimerId); mockAuctionTimerId = null; }
+  mockAuction = {
+    playerName: player.name, pos: player.pos, mv: player.mv,
+    price: 1,
+    leaderIdx: nominatorIdx,
+    nominatorIdx,
+    quietTicks: 0,
+    status: 'live',
+  };
+  renderMockAuction();
+  scheduleMockAuctionTick();
+}
+
+function scheduleMockAuctionTick(){
+  if(mockAuctionTimerId) clearTimeout(mockAuctionTimerId);
+  mockAuctionTimerId = setTimeout(mockAuctionTick, MOCK_TICK_MS);
+}
+
+function mockAuctionTick(){
+  mockAuctionTimerId = null;
+  if(!mockModeActive || !mockAuction || mockAuction.status !== 'live') return;
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const nextPrice = mockAuction.price + 1;
+  const candidates = [];
+  state.teams.forEach((t,i)=>{
+    if(i===myIdx || i===mockAuction.leaderIdx) return;
+    const ceil = mockRivalCeilings[i];
+    if(!ceil || ceil < nextPrice) return;
+    if(effOpenSlots(i) <= 0) return;
+    const progress = (nextPrice-1) / ceil;   // how close to their own limit
+    const p = Math.max(0.08, 0.8 - 0.65*progress);
+    if(Math.random() < p) candidates.push({idx:i, ceil});
+  });
+  if(candidates.length){
+    candidates.sort((a,b)=>b.ceil-a.ceil);
+    mockAuction.price = nextPrice;
+    mockAuction.leaderIdx = candidates[0].idx;
+    mockAuction.quietTicks = 0;
+    renderMockAuction();
+    scheduleMockAuctionTick();
     return;
   }
-  const winner = entries[0];
-  const second = entries.length>1 ? entries[1].c : 0;
-  const price = Math.max(1, Math.min(winner.c, second+1, effMaxLegalBid(winner.idx)));
-  const sel = document.getElementById('pickTeamSelect');
-  if(sel) sel.value = String(winner.idx);
-  currentBidValue = price;
-  logCurrentPick();
+  mockAuction.quietTicks++;
+  if(mockAuction.quietTicks >= 3){ mockAuctionFinish(); return; }
+  renderMockAuction();
+  scheduleMockAuctionTick();
+}
+
+function mockAuctionRaiseByMe(){
+  if(!mockModeActive || !mockAuction || mockAuction.status !== 'live') return;
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  if(mockAuction.leaderIdx === myIdx) return;
+  const nextPrice = mockAuction.price + 1;
+  if(nextPrice > effMaxLegalBid(myIdx)) return;
+  mockAuction.price = nextPrice;
+  mockAuction.leaderIdx = myIdx;
+  mockAuction.quietTicks = 0;
+  renderMockAuction();
+  scheduleMockAuctionTick();
+}
+
+/* Skip the remaining real-time pacing and resolve the live auction to its
+   current leader right now -- for AI-vs-AI nominations Blake doesn't need
+   to sit through, not a different outcome, just a faster path to it. */
+function mockAuctionSkip(){
+  if(!mockModeActive || !mockAuction || mockAuction.status !== 'live') return;
+  if(mockAuctionTimerId){ clearTimeout(mockAuctionTimerId); mockAuctionTimerId = null; }
+  mockAuctionFinish();
+}
+
+function mockAuctionFinish(){
+  if(mockAuctionTimerId){ clearTimeout(mockAuctionTimerId); mockAuctionTimerId = null; }
+  if(!mockAuction) return;
+  const p = DRAFT_POOL.find(x=>x.name===mockAuction.playerName);
+  const teamIdx = mockAuction.leaderIdx;
+  const price = mockAuction.price;
+  if(p){
+    state.draftPicks.push({
+      id: pickIdCounter++,
+      name: p.name, pos: p.pos, mv: p.mv,
+      price, length: 1, teamIdx,
+      suggested: suggestedDollar(p.mv, p.pos, p.name)
+    });
+  }
+  mockAuction.status = 'recap';
+  mockAuction.recapHTML = mockBuildRecap(p, teamIdx, price);
+  selectedDraftPlayer = null;
+  renderMockAuction();
+  renderDraftView();
+  renderLeagueGrid();
+  mockAuctionTimerId = setTimeout(()=>{
+    mockAuctionTimerId = null;
+    if(!mockModeActive) return;
+    mockAuction = null;
+    mockAdvanceNomination();
+  }, MOCK_RECAP_MS);
+}
+
+/* A quick read on the sale: what it went for against market, and -- for
+   whoever wasn't you -- a one-line frame on why that team wanted him,
+   reusing the same demand model the live bid panel itself trusts. */
+function mockBuildRecap(p, teamIdx, price){
+  const team = state.teams[teamIdx];
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const name = p ? p.name : mockAuction.playerName;
+  const suggested = p ? suggestedDollar(p.mv, p.pos, p.name) : price;
+  const diff = price - suggested;
+  const diffText = diff===0 ? `right at the $${suggested} market number`
+    : diff>0 ? `$${diff} over the $${suggested} market number`
+    : `$${Math.abs(diff)} under the $${suggested} market number`;
+  const wonByMe = teamIdx === myIdx;
+  const demand = p ? demandStateFor(teamIdx, p.pos) : 'moderate';
+  const demandText = { hungry:'was hungry there, nothing at the position yet', moderate:'had one solid piece there already', stacked:'was already stacked at the position' }[demand];
+  const flavor = wonByMe
+    ? `You land him for $${price} -- ${diffText}.`
+    : `${team.owner} takes him for $${price} -- ${diffText}. ${team.owner} ${demandText}.`;
+  return `
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:12px 14px;">
+      ${p?faceHTML(p,40):''}
+      <div style="min-width:180px;">
+        <div style="font-weight:700;letter-spacing:.04em;color:${wonByMe?'var(--jade)':'var(--gold)'};">SOLD &middot; $${price}</div>
+        <div style="font-weight:700;font-size:15px;margin-top:2px;">${name} ${p?`<span class="pos-tag pos-${p.pos}">${p.pos}</span>`:''}</div>
+      </div>
+      <p class="panel-sub" style="margin:0;flex:1;min-width:220px;">${flavor}</p>
+      <span class="row-act" tabindex="0" role="button" id="mockRecapSkipBtn" title="Skip the pause and go straight to the next nomination">next now</span>
+    </div>
+  `;
+}
+
+/* Renders whatever the auction box should show right now: nothing between
+   nominations (the static "Next nomination" row takes over), the live
+   ticking state while one is running, or the recap once it's sold. */
+function renderMockAuction(){
+  const box = document.getElementById('mockAuctionBox');
+  const manualRow = document.getElementById('mockManualRow');
+  if(!box) return;
+  if(!mockAuction){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    if(manualRow) manualRow.style.display = '';
+    return;
+  }
+  if(manualRow) manualRow.style.display = 'none';
+  box.style.display = '';
+
+  if(mockAuction.status === 'recap'){
+    box.innerHTML = mockAuction.recapHTML;
+    const skipBtn = document.getElementById('mockRecapSkipBtn');
+    if(skipBtn) skipBtn.addEventListener('click', ()=>{
+      if(mockAuctionTimerId){ clearTimeout(mockAuctionTimerId); mockAuctionTimerId = null; }
+      mockAuction = null;
+      mockAdvanceNomination();
+    });
+    return;
+  }
+
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const p = DRAFT_POOL.find(x=>x.name===mockAuction.playerName);
+  const leader = state.teams[mockAuction.leaderIdx];
+  const isMeLeading = mockAuction.leaderIdx === myIdx;
+  const nextPrice = mockAuction.price + 1;
+  const myMax = myIdx>=0 ? effMaxLegalBid(myIdx) : 0;
+  const canBid = !isMeLeading && myIdx>=0 && effOpenSlots(myIdx)>0 && nextPrice<=myMax;
+  const callText = mockAuction.quietTicks===1 ? 'Going once...' : mockAuction.quietTicks===2 ? 'Going twice...' : '';
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:12px 14px;">
+      ${p?faceHTML(p,40):''}
+      <div style="min-width:170px;">
+        <div style="font-weight:700;font-size:15px;">${p?p.name:mockAuction.playerName} ${p?`<span class="pos-tag pos-${p.pos}">${p.pos}</span>`:''}</div>
+        <div class="panel-sub" style="margin:2px 0 0;">${isMeLeading?'You lead':`${leader?leader.owner:'?'} leads`}</div>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:var(--jade);">$${mockAuction.price}</div>
+      <div style="min-width:100px;color:var(--gold);font-weight:700;letter-spacing:.04em;">${callText}</div>
+      <span style="flex:1;"></span>
+      <span class="row-act" tabindex="0" role="button" id="mockAuctionSkipBtn" title="Skip the pacing and resolve to the current leader now">skip</span>
+      <button class="primary" id="mockBidBtn" ${canBid?'':'disabled'}>Bid $${nextPrice}</button>
+    </div>
+  `;
+  const bidBtn = document.getElementById('mockBidBtn');
+  if(bidBtn) bidBtn.addEventListener('click', mockAuctionRaiseByMe);
+  const skipBtn = document.getElementById('mockAuctionSkipBtn');
+  if(skipBtn) skipBtn.addEventListener('click', mockAuctionSkip);
 }
 
 function bindMockDraftControls(){
@@ -4364,8 +4587,7 @@ function bindMockDraftControls(){
   if(endBtn && !endBtn.dataset.bound){ endBtn.dataset.bound='1'; endBtn.addEventListener('click', endMockDraft); }
   const nextBtn = document.getElementById('mockNextNomBtn');
   if(nextBtn && !nextBtn.dataset.bound){ nextBtn.dataset.bound='1'; nextBtn.addEventListener('click', mockAdvanceNomination); }
-  const fieldBtn = document.getElementById('mockFieldTakesBtn');
-  if(fieldBtn && !fieldBtn.dataset.bound){ fieldBtn.dataset.bound='1'; fieldBtn.addEventListener('click', mockFieldTakesHim); }
+  renderMockAuction();
 }
 
 
