@@ -1121,27 +1121,6 @@
   .pick-row-bottom .icon-btn{flex-shrink:0;padding:5px 7px;font-size:10.5px;}
 
   /* ---------- ROSTER SLOTS ---------- */
-  .slot-chip-row{display:flex;flex-wrap:wrap;gap:6px;}
-  .slot-chip{
-    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.05em;
-    padding:8px 10px;border-radius:6px;border:1px solid var(--line);
-    transition:all var(--mid) var(--ease);
-  }
-  .slot-chip.filled{
-    background:rgba(63,182,139,.14);border-color:rgba(63,182,139,.5);color:var(--jade);
-  }
-  .slot-chip.open{
-    background:var(--ink);color:var(--chalk-3);border-style:dashed;
-  }
-  .roster-player-list{list-style:none;padding:0;margin:12px 0 0;font-size:13.5px;}
-  .roster-player-list li{
-    display:flex;justify-content:space-between;align-items:center;gap:10px;
-    padding:8px 0;color:var(--chalk-2);border-bottom:1px solid var(--line-soft);
-  }
-  .roster-player-list li:last-child{border-bottom:none;}
-  .roster-player-list li .p-price{
-    font-family:'JetBrains Mono',monospace;color:var(--gold);font-weight:700;
-  }
   .roster-slot-row{
     display:flex;justify-content:space-between;align-items:center;padding:8px 0;
     border-bottom:1px solid var(--line-soft);font-family:'JetBrains Mono',monospace;font-size:12px;
@@ -1828,7 +1807,7 @@
           </div>
 
           <div class="side-body" data-pane="roster">
-            <p class="panel-sub">Live, including tonight's picks. Starters: 1 QB, 2 RB, 2 WR/TE, 1 flex, 1 PK, 1 DST.</p>
+            <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
             <div id="myRosterPanel"></div>
             <div style="margin-top:16px;">
               <h3 style="font-size:12px;">Cap space</h3>
@@ -5140,38 +5119,35 @@ function renderMyRoster(){
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   if(myIdx<0){ wrap.innerHTML = '<p class="panel-sub">Team not found.</p>'; return; }
   const team = state.teams[myIdx];
-  const rostered = team.players.filter(p=>!p.deadCap).map(p=>({
-    name:p.name, pos:p.pos, price:p.years[state.currentYear]||p.base, live:false
-  }));
-  const picks = picksForTeam(myIdx).map(p=>({ name:p.name, pos:p.pos, price:p.price, live:true }));
-  const all = [...rostered, ...picks];
   const deadN = team.players.filter(p=>p.deadCap).length;
 
-  const counts = { QB:0, RB:0, WR:0, TE:0, PK:0, DST:0 };
-  all.forEach(p=>{ if(counts[p.pos]!==undefined) counts[p.pos]++; });
-  const rbwrFilled = Math.min(counts.RB + counts.WR + counts.TE, RBWR_FLEX_TOTAL);
+  // Same starters/bench read as Other Rosters -- best VOR into the most
+  // valuable slot he's eligible for, so an early pick slides to bench the
+  // moment something better fills his slot, no special-casing needed.
+  const held = team.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
+    .concat(picksForTeam(myIdx).map(p=>({name:p.name,pos:p.pos})));
+  const { starters, bench } = assignLineup(held);
+  const { slots: benchSlots, overflow } = assignBench(bench);
 
-  const chipDefs = [
-    {label:'QB', filled: counts.QB>=1},
-    {label:'RB', filled: rbwrFilled>=1},
-    {label:'RB', filled: rbwrFilled>=2},
-    {label:'WR', filled: rbwrFilled>=3},
-    {label:'WR', filled: rbwrFilled>=4},
-    {label:'FLX', filled: rbwrFilled>=5},
-    {label:'PK', filled: counts.PK>=1},
-    {label:'DST', filled: counts.DST>=1},
-  ];
-  const slotsHTML = `<div class="slot-chip-row">${
-    chipDefs.map(s=>`<span class="slot-chip ${s.filled?'filled':'open'}">${s.label}</span>`).join('')
-  }</div><p class="panel-sub" style="margin:8px 0 0;">${chipDefs.filter(s=>s.filled).length}/8 starter slots filled</p>`;
+  const starterRows = SLOTS.map(slot=>{
+    const pl = starters[slot.key];
+    return `<div class="or-slot"><span class="or-slot-label">${slot.label}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
+  }).join('');
+  const benchRows = BENCH_SLOTS.map(slot=>{
+    const pl = benchSlots[slot.key];
+    return `<div class="or-slot"><span class="or-slot-label">${slot.label}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
+  }).join('');
+  const overflowRows = overflow.map(pl=>
+    `<div class="or-slot"><span class="or-slot-label">Extra</span><span class="or-slot-name">${pl.name}</span></div>`
+  ).join('');
 
-  const order = {QB:0,RB:1,WR:2,TE:3,PK:4,DST:5};
-  all.sort((a,b)=> (order[a.pos]-order[b.pos]) || (b.price-a.price));
-  const listHTML = all.length ? `<ul class="roster-player-list">${
-    all.map(p=>`<li><span><span class="pos-tag pos-${p.pos}" style="margin-right:4px;">${p.pos}</span>${p.name}${p.live?' <span class="dead-tag" style="color:var(--gold);border-color:rgba(229,181,103,0.4);background:rgba(229,181,103,0.1);">this session</span>':''}</span><span class="p-price">$${p.price}</span></li>`).join('')
-  }</ul>` : '<p class="panel-sub">No players yet. Anyone you win tonight appears here as you log them.</p>';
-
-  wrap.innerHTML = `${slotsHTML}${listHTML}<p class="panel-sub" style="margin-top:8px;">${all.length}/18 roster spots filled${deadN?`, plus ${deadN} dead-cap ${deadN===1?'entry':'entries'} that cost money but no roster spot`:''}.</p>`;
+  wrap.innerHTML = `
+    <div class="or-slot-group-label">Starters</div>
+    ${starterRows}
+    <div class="or-slot-group-label">Bench</div>
+    ${benchRows}${overflowRows}
+    <p class="panel-sub" style="margin-top:8px;">${held.length}/18 roster spots filled${deadN?`, plus ${deadN} dead-cap ${deadN===1?'entry':'entries'} that cost money but no roster spot`:''}.</p>
+  `;
 }
 
 /* Every other team, live, with the same starter/bench read the tool trusts
