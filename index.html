@@ -87,6 +87,56 @@
      rosters) sit either side of the original three columns, and on a wide
      monitor there was still dead margin left over even at 1760px. */
   .wrap:has(#view-draft.active){max-width:2320px;}
+  /* Draft Day is a live, no-scroll workspace, not a page you read -- the
+     generic page chrome (full title, status cards, mode cards with their own
+     subtitles, a sub-tab row with a single button on it) is sized for
+     browsing, not for fitting a whole live auction on one screen. Shrink it
+     specifically here rather than everywhere, the same way the width above
+     is scoped to this view only. */
+  .wrap:has(#view-draft.active) header{padding-bottom:8px;}
+  .wrap:has(#view-draft.active) .brand-eyebrow{margin-bottom:3px;}
+  .wrap:has(#view-draft.active) h1{font-size:22px;}
+  .wrap:has(#view-draft.active) .status-strip{margin-bottom:10px;}
+  .wrap:has(#view-draft.active) .strip-cell{padding:6px 14px;}
+  .wrap:has(#view-draft.active) .strip-val{font-size:15px;}
+  .wrap:has(#view-draft.active) .modes{margin-bottom:0;gap:6px;}
+  .wrap:has(#view-draft.active) .mode{padding:6px 12px;flex-direction:row;align-items:center;gap:8px;flex:0 0 auto;}
+  .wrap:has(#view-draft.active) .mode-sub{display:none;}
+  .wrap:has(#view-draft.active) .mode-name{font-size:13px;}
+  .wrap:has(#view-draft.active) .mode-ic{width:15px;height:15px;}
+  /* nav.tabs still exists and is still driven by JS (putOnTheClock() clicks
+     it programmatically to switch views) -- display:none only hides the box,
+     .click() still works on a hidden element, so this is safe. It would only
+     ever show one button ("Draft Day") while this view is active anyway. */
+  .wrap:has(#view-draft.active) nav.tabs{display:none;}
+  .wrap:has(#view-draft.active) .draft-layout .panel{padding:14px 18px;}
+  .wrap:has(#view-draft.active) .sub-tabs{margin:0 0 8px;}
+  .wrap:has(#view-draft.active) .sub-tab{padding:6px 12px;font-size:12.5px;}
+  .wrap:has(#view-draft.active) #situationStrip{padding:5px 12px;margin-bottom:8px;}
+  /* However much reference detail sits above it, the action that actually
+     ends a nomination -- pick the winning team, log the price -- stays
+     reachable without scrolling the rest of the way down. Sticks to the
+     bottom of draft-main's own scroll box, not the page. */
+  .wrap:has(#view-draft.active) .bid-log-row{
+    position:sticky;bottom:-14px;background:var(--surface);
+    box-shadow:0 -8px 12px -4px rgba(0,0,0,.35);z-index:2;
+  }
+  .wrap:has(#view-draft.active) .footnote{display:none;}
+  /* Every draft-layout column is independently height-capped and confirmed
+     to clip and scroll correctly on its own (verified directly against
+     computed styles and bounding rects) -- but a scrollable descendant
+     nested this deep inside a sticky-positioned CSS Grid item still leaves
+     the page itself a few dozen pixels "scrollable" in some engines, a real
+     but purely cosmetic side effect of that combination, not of anything
+     actually being cut off. Belt-and-suspenders: disable page-level
+     vertical scroll outright while Draft Day is active -- but ONLY at the
+     same 1600px width the columns themselves start being capped at (see
+     .draft-layout below). Below that the layout already reverts to a
+     normal stacked column that needs to scroll like any other page; forcing
+     overflow:hidden there would make the stacked content unreachable. */
+  @media (min-width:1600px){
+    html:has(#view-draft.active), body:has(#view-draft.active){overflow-y:hidden;}
+  }
 
   /* Any table that can outgrow its panel scrolls inside it rather than
      bleeding over the edge. */
@@ -944,14 +994,49 @@
      column mobile stack: first the history column drops below (still full
      width, still on screen without much scrolling), then at the existing
      mobile breakpoint everything stacks the way it always has. */
+  /* Every column is capped to the viewport and scrolls internally rather
+     than the page scrolling -- the goal on Draft Day is the whole workspace
+     fitting on screen at once, so no column is allowed to push the document
+     taller than one view. A column that still doesn't fit gets its own
+     scrollbar (a contained "popout"), which is a very different, much less
+     disruptive thing than losing the bid panel off the bottom of the browser
+     mid-auction. */
+  /* min-height:0 on every column below is not decorative -- a grid item's
+     default min-height is "auto", which floors it at its own UNCLAMPED
+     content height regardless of max-height, so the grid row (and therefore
+     the page) still grows to fit the tallest column's real content even
+     though that column visually clips and scrolls correctly on its own.
+     Overriding the floor to 0 is what lets max-height+overflow actually stop
+     the row -- and the page -- from growing past the viewport. */
+  /* position:sticky and the max-height/overflow-y that clips a column to the
+     viewport live on DIFFERENT elements on purpose. Sticky + overflow on the
+     SAME element visually clips fine but still inflates
+     document.scrollHeight (a real, documented sticky/overflow interaction
+     quirk) -- so the outer column stays sticky, and the actual height cap +
+     scrollbar sit on the .panel it wraps. .draft-main was never sticky, so
+     it doesn't have this problem and keeps the cap directly. */
   .draft-layout{display:grid;grid-template-columns:280px 380px 1fr 340px 320px;gap:18px;align-items:start;}
-  .draft-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px;min-width:0;}
-  .draft-sidebar .panel{margin-bottom:0;min-width:0;overflow:hidden;}
-  .draft-main{min-width:0;}
-  .draft-history-col{position:sticky;top:16px;min-width:0;}
+  .draft-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px;min-width:0;min-height:0;}
+  .draft-sidebar .panel{margin-bottom:0;min-width:0;}
+  .draft-main{min-width:0;min-height:0;}
+  .draft-history-col{position:sticky;top:16px;min-width:0;min-height:0;}
   .draft-history-col .panel{margin-bottom:0;min-width:0;}
-  .draft-rail-left,.draft-rail-right{position:sticky;top:16px;min-width:0;max-height:calc(100vh - 32px);overflow-y:auto;}
+  .draft-rail-left,.draft-rail-right{position:sticky;top:16px;min-width:0;min-height:0;}
   .draft-rail-left .panel,.draft-rail-right .panel{margin-bottom:0;min-width:0;}
+  /* Capping every column to the viewport (and disabling page scroll for the
+     view entirely, see the body/html rule further up) only makes sense once
+     the layout is actually wide enough to show columns side by side -- below
+     that, .draft-rail-left/right and the history column already fall back to
+     stacked full-width blocks (see the breakpoints below), and that stack
+     needs to scroll normally like any other page, the same as it always
+     could before this rework. 1600px is deliberately the same threshold
+     where the rails themselves stop being real side columns. */
+  @media (min-width:1600px){
+    .draft-sidebar .panel{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
+    .draft-main{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
+    .draft-history-col .panel{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
+    .draft-rail-left .panel,.draft-rail-right .panel{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
+  }
   /* Two extra rails only earn their keep once there is genuinely room for the
      center bid panel to breathe alongside them -- drop the right one first
      (least urgent while nothing's on the clock), then the left one, before
@@ -1067,10 +1152,10 @@
 
   /* ---------- BID ASSISTANT ---------- */
   .bidder-pill{
-    display:inline-flex;align-items:center;gap:7px;
-    font-family:'Inter',sans-serif;font-size:12px;font-weight:500;
-    padding:8px 13px;border-radius:var(--r-pill);cursor:pointer;user-select:none;
-    border:1px solid var(--line);background:var(--ink);color:var(--chalk-3);margin:3px;
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:'Inter',sans-serif;font-size:11px;font-weight:500;
+    padding:5px 10px;border-radius:var(--r-pill);cursor:pointer;user-select:none;
+    border:1px solid var(--line);background:var(--ink);color:var(--chalk-3);margin:2px;
     transition:all var(--fast) var(--ease);
   }
   .bidder-pill:hover{transform:translateY(-1px);border-color:#31405A;}
@@ -1088,11 +1173,11 @@
   .bidder-pill.in .bidder-dot{background:var(--jade);box-shadow:0 0 9px rgba(63,182,139,.75);}
   .bidder-pill.out .bidder-dot{background:var(--coral-deep);}
 
-  .bid-key-numbers{display:flex;gap:10px;margin-top:12px;}
-  .bkn-box{flex:1;background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:10px 14px;}
+  .bid-key-numbers{display:flex;gap:8px;margin-top:8px;}
+  .bkn-box{flex:1;background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:7px 12px;}
   .bkn-box.walk{border-color:rgba(229,181,103,.35);}
-  .bkn-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);}
-  .bkn-value{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:var(--chalk);margin-top:2px;}
+  .bkn-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);}
+  .bkn-value{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:800;color:var(--chalk);margin-top:1px;}
   .bkn-box.walk .bkn-value{color:var(--gold);}
 
   .bid-price-track{margin:20px 0 6px;}
@@ -1102,9 +1187,13 @@
   }
 
   /* The signature moment: the live bid, set like a market price. */
+  /* Used to be the primary visual anchor for dragging the bid slider, which
+     is why it was a 38-54px hero number -- since the slider's gone (see the
+     price-track +/- field instead) it's now a secondary confirmation line,
+     sized to match. */
   .bid-readout{
-    font-family:'JetBrains Mono',monospace;font-size:clamp(38px,6vw,54px);font-weight:700;
-    letter-spacing:-.045em;text-align:center;padding:16px 0;border-radius:10px;margin:8px 0;
+    font-family:'JetBrains Mono',monospace;font-size:clamp(18px,2.2vw,22px);font-weight:700;
+    letter-spacing:-.02em;text-align:center;padding:8px 0;border-radius:10px;margin:6px 0;
     border:1px solid var(--line);position:relative;overflow:hidden;
     transition:color var(--mid) var(--ease), background var(--mid) var(--ease),
                border-color var(--mid) var(--ease), box-shadow var(--mid) var(--ease);
@@ -1414,13 +1503,13 @@
 
   /* ---------- VERDICT LIGHT ---------- */
   .verdict{
-    display:flex;align-items:center;gap:18px;padding:16px 20px;margin:12px 0 0;
+    display:flex;align-items:center;gap:14px;padding:11px 16px;margin:8px 0 0;
     border-radius:12px;border:1px solid var(--line);position:relative;overflow:hidden;
     transition:background var(--mid) var(--ease), border-color var(--mid) var(--ease),
                box-shadow var(--mid) var(--ease);
   }
   .verdict-lamp{
-    width:54px;height:54px;border-radius:50%;flex-shrink:0;position:relative;
+    width:42px;height:42px;border-radius:50%;flex-shrink:0;position:relative;
     transition:background var(--mid) var(--ease), box-shadow var(--mid) var(--ease);
   }
   .verdict-lamp::after{
@@ -1770,27 +1859,23 @@
       </div>
 
       <div class="draft-main">
-        <div class="panel" id="mockDraftPanel" style="border:1px solid var(--line);">
-          <div id="mockDraftIdle">
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <span class="panel-sub" style="margin:0;">Want to rehearse before the real thing? Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.</span>
-              <button class="row-act" tabindex="0" role="button" id="startMockDraftBtn">start mock draft</button>
-            </div>
-            <div id="mockHistoryBody" style="margin-top:10px;"></div>
+        <div id="mockDraftIdle" style="margin-bottom:10px;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span class="th-help" title="Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.">Rehearse before the real thing?</span>
+          <button class="row-act" tabindex="0" role="button" id="startMockDraftBtn">start mock draft</button>
+          <div id="mockHistoryBody" style="flex-basis:100%;"></div>
+        </div>
+        <div class="panel" id="mockDraftActive" style="display:none;border:1px solid var(--line);">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#3a2a0a;border:1px solid #7a5a10;border-radius:7px;padding:8px 12px;">
+            <strong style="color:#ffcf5c;">MOCK DRAFT IN PROGRESS</strong>
+            <span class="panel-sub" style="margin:0;">Practice only -- nothing here is saved, and it never touches your real board.</span>
+            <span style="flex:1;"></span>
+            <span class="row-act" tabindex="0" role="button" id="newMockDraftBtn" title="Reshuffle rival personalities and start over from your real current roster">new mock draft</span>
+            <span class="row-act" tabindex="0" role="button" id="endMockDraftBtn" title="Exit back to your real draft board, unchanged">end mock draft</span>
           </div>
-          <div id="mockDraftActive" style="display:none;">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#3a2a0a;border:1px solid #7a5a10;border-radius:7px;padding:8px 12px;">
-              <strong style="color:#ffcf5c;">MOCK DRAFT IN PROGRESS</strong>
-              <span class="panel-sub" style="margin:0;">Practice only -- nothing here is saved, and it never touches your real board.</span>
-              <span style="flex:1;"></span>
-              <span class="row-act" tabindex="0" role="button" id="newMockDraftBtn" title="Reshuffle rival personalities and start over from your real current roster">new mock draft</span>
-              <span class="row-act" tabindex="0" role="button" id="endMockDraftBtn" title="Exit back to your real draft board, unchanged">end mock draft</span>
-            </div>
-            <p class="panel-sub" id="mockAnnounce" style="margin:8px 0 4px;min-height:1.4em;"></p>
-            <div id="mockAuctionBox" style="display:none;margin:8px 0 4px;"></div>
-            <div class="field-row" style="margin-top:4px;" id="mockManualRow">
-              <button class="primary" id="mockNextNomBtn">Next nomination</button>
-            </div>
+          <p class="panel-sub" id="mockAnnounce" style="margin:8px 0 4px;min-height:1.4em;"></p>
+          <div id="mockAuctionBox" style="display:none;margin:8px 0 4px;"></div>
+          <div class="field-row" style="margin-top:4px;" id="mockManualRow">
+            <button class="primary" id="mockNextNomBtn">Next nomination</button>
           </div>
         </div>
 
@@ -1810,8 +1895,7 @@
 
         <div class="sub-body" data-sub="bid">
         <div class="panel">
-          <h3>Bid assistant</h3>
-          <p class="panel-sub">Search a player, check his suggested and walk-away numbers, then track the price as it climbs in the room. Every verdict here answers one question: should you go a dollar higher. Tag who else is still in as you learn it, and log the winner at the price it actually finished on.</p>
+          <h3>Bid assistant <span class="th-help" title="Search a player, check his suggested and walk-away numbers, then track the price as it climbs in the room. Every verdict here answers one question: should you go a dollar higher. Tag who else is still in as you learn it, and log the winner at the price it actually finished on." style="font-size:11px;font-weight:400;">how this works</span></h3>
           <div class="field-row">
             <div style="flex:2;"><label>Player on the clock</label><input type="text" id="draftSearchBox" placeholder="Type a name..." autocomplete="off"></div>
             <span class="row-act" tabindex="0" role="button" id="addPlayerToggle" title="Log someone who is not in the pool">+ player not listed</span>
@@ -3802,9 +3886,14 @@ function putOnTheClock(name){
   if(matches){ matches.hidden = true; matches.innerHTML = ''; }
   renderBidPanel();
 
+  /* 'nearest' rather than 'center': Draft Day's own column now fits the bid
+     panel without scrolling in the normal case, so forcibly re-centering it
+     on every nomination just introduced a needless scroll of its own.
+     'nearest' only moves anything if the panel genuinely isn't already in
+     view, and scrolls its own bounded column (draft-main), not the page. */
   setTimeout(()=>{
     const bp = document.getElementById('draftBidPanel');
-    if(bp && bp.scrollIntoView) bp.scrollIntoView({behavior:'smooth', block:'center'});
+    if(bp && bp.scrollIntoView) bp.scrollIntoView({behavior:'smooth', block:'nearest'});
   }, onDraft ? 0 : 90);
 }
 
@@ -4737,6 +4826,27 @@ function renderDraftView(){
   renderDraftPool();
   renderBidPanel();
   renderDraftHistory();
+  fitDraftColumnsToViewport();
+}
+
+/* Every draft-layout column caps its own height and scrolls internally (see
+   --draft-col-max-h in the CSS) so the PAGE never needs scrolling on Draft
+   Day, only an individual column does if it's still too tall. A fixed
+   `100vh - Xpx` guess would drift the moment the chrome above the grid
+   changes height by even a few pixels, so this measures the grid's actual
+   on-screen top instead and sizes every column to fill exactly what's left
+   of the viewport below it. */
+function fitDraftColumnsToViewport(){
+  const layout = document.querySelector('.draft-layout');
+  if(!layout) return;
+  const top = layout.getBoundingClientRect().top;
+  const avail = Math.max(240, Math.floor(window.innerHeight - top - 16));
+  layout.style.setProperty('--draft-col-max-h', avail + 'px');
+}
+if(typeof window !== 'undefined' && window.addEventListener){
+  window.addEventListener('resize', ()=>{
+    if(typeof fitDraftColumnsToViewport === 'function') fitDraftColumnsToViewport();
+  });
 }
 
 
@@ -5576,6 +5686,7 @@ function renderBidPanel(){
   const panel = document.getElementById('draftBidPanel');
   if(!selectedDraftPlayer){
     panel.innerHTML = `<p class="panel-sub">Nobody on the clock. Type a name above to start, or pick one from the Pool tab. Anyone not in the pool can be added with "+ player not listed".</p>`;
+    fitDraftColumnsToViewport();
     return;
   }
   const p = selectedDraftPlayer;
@@ -5618,16 +5729,13 @@ function renderBidPanel(){
 
     <div class="bid-key-numbers">
       <div class="bkn-box"><div class="bkn-label">Suggested</div><div class="bkn-value">$${marketNow}</div></div>
-      <div class="bkn-box walk"><div class="bkn-label">Walk away</div><div class="bkn-value">${walkVal?('$'+walkVal):'&mdash;'}</div></div>
+      <div class="bkn-box walk"><div class="bkn-label">Walk away${waNote?` <span class="th-help" title="${waNote.replace(/"/g,'&quot;')}">why</span>`:''}</div><div class="bkn-value">${walkVal?('$'+walkVal):'&mdash;'}</div></div>
     </div>
-    ${waNote?`<p class="panel-sub" style="margin:6px 0 0;">${waNote}</p>`:''}
 
     <p class="panel-sub" style="margin-top:10px;" id="bidStaticNote"></p>
-    <div class="stat-strip" id="bidStatStrip"></div>
 
     <p class="panel-sub" style="margin:8px 0 4px;font-size:12px;">
-      Ordered by who is most likely to want him, dots for how likely, based on their roster holes and what they can still spend.
-      Tag whoever is actually bidding.
+      Tag whoever is actually bidding <span class="th-help" title="Ordered by who is most likely to want him, dots for how likely, based on their roster holes and what they can still spend.">(ordered by likelihood)</span>.
     </p>
     <div style="margin:4px 0;" id="bidderPillWrap">${bidderPills || '<span class="panel-sub">No other teams to track, so nobody can outbid you.</span>'}</div>
 
@@ -5651,6 +5759,7 @@ function renderBidPanel(){
       <span class="row-act" tabindex="0" role="button" id="verdictToggle">why</span>
     </div>
     <div class="verdict-detail" id="verdictDetail">
+      <div class="stat-strip" id="bidStatStrip"></div>
       <ul class="verdict-why" id="verdictWhy"></ul>
       <p class="panel-sub" id="bidFieldNote" style="margin-top:8px;"></p>
       <div id="bidOppCost"></div>
@@ -5659,11 +5768,10 @@ function renderBidPanel(){
       <div id="bidHistoryBlock"></div>
     </div>
 
-    <div class="field-row" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px;">
+    <div class="field-row bid-log-row" style="margin-top:16px;border-top:1px solid var(--line);padding:12px 0 2px;">
       <div><label>Winning team</label><select id="pickTeamSelect">${teamOptions}</select></div>
-      <button class="primary" id="logPickBtn">Log pick at $<span id="logPickPriceLabel">1</span></button>
+      <button class="primary" id="logPickBtn" title="Logs at whatever price is in the field above. Contract length gets assigned after the draft per the rules, so every pick logs here as a 1-year placeholder, fix the real length later in the draft board below.">Log pick at $<span id="logPickPriceLabel">1</span></button>
     </div>
-    <p class="panel-sub" style="margin-top:4px;">Logs at whatever price is in the field above. Contract length gets assigned after the draft per the rules, so every pick logs here as a 1-year placeholder, fix the real length later in the draft board below.</p>
   `;
 
   document.getElementById('bidNumberInput').addEventListener('input', (e)=>{
@@ -5693,6 +5801,7 @@ function renderBidPanel(){
   document.getElementById('logPickBtn').addEventListener('click', logCurrentPick);
 
   updateBidDynamicParts();
+  fitDraftColumnsToViewport();
 }
 
 function logCurrentPick(){
@@ -5873,7 +5982,7 @@ function updateBidDynamicParts(){
   /* Show both numbers, because they mean different things and confusing them
      costs a dollar on every contested player: the big figure is what is on the
      table, the small one is what it costs you to take it. */
-  readout.innerHTML = `$${currentBidValue}<span style="font-size:16px;color:var(--chalk-3);margin-left:12px;font-weight:600;">on the table &middot; yours would be $${currentBidValue+1}</span>`;
+  readout.innerHTML = `$${currentBidValue}<span style="font-size:12px;color:var(--chalk-3);margin-left:10px;font-weight:600;">on the table &middot; yours would be $${currentBidValue+1}</span>`;
   readout.className = 'bid-readout '+readoutClass;
 
   const ocBox = document.getElementById('bidOppCost');
