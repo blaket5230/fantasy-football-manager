@@ -1081,6 +1081,8 @@
   .pt-player-row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10.5px;padding:1px 0;color:var(--chalk-2);min-width:0;}
   .pt-player-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;}
+  .pt-player-row.pt-gone{opacity:.45;}
+  .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -5250,7 +5252,7 @@ const POOL_TIER_DEFAULT_CAP = 29;
 function renderPoolTierRail(){
   const wrap = document.getElementById('poolTierBody');
   if(!wrap) return;
-  const pool = availablePool();
+  const taken = draftedNamesSet();
   const order = ['QB','RB','WR','TE','PK','DST'];
   const pos = order.includes(poolTierSelectedPos) ? poolTierSelectedPos : order[0];
   poolTierSelectedPos = pos;
@@ -5263,11 +5265,17 @@ function renderPoolTierRail(){
   // mv score (see its own comment), which already produces a sane tier count
   // on its own -- no separate override needed here anymore, and it means
   // this rail's tier numbers now agree exactly with the live bid panel's.
-  const atPos = pool.filter(p=>p.pos===pos);
-  const body = !atPos.length
-    ? `<p class="panel-sub">No ${pos}s left in the pool.</p>`
+  //
+  // Tiers are built from the FULL position pool (drafted + undrafted), not
+  // just what's left, so a player who gets taken doesn't reshuffle the tier
+  // boundaries out from under everyone else -- he stays in his tier, just
+  // struck through and faded, so the rail also reads as a running draft log.
+  const allAtPos = DRAFT_POOL.filter(p=>p.pos===pos);
+  const remainingAtPos = allAtPos.filter(p=>!taken.has(p.name));
+  const body = !allAtPos.length
+    ? `<p class="panel-sub">No ${pos}s in the pool.</p>`
     : (()=>{
-        const tiers = buildTiersFrom(atPos, pos);
+        const tiers = buildTiersFrom(allAtPos, pos);
         // Cut either between tiers or, for a single oversized tier (PK/DST
         // are one giant undifferentiated tier apiece), partway through it --
         // a tier boundary isn't guaranteed to exist where the budget runs out.
@@ -5294,9 +5302,10 @@ function renderPoolTierRail(){
         const tierBlocks = visible.map((t,i)=>{
           const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
           const capped = i===partialAt ? names.slice(0, partialShow) : names;
-          const rows = capped.map(p=>
-            `<div class="pt-player-row" title="${p.name}"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`
-          ).join('');
+          const rows = capped.map(p=>{
+            const gone = taken.has(p.name);
+            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${p.name}"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
+          }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
 
@@ -5304,7 +5313,7 @@ function renderPoolTierRail(){
           ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show ${hiddenCount} more, ${hiddenTierCount} more tier${hiddenTierCount===1?'':'s'}</span>`
           : (poolTierExpanded && tiers.length>1 ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show less</span>` : '');
 
-        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${atPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
+        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${remainingAtPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
       })();
 
   wrap.innerHTML = tabsHTML + body;
