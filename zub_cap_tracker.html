@@ -5682,6 +5682,13 @@ function clearTheClock(){
   renderBidPanel();
 }
 
+/* No live bid tracking, no verdict, no bidder tagging -- just what to
+   nominate/watch for, a suggested range, and your own personal ceiling.
+   The room moves the actual price; you decide against these two numbers in
+   your head and log whoever actually won him once it's over. bidVerdict()
+   and the interactive price-tracking UI it drove are still defined further
+   down (mock draft's own ticking auction is unrelated and untouched), just
+   no longer the thing this panel shows. */
 function renderBidPanel(){
   const panel = document.getElementById('draftBidPanel');
   if(!selectedDraftPlayer){
@@ -5691,35 +5698,28 @@ function renderBidPanel(){
   }
   const p = selectedDraftPlayer;
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
-
-  // Order the pills by how likely each team is to want him, so the dangerous
-  // names sit at the front rather than being buried in roster order.
-  const threats = bidThreats(p);
-  const threatBy = {}; threats.forEach(t=>threatBy[t.idx]=t);
-  const bidderPills = state.teams.map((t,i)=>({t,i}))
-    .filter(x=>x.i!==myIdx)
-    .sort((a,b)=>((threatBy[b.i]||{score:0}).score)-((threatBy[a.i]||{score:0}).score))
-    .map(({t,i})=>{
-      const isIn = activeBidders.has(i);
-      const th = threatBy[i];
-      const tip = th
-        ? `${th.owner}: ${th.demand} at ${p.pos}, $${th.cap} cap and ${th.slots} slots, his ceiling on this player is about $${th.ceiling}. Predicted ${th.band}.`
-        : `${t.owner} cannot realistically bid: no room or not enough cap.`;
-      const mark = th ? ({high:'\u25cf\u25cf\u25cf', likely:'\u25cf\u25cf', possible:'\u25cf', unlikely:''})[th.band] : '';
-      return `<span class="bidder-pill ${isIn?'in':'out'}" data-bidder-idx="${i}" title="${tip.replace(/"/g,'')}"><span class="bidder-dot"></span>${t.owner}${mark?` <span style="font-size:9px;letter-spacing:-1px;opacity:.75;">${mark}</span>`:''}</span>`;
-    }).join('');
-
   const teamOptions = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
 
-  // The two numbers that actually matter the instant he hits the clock,
-  // computed once here rather than requiring you to drag anything first.
-  const marketNow = suggestedDollar(p.mv, p.pos, p.name);
-  const wa = myIdx>=0 ? walkAwayPrice(p) : null;
-  const walkVal = wa && wa.walk > 0 ? wa.walk : null;
-  const waNote = wa ? wa.note : '';
+  // Suggested range: market anchor to the scarcity-adjusted figure, whichever
+  // order they land in -- same inputs the old live readout used, just shown
+  // as a band instead of one number that needed a slider to explore.
+  const market = suggestedDollar(p.mv, p.pos, p.name);
+  const scarcity = scarcityForPos(p.pos);
+  const tier = tierFor(market);
+  const effectiveScarcityMult = tier==='elite' ? Math.max(1.0, scarcity.mult) : scarcity.mult;
+  const marketAdjusted = Math.max(1, Math.round(market*effectiveScarcityMult));
+  const rangeLo = Math.min(market, marketAdjusted);
+  const rangeHi = Math.max(market, marketAdjusted);
+  const rangeText = rangeLo===rangeHi ? `$${rangeLo}` : `$${rangeLo}&ndash;$${rangeHi}`;
 
-  // Build the shell ONCE per player selection. The price field is never
-  // touched again after this, typing into it only patches the readout below.
+  // Your own ceiling: the same walk-away math the old panel used, just the
+  // headline number now instead of a secondary one.
+  const wa = myIdx>=0 ? walkAwayPrice(p) : null;
+  const maxVal = wa && wa.walk > 0 ? wa.walk : null;
+  const maxNote = wa ? wa.note : '';
+
+  currentBidValue = market;
+
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
@@ -5728,49 +5728,14 @@ function renderBidPanel(){
     </div>
 
     <div class="bid-key-numbers">
-      <div class="bkn-box"><div class="bkn-label">Suggested</div><div class="bkn-value">$${marketNow}</div></div>
-      <div class="bkn-box walk"><div class="bkn-label">Walk away${waNote?` <span class="th-help" title="${waNote.replace(/"/g,'&quot;')}">why</span>`:''}</div><div class="bkn-value">${walkVal?('$'+walkVal):'&mdash;'}</div></div>
-    </div>
-
-    <p class="panel-sub" style="margin-top:10px;" id="bidStaticNote"></p>
-
-    <p class="panel-sub" style="margin:8px 0 4px;font-size:12px;">
-      Tag whoever is actually bidding <span class="th-help" title="Ordered by who is most likely to want him, dots for how likely, based on their roster holes and what they can still spend.">(ordered by likelihood)</span>.
-    </p>
-    <div style="margin:4px 0;" id="bidderPillWrap">${bidderPills || '<span class="panel-sub">No other teams to track, so nobody can outbid you.</span>'}</div>
-
-    <div class="bid-price-track" style="display:flex;align-items:center;gap:9px;">
-      <span class="row-act" tabindex="0" role="button" id="bidStepDown" title="One dollar less">&minus;</span>
-      <span style="font-family:'JetBrains Mono',monospace;color:var(--chalk-3);">$</span>
-      <input type="number" id="bidNumberInput" min="1" value="1" style="width:64px;" title="What's currently on the table in the room -- your next bid is one more than this">
-      <span class="row-act" tabindex="0" role="button" id="bidStepUp" title="One dollar more">&plus;</span>
-    </div>
-    <div class="bid-readout" id="bidReadout"></div>
-
-    <div class="verdict" id="verdictBox">
-      <div class="verdict-lamp" id="verdictLamp"></div>
-      <div class="verdict-copy">
-        <div class="verdict-call" id="verdictCall"></div>
-        <div class="verdict-headline" id="verdictHeadline"></div>
-        <div class="verdict-sub" id="verdictSub"></div>
-      </div>
-    </div>
-    <div class="verdict-toggle-row">
-      <span class="row-act" tabindex="0" role="button" id="verdictToggle">why</span>
-    </div>
-    <div class="verdict-detail" id="verdictDetail">
-      <div class="stat-strip" id="bidStatStrip"></div>
-      <ul class="verdict-why" id="verdictWhy"></ul>
-      <p class="panel-sub" id="bidFieldNote" style="margin-top:8px;"></p>
-      <div id="bidOppCost"></div>
-      <div id="bidTierNote"></div>
-      <div id="bidAltBlock"></div>
-      <div id="bidHistoryBlock"></div>
+      <div class="bkn-box"><div class="bkn-label">Suggested bid</div><div class="bkn-value">${rangeText}</div></div>
+      <div class="bkn-box walk"><div class="bkn-label">Max bid for you${maxNote?` <span class="th-help" title="${maxNote.replace(/"/g,'&quot;')}">why</span>`:''}</div><div class="bkn-value">${maxVal?('$'+maxVal):'&mdash;'}</div></div>
     </div>
 
     <div class="field-row bid-log-row" style="margin-top:16px;border-top:1px solid var(--line);padding:12px 0 2px;">
       <div><label>Winning team</label><select id="pickTeamSelect">${teamOptions}</select></div>
-      <button class="primary" id="logPickBtn" title="Logs at whatever price is in the field above. Contract length gets assigned after the draft per the rules, so every pick logs here as a 1-year placeholder, fix the real length later in the draft board below.">Log pick at $<span id="logPickPriceLabel">1</span></button>
+      <div><label>Price</label><input type="number" id="bidNumberInput" min="1" value="${market}" style="width:72px;" title="What he actually sold for in the room"></div>
+      <button class="primary" id="logPickBtn">Log pick</button>
     </div>
   `;
 
@@ -5778,29 +5743,10 @@ function renderBidPanel(){
     const v = Math.round(Number(e.target.value));
     if(!v || v<1) return;   // mid-typing (empty/partial), don't fight the field
     currentBidValue = v;
-    updateBidDynamicParts();
-  });
-  document.getElementById('bidStepUp').addEventListener('click', ()=>{
-    currentBidValue += 1;
-    updateBidDynamicParts();
-  });
-  document.getElementById('bidStepDown').addEventListener('click', ()=>{
-    currentBidValue = Math.max(1, currentBidValue - 1);
-    updateBidDynamicParts();
-  });
-  document.querySelectorAll('.bidder-pill').forEach(pill=>{
-    pill.addEventListener('click', ()=>{
-      const idx = Number(pill.dataset.bidderIdx);
-      biddersArePredicted = false;   // you have corrected it, so it is now your read
-      if(activeBidders.has(idx)) activeBidders.delete(idx); else activeBidders.add(idx);
-      pill.classList.toggle('in');
-      pill.classList.toggle('out');
-      updateBidDynamicParts();
-    });
   });
   document.getElementById('logPickBtn').addEventListener('click', logCurrentPick);
+  document.getElementById('clearClock').addEventListener('click', clearTheClock);
 
-  updateBidDynamicParts();
   fitDraftColumnsToViewport();
 }
 
