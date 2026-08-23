@@ -1715,7 +1715,7 @@
       <div class="draft-rail-left">
         <div class="panel">
           <h3 style="font-size:12px;">Pool by tier</h3>
-          <p class="panel-sub">Who's actually left, grouped by natural value gaps -- broader bands than the live bid panel's own tier read on a specific player, so the numbers here won't always match his.</p>
+          <p class="panel-sub">Who's actually left, grouped by natural price gaps -- same tier read the live bid panel uses on a specific player, so the numbers here match his.</p>
           <div id="poolTierBody"></div>
         </div>
       </div>
@@ -5140,20 +5140,15 @@ function renderPoolTierRail(){
     `<button class="side-tab ${o===pos?'active':''}" data-pos="${o}">${o}</button>`
   ).join('')}</div>`;
 
-  // The live bid panel's own tier read (tierInfoFor) wants every real price
-  // gap, which is exactly right for "is there a same-tier alternative to
-  // THIS guy" -- but it produced 20-30+ tiers per position for a glance-at-
-  // the-board overview, most of them one or two names. 2.5x the tuned
-  // spread/cliff collapses that to a handful of genuinely distinct bands
-  // without touching the numbers the bid panel itself depends on.
-  const RAIL_TIER_MULT = 2.5;
+  // buildTiersFrom() now clusters on real price rather than the model's own
+  // mv score (see its own comment), which already produces a sane tier count
+  // on its own -- no separate override needed here anymore, and it means
+  // this rail's tier numbers now agree exactly with the live bid panel's.
   const atPos = pool.filter(p=>p.pos===pos);
   const body = !atPos.length
     ? `<p class="panel-sub">No ${pos}s left in the pool.</p>`
     : (()=>{
-        const spread = (TIER_SPREAD[pos] ?? 0.18) * RAIL_TIER_MULT;
-        const cliff  = (TIER_CLIFF[pos]  ?? 0.12) * RAIL_TIER_MULT;
-        const tiers = buildTiersFrom(atPos, pos, spread, cliff);
+        const tiers = buildTiersFrom(atPos, pos);
         const tierBlocks = tiers.map((t,i)=>{
           const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
           const rows = names.map(p=>
@@ -6767,28 +6762,32 @@ function walkAwayPrice(player){
 const TIER_SPREAD = { QB:0.30, TE:0.20, RB:0.18, WR:0.18, PK:0.35, DST:0.35 };
 const TIER_CLIFF  = { QB:0.22, TE:0.16, RB:0.12, WR:0.12, PK:0.30, DST:0.30 };
 
-/* spreadOverride/cliffOverride let a caller ask for a coarser (or finer) cut
-   than the position's tuned default without touching that default -- used by
-   the pool-by-tier rail's overview, which wants far fewer, broader groups
-   than tierInfoFor()'s precise "who's the next best alternative right now"
-   read that the live bid panel's verdict depends on. */
-function buildTiersFrom(players, tuningPos, spreadOverride, cliffOverride){
+/* Clusters on real market PRICE (suggestedDollar), not the internal mv
+   score. Those two usually track together but genuinely disagree for a real
+   subset of players -- an aging-but-productive back like Derrick Henry
+   carries a heavily mv-discounted model score (age/risk) while the actual
+   market still pays up for him, so mv-based clustering used to group him
+   with players $10 cheaper while missing his real price-equal. Since the
+   whole point of a tier here is "similarly priced, genuinely interchangeable
+   right now," it has to cluster on the number it's actually comparing. */
+function buildTiersFrom(players, tuningPos){
   const pos = tuningPos;
-  const spread = spreadOverride ?? (TIER_SPREAD[pos] ?? 0.18);
-  const cliff  = cliffOverride  ?? (TIER_CLIFF[pos]  ?? 0.12);
-  const lst = players.slice().sort((a,b)=>b.mv-a.mv);
+  const spread = TIER_SPREAD[pos] ?? 0.18;
+  const cliff  = TIER_CLIFF[pos]  ?? 0.12;
+  const priced = players.map(p=>({ p, price: suggestedDollar(p.mv, p.pos, p.name) }))
+    .sort((a,b)=>b.price-a.price);
   const out=[]; let cur=[];
-  lst.forEach((p,i)=>{
-    if(!cur.length){ cur=[p]; return; }
-    const lead=cur[0].mv;
-    const within = lead>0 && (lead-p.mv)/lead <= spread;
-    const prev = lst[i-1].mv;
-    const step = prev>0 ? (prev-p.mv)/prev : 1;
-    if(within && step < cliff){ cur.push(p); }
-    else { out.push(cur); cur=[p]; }
+  priced.forEach((entry,i)=>{
+    if(!cur.length){ cur=[entry]; return; }
+    const lead = cur[0].price;
+    const within = lead>0 && (lead-entry.price)/lead <= spread;
+    const prevPrice = priced[i-1].price;
+    const step = prevPrice>0 ? (prevPrice-entry.price)/prevPrice : 1;
+    if(within && step < cliff){ cur.push(entry); }
+    else { out.push(cur); cur=[entry]; }
   });
   if(cur.length) out.push(cur);
-  return out;
+  return out.map(tier => tier.map(e=>e.p));
 }
 
 // Which tier is a given player in, among everyone still available?
