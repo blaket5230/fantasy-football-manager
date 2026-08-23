@@ -977,16 +977,15 @@
   }
 
   /* ---------- OTHER ROSTERS RAIL ---------- */
-  .or-team{padding:10px 0;border-bottom:1px solid var(--line-soft);}
-  .or-team:last-child{border-bottom:none;}
-  .or-team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:6px;color:var(--chalk);}
+  .or-team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:2px;color:var(--chalk);}
   .or-team-head span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .or-team-cap{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:11px;color:var(--chalk-3);white-space:nowrap;}
-  .or-slot{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:1.5px 0;}
-  .or-slot-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.05em;color:var(--chalk-3);width:54px;flex-shrink:0;text-transform:uppercase;}
+  .or-slot-group-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin:10px 0 4px;}
+  .or-slot{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0;border-bottom:1px solid var(--line-soft);}
+  .or-slot:last-child{border-bottom:none;}
+  .or-slot-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.05em;color:var(--chalk-3);width:60px;flex-shrink:0;text-transform:uppercase;}
   .or-slot-name{color:var(--chalk-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .or-slot-empty{color:var(--chalk-3);opacity:.5;}
-  .or-bench{margin-top:5px;font-size:10.5px;color:var(--chalk-3);line-height:1.5;}
 
   /* ---------- POOL-BY-TIER RAIL ---------- */
   .pt-pos{padding:9px 0;border-bottom:1px solid var(--line-soft);}
@@ -5067,27 +5066,60 @@ function renderMyRoster(){
    for. That's what makes it "intelligent" rather than just draft order: a
    pick 1 flier reads as a starter only until something better takes his
    slot, then he quietly becomes bench with no special-casing needed. */
+// Which other team the rail is currently showing -- one at a time behind a
+// dropdown rather than 11 cards stacked on top of each other, which is what
+// actually leaves room to show the full 18 spots instead of just starters.
+let otherRosterSelectedIdx = null;
 function renderOtherRosters(){
   const wrap = document.getElementById('otherRostersBody');
   if(!wrap) return;
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
-  wrap.innerHTML = state.teams.map((t,i)=>{
-    if(i===myIdx) return '';
-    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
-      .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
-    const { starters, bench } = assignLineup(held);
-    const starterRows = SLOTS.map(slot=>{
-      const pl = starters[slot.key];
-      return `<div class="or-slot"><span class="or-slot-label">${slot.label}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
-    }).join('');
-    const benchLine = bench.length
-      ? `<div class="or-bench">Bench: ${bench.map(p=>p.name).join(', ')}</div>`
-      : '';
-    return `<div class="or-team">
-      <div class="or-team-head"><span>${t.owner}</span><span class="or-team-cap">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
-      ${starterRows}${benchLine}
-    </div>`;
+  const otherIdxs = state.teams.map((t,i)=>i).filter(i=>i!==myIdx);
+  if(!otherIdxs.length){ wrap.innerHTML = '<p class="panel-sub">No other teams to show.</p>'; return; }
+  if(otherRosterSelectedIdx===null || !otherIdxs.includes(otherRosterSelectedIdx)){
+    otherRosterSelectedIdx = otherIdxs[0];
+  }
+  const i = otherRosterSelectedIdx;
+  const t = state.teams[i];
+
+  const options = otherIdxs.map(idx=>
+    `<option value="${idx}" ${idx===i?'selected':''}>${state.teams[idx].owner}</option>`
+  ).join('');
+
+  const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
+    .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
+  const { starters, bench } = assignLineup(held);
+  const { slots: benchSlots, overflow } = assignBench(bench);
+
+  // A rail this narrow has no room for SLOTS' full "Flex RB/WR/TE" label --
+  // shorten just this one, in this one spot, rather than touch the shared
+  // label everywhere else in the tool reads it at full width.
+  const railLabel = slot => slot.key==='FLEX' ? 'FLEX' : slot.label;
+  const starterRows = SLOTS.map(slot=>{
+    const pl = starters[slot.key];
+    return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
   }).join('');
+  const benchRows = BENCH_SLOTS.map(slot=>{
+    const pl = benchSlots[slot.key];
+    return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
+  }).join('');
+  const overflowRows = overflow.map(pl=>
+    `<div class="or-slot"><span class="or-slot-label">Extra</span><span class="or-slot-name">${pl.name}</span></div>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <select id="otherRosterSelect" style="width:100%;">${options}</select>
+    <div class="or-team-head" style="margin-top:10px;"><span>${t.owner}</span><span class="or-team-cap">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
+    <div class="or-slot-group-label">Starters</div>
+    ${starterRows}
+    <div class="or-slot-group-label">Bench</div>
+    ${benchRows}${overflowRows}
+  `;
+  const sel = document.getElementById('otherRosterSelect');
+  if(sel) sel.addEventListener('change', ()=>{
+    otherRosterSelectedIdx = Number(sel.value);
+    renderOtherRosters();
+  });
 }
 
 /* Available pool, grouped by position, then by tier within it -- the same
@@ -7320,6 +7352,23 @@ function assignLineup(players){
   });
   const bench = pool.filter((p,idx)=>!used.has(idx));
   return { starters, bench };
+}
+/* Same idea, one level down: which of the players assignLineup() left on the
+   bench fills which of the 10 bench spots. BENCH_SLOTS reserves the first two
+   for a kicker and defense cover, so those get first claim on a bench PK/DST
+   before anything else does -- everyone left over fills the 8 open slots
+   best-VOR-first, and anything past 18 total (dead-cap aside, shouldn't
+   normally happen) still shows up rather than silently vanishing. */
+function assignBench(benchPlayers){
+  const pool = benchPlayers.slice().sort((a,b)=>vor(b)-vor(a));
+  const used = new Set();
+  const slots = {};
+  BENCH_SLOTS.forEach(slot=>{
+    const i = pool.findIndex((p,idx)=>!used.has(idx) && slot.eligible.includes(p.pos));
+    if(i >= 0){ used.add(i); slots[slot.key] = pool[i]; }
+  });
+  const overflow = pool.filter((p,idx)=>!used.has(idx));
+  return { slots, overflow };
 }
 
 /* The best starting lineup reachable from here, given a cap and a set of
