@@ -988,13 +988,12 @@
   .or-slot-empty{color:var(--chalk-3);opacity:.5;}
 
   /* ---------- POOL-BY-TIER RAIL ---------- */
-  .pt-pos{padding:9px 0;border-bottom:1px solid var(--line-soft);}
-  .pt-pos:last-child{border-bottom:none;}
-  .pt-pos-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .pt-pos-head{display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px;}
   .pt-pos-count{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--chalk-3);}
-  .pt-tier{display:flex;gap:8px;font-size:11px;padding:2px 0;align-items:baseline;}
-  .pt-tier-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--gold);width:38px;flex-shrink:0;}
-  .pt-tier-names{color:var(--chalk-2);line-height:1.4;}
+  .pt-tier{margin-bottom:10px;}
+  .pt-tier-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:3px;}
+  .pt-player-row{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;padding:2px 0;color:var(--chalk-2);}
+  .pt-player-price{font-family:'JetBrains Mono',monospace;color:var(--chalk-3);flex-shrink:0;}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -5125,23 +5124,44 @@ function renderOtherRosters(){
 /* Available pool, grouped by position, then by tier within it -- the same
    natural-gap grouping tierInfoFor() already uses in the bid panel, just
    shown up front instead of one player at a time. */
+// Which position the rail is currently showing -- one at a time behind
+// tabs rather than all six stacked into one long scroll, which is what
+// actually leaves room to list every player in a tier instead of "+N more".
+let poolTierSelectedPos = 'RB';
 function renderPoolTierRail(){
   const wrap = document.getElementById('poolTierBody');
   if(!wrap) return;
   const pool = availablePool();
   const order = ['QB','RB','WR','TE','PK','DST'];
-  wrap.innerHTML = order.map(pos=>{
-    const atPos = pool.filter(p=>p.pos===pos);
-    if(!atPos.length) return '';
-    const tiers = buildTiersFrom(atPos, pos);
-    const tierRows = tiers.map((t,i)=>{
-      const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
-      const shown = names.slice(0,3).map(p=>p.name).join(', ');
-      const more = names.length>3 ? ` +${names.length-3} more` : '';
-      return `<div class="pt-tier"><span class="pt-tier-label">T${i+1} &middot; ${t.length}</span><span class="pt-tier-names">${shown}${more}</span></div>`;
-    }).join('');
-    return `<div class="pt-pos"><div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${atPos.length} left</span></div>${tierRows}</div>`;
-  }).join('');
+  const pos = order.includes(poolTierSelectedPos) ? poolTierSelectedPos : order[0];
+  poolTierSelectedPos = pos;
+
+  const tabsHTML = `<div class="side-tabs" id="poolTierTabs">${order.map(o=>
+    `<button class="side-tab ${o===pos?'active':''}" data-pos="${o}">${o}</button>`
+  ).join('')}</div>`;
+
+  const atPos = pool.filter(p=>p.pos===pos);
+  const body = !atPos.length
+    ? `<p class="panel-sub">No ${pos}s left in the pool.</p>`
+    : (()=>{
+        const tiers = buildTiersFrom(atPos, pos);
+        const tierBlocks = tiers.map((t,i)=>{
+          const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
+          const rows = names.map(p=>
+            `<div class="pt-player-row"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`
+          ).join('');
+          return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div>${rows}</div>`;
+        }).join('');
+        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${atPos.length} left</span></div>${tierBlocks}`;
+      })();
+
+  wrap.innerHTML = tabsHTML + body;
+  wrap.querySelectorAll('#poolTierTabs .side-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      poolTierSelectedPos = btn.dataset.pos;
+      renderPoolTierRail();
+    });
+  });
 }
 
 function bindAddPlayer(){
