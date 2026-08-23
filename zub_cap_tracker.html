@@ -5238,6 +5238,13 @@ function renderOtherRosters(){
 // tabs rather than all six stacked into one long scroll, which is what
 // actually leaves room to list every player in a tier instead of "+N more".
 let poolTierSelectedPos = 'RB';
+// Even one position at a time, RB and WR run 120-150+ available players --
+// real depth, not something a sidebar can show in full without scrolling no
+// matter how tight the rows get. Default to the tiers that actually still
+// separate real players, collapse the replacement-level tail into one line,
+// and let a click reveal the rest for whoever wants to dig into the bench.
+let poolTierExpanded = false;
+const POOL_TIER_DEFAULT_CAP = 16;
 function renderPoolTierRail(){
   const wrap = document.getElementById('poolTierBody');
   if(!wrap) return;
@@ -5259,22 +5266,57 @@ function renderPoolTierRail(){
     ? `<p class="panel-sub">No ${pos}s left in the pool.</p>`
     : (()=>{
         const tiers = buildTiersFrom(atPos, pos);
-        const tierBlocks = tiers.map((t,i)=>{
+        // Cut either between tiers or, for a single oversized tier (PK/DST
+        // are one giant undifferentiated tier apiece), partway through it --
+        // a tier boundary isn't guaranteed to exist where the budget runs out.
+        let shown = 0, cutIdx = tiers.length, partialAt = -1, partialShow = 0;
+        if(!poolTierExpanded){
+          for(let i=0;i<tiers.length;i++){
+            const remaining = POOL_TIER_DEFAULT_CAP - shown;
+            if(remaining <= 0){ cutIdx = i; break; }
+            if(tiers[i].length <= remaining){
+              shown += tiers[i].length;
+            } else {
+              partialAt = i; partialShow = remaining;
+              cutIdx = i+1;
+              break;
+            }
+          }
+        }
+        const visible = tiers.slice(0, cutIdx);
+        const hiddenTiers = tiers.slice(cutIdx);
+        let hiddenCount = hiddenTiers.reduce((s,t)=>s+t.length,0);
+        if(partialAt>=0) hiddenCount += tiers[partialAt].length - partialShow;
+        const hiddenTierCount = hiddenTiers.length + (partialAt>=0 ? 1 : 0);
+
+        const tierBlocks = visible.map((t,i)=>{
           const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
-          const rows = names.map(p=>
+          const capped = i===partialAt ? names.slice(0, partialShow) : names;
+          const rows = capped.map(p=>
             `<div class="pt-player-row"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`
           ).join('');
           return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div>${rows}</div>`;
         }).join('');
-        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${atPos.length} left</span></div>${tierBlocks}`;
+
+        const toggle = hiddenTierCount
+          ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show ${hiddenCount} more, ${hiddenTierCount} more tier${hiddenTierCount===1?'':'s'}</span>`
+          : (poolTierExpanded && tiers.length>1 ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show less</span>` : '');
+
+        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${atPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
       })();
 
   wrap.innerHTML = tabsHTML + body;
   wrap.querySelectorAll('#poolTierTabs .side-tab').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       poolTierSelectedPos = btn.dataset.pos;
+      poolTierExpanded = false;
       renderPoolTierRail();
     });
+  });
+  const toggleBtn = document.getElementById('poolTierToggle');
+  if(toggleBtn) toggleBtn.addEventListener('click', ()=>{
+    poolTierExpanded = !poolTierExpanded;
+    renderPoolTierRail();
   });
 }
 
