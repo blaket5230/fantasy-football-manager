@@ -83,6 +83,10 @@
      1240px was leaving half a monitor empty while the pool table ran off the
      side of its own panel. */
   .wrap{max-width:1760px;margin:0 auto;padding:32px 28px 0;}
+  /* Draft Day earns more: two extra reference rails (pool-by-tier, other
+     rosters) sit either side of the original three columns, and on a wide
+     monitor there was still dead margin left over even at 1760px. */
+  .wrap:has(#view-draft.active){max-width:2320px;}
 
   /* Any table that can outgrow its panel scrolls inside it rather than
      bleeding over the edge. */
@@ -940,12 +944,27 @@
      column mobile stack: first the history column drops below (still full
      width, still on screen without much scrolling), then at the existing
      mobile breakpoint everything stacks the way it always has. */
-  .draft-layout{display:grid;grid-template-columns:380px 1fr 340px;gap:18px;align-items:start;}
+  .draft-layout{display:grid;grid-template-columns:280px 380px 1fr 340px 320px;gap:18px;align-items:start;}
   .draft-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px;min-width:0;}
   .draft-sidebar .panel{margin-bottom:0;min-width:0;overflow:hidden;}
   .draft-main{min-width:0;}
   .draft-history-col{position:sticky;top:16px;min-width:0;}
   .draft-history-col .panel{margin-bottom:0;min-width:0;}
+  .draft-rail-left,.draft-rail-right{position:sticky;top:16px;min-width:0;max-height:calc(100vh - 32px);overflow-y:auto;}
+  .draft-rail-left .panel,.draft-rail-right .panel{margin-bottom:0;min-width:0;}
+  /* Two extra rails only earn their keep once there is genuinely room for the
+     center bid panel to breathe alongside them -- drop the right one first
+     (least urgent while nothing's on the clock), then the left one, before
+     falling back to the original three-column layout at the same breakpoint
+     it already used. */
+  @media (max-width:1900px){
+    .draft-layout{grid-template-columns:280px 380px 1fr 340px;}
+    .draft-rail-right{grid-column:1 / -1;position:static;max-height:none;order:99;}
+  }
+  @media (max-width:1600px){
+    .draft-layout{grid-template-columns:380px 1fr 340px;}
+    .draft-rail-left{grid-column:1 / -1;position:static;max-height:none;order:99;}
+  }
   @media (max-width:1400px){
     .draft-layout{grid-template-columns:340px 1fr;}
     .draft-history-col{grid-column:1 / -1;position:static;}
@@ -954,7 +973,29 @@
     .draft-layout{grid-template-columns:1fr;}
     .draft-sidebar{position:static;}
     .draft-history-col{position:static;}
+    .draft-rail-left,.draft-rail-right{position:static;order:0;}
   }
+
+  /* ---------- OTHER ROSTERS RAIL ---------- */
+  .or-team{padding:10px 0;border-bottom:1px solid var(--line-soft);}
+  .or-team:last-child{border-bottom:none;}
+  .or-team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:6px;color:var(--chalk);}
+  .or-team-head span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .or-team-cap{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:11px;color:var(--chalk-3);white-space:nowrap;}
+  .or-slot{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:1.5px 0;}
+  .or-slot-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.05em;color:var(--chalk-3);width:54px;flex-shrink:0;text-transform:uppercase;}
+  .or-slot-name{color:var(--chalk-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .or-slot-empty{color:var(--chalk-3);opacity:.5;}
+  .or-bench{margin-top:5px;font-size:10.5px;color:var(--chalk-3);line-height:1.5;}
+
+  /* ---------- POOL-BY-TIER RAIL ---------- */
+  .pt-pos{padding:9px 0;border-bottom:1px solid var(--line-soft);}
+  .pt-pos:last-child{border-bottom:none;}
+  .pt-pos-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .pt-pos-count{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--chalk-3);}
+  .pt-tier{display:flex;gap:8px;font-size:11px;padding:2px 0;align-items:baseline;}
+  .pt-tier-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--gold);width:38px;flex-shrink:0;}
+  .pt-tier-names{color:var(--chalk-2);line-height:1.4;}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -1049,34 +1090,17 @@
   .bidder-pill.in .bidder-dot{background:var(--jade);box-shadow:0 0 9px rgba(63,182,139,.75);}
   .bidder-pill.out .bidder-dot{background:var(--coral-deep);}
 
-  .bid-slider-wrap{margin:20px 0 6px;}
-  .bid-slider-wrap input[type=range]{
-    width:100%;-webkit-appearance:none;appearance:none;background:transparent;cursor:grab;
-  }
-  .bid-slider-wrap input[type=range]:active{cursor:grabbing;}
-  .bid-slider-wrap input[type=range]::-webkit-slider-runnable-track{
-    height:5px;border-radius:3px;background:var(--ink);border:1px solid var(--line);
-  }
-  .bid-slider-wrap input[type=range]::-moz-range-track{
-    height:5px;border-radius:3px;background:var(--ink);border:1px solid var(--line);
-  }
-  .bid-slider-wrap input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;appearance:none;width:19px;height:19px;border-radius:50%;
-    margin-top:-8px;background:linear-gradient(180deg,#F3CB8A,var(--gold));
-    border:1px solid var(--gold-deep);
-    box-shadow:0 2px 8px rgba(0,0,0,.55), 0 0 0 0 rgba(229,181,103,.4);
-    transition:box-shadow var(--fast) var(--ease), transform var(--fast) var(--ease);
-  }
-  .bid-slider-wrap input[type=range]::-moz-range-thumb{
-    width:19px;height:19px;border-radius:50%;border:1px solid var(--gold-deep);
-    background:linear-gradient(180deg,#F3CB8A,var(--gold));box-shadow:0 2px 8px rgba(0,0,0,.55);
-  }
-  .bid-slider-wrap input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.09);}
-  .bid-slider-wrap input[type=range]:active::-webkit-slider-thumb{
-    box-shadow:0 2px 8px rgba(0,0,0,.55), 0 0 0 7px rgba(229,181,103,.16);
-  }
-  .bid-slider-wrap input[type=range]:focus-visible::-webkit-slider-thumb{
-    box-shadow:0 2px 8px rgba(0,0,0,.55), 0 0 0 7px rgba(229,181,103,.26);
+  .bid-key-numbers{display:flex;gap:10px;margin-top:12px;}
+  .bkn-box{flex:1;background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:10px 14px;}
+  .bkn-box.walk{border-color:rgba(229,181,103,.35);}
+  .bkn-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);}
+  .bkn-value{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:var(--chalk);margin-top:2px;}
+  .bkn-box.walk .bkn-value{color:var(--gold);}
+
+  .bid-price-track{margin:20px 0 6px;}
+  .bid-price-track #bidNumberInput{
+    background:var(--ink);border:1px solid var(--line);border-radius:var(--r-ctrl);
+    color:var(--chalk);padding:6px 8px;font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;
   }
 
   /* The signature moment: the live bid, set like a market price. */
@@ -1690,6 +1714,14 @@
   <!-- DRAFT DAY -->
   <div class="view" id="view-draft">
     <div class="draft-layout">
+      <div class="draft-rail-left">
+        <div class="panel">
+          <h3 style="font-size:12px;">Pool by tier</h3>
+          <p class="panel-sub">Who's actually left, grouped the same way the bid panel's own tier read groups them -- natural value gaps, not fixed price bands.</p>
+          <div id="poolTierBody"></div>
+        </div>
+      </div>
+
       <div class="draft-sidebar">
         <!-- Six reference panels stacked down the side meant six things
              competing for attention while you had ten seconds to bid. They are
@@ -1781,7 +1813,7 @@
         <div class="sub-body" data-sub="bid">
         <div class="panel">
           <h3>Bid assistant</h3>
-          <p class="panel-sub">Search a player, then drag the slider to whatever has just been called in the room. Every verdict here answers one question: should you go a dollar higher. Tag who else is still in as you learn it, and log the winner at the price it actually finished on.</p>
+          <p class="panel-sub">Search a player, check his suggested and walk-away numbers, then track the price as it climbs in the room. Every verdict here answers one question: should you go a dollar higher. Tag who else is still in as you learn it, and log the winner at the price it actually finished on.</p>
           <div class="field-row">
             <div style="flex:2;"><label>Player on the clock</label><input type="text" id="draftSearchBox" placeholder="Type a name..." autocomplete="off"></div>
             <span class="row-act" tabindex="0" role="button" id="addPlayerToggle" title="Log someone who is not in the pool">+ player not listed</span>
@@ -1873,6 +1905,14 @@
             <button class="primary" id="commitDraftBtn">Commit draft to rosters</button>
             <span class="panel-sub" style="margin:0;">Only do this once the auction is actually over, it assigns real contract lengths and permanently moves every pick into the cap ledger.</span>
           </div>
+        </div>
+      </div>
+
+      <div class="draft-rail-right">
+        <div class="panel">
+          <h3 style="font-size:12px;">Other rosters</h3>
+          <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
+          <div id="otherRostersBody"></div>
         </div>
       </div>
     </div>
@@ -4683,6 +4723,8 @@ function renderDraftView(){
   document.getElementById('draftBudgets').innerHTML = rows;
 
   renderMyRoster();
+  renderOtherRosters();
+  renderPoolTierRail();
   renderEndgame();
   markSideAlerts();
   renderBoardState();
@@ -5018,6 +5060,56 @@ function renderMyRoster(){
   }</ul>` : '<p class="panel-sub">No players yet. Anyone you win tonight appears here as you log them.</p>';
 
   wrap.innerHTML = `${slotsHTML}${listHTML}<p class="panel-sub" style="margin-top:8px;">${all.length}/18 roster spots filled${deadN?`, plus ${deadN} dead-cap ${deadN===1?'entry':'entries'} that cost money but no roster spot`:''}.</p>`;
+}
+
+/* Every other team, live, with the same starter/bench read the tool trusts
+   for its own solver -- best VOR into the most valuable slot he's eligible
+   for. That's what makes it "intelligent" rather than just draft order: a
+   pick 1 flier reads as a starter only until something better takes his
+   slot, then he quietly becomes bench with no special-casing needed. */
+function renderOtherRosters(){
+  const wrap = document.getElementById('otherRostersBody');
+  if(!wrap) return;
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  wrap.innerHTML = state.teams.map((t,i)=>{
+    if(i===myIdx) return '';
+    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
+      .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
+    const { starters, bench } = assignLineup(held);
+    const starterRows = SLOTS.map(slot=>{
+      const pl = starters[slot.key];
+      return `<div class="or-slot"><span class="or-slot-label">${slot.label}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
+    }).join('');
+    const benchLine = bench.length
+      ? `<div class="or-bench">Bench: ${bench.map(p=>p.name).join(', ')}</div>`
+      : '';
+    return `<div class="or-team">
+      <div class="or-team-head"><span>${t.owner}</span><span class="or-team-cap">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
+      ${starterRows}${benchLine}
+    </div>`;
+  }).join('');
+}
+
+/* Available pool, grouped by position, then by tier within it -- the same
+   natural-gap grouping tierInfoFor() already uses in the bid panel, just
+   shown up front instead of one player at a time. */
+function renderPoolTierRail(){
+  const wrap = document.getElementById('poolTierBody');
+  if(!wrap) return;
+  const pool = availablePool();
+  const order = ['QB','RB','WR','TE','PK','DST'];
+  wrap.innerHTML = order.map(pos=>{
+    const atPos = pool.filter(p=>p.pos===pos);
+    if(!atPos.length) return '';
+    const tiers = buildTiersFrom(atPos, pos);
+    const tierRows = tiers.map((t,i)=>{
+      const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
+      const shown = names.slice(0,3).map(p=>p.name).join(', ');
+      const more = names.length>3 ? ` +${names.length-3} more` : '';
+      return `<div class="pt-tier"><span class="pt-tier-label">T${i+1} &middot; ${t.length}</span><span class="pt-tier-names">${shown}${more}</span></div>`;
+    }).join('');
+    return `<div class="pt-pos"><div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${atPos.length} left</span></div>${tierRows}</div>`;
+  }).join('');
 }
 
 function bindAddPlayer(){
@@ -5452,16 +5544,29 @@ function renderBidPanel(){
 
   const teamOptions = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
 
-  // Build the shell ONCE per player selection. The slider itself is never
-  // touched again after this, dragging it only patches the readout below,
-  // which is what keeps the drag smooth instead of jumping one tick at a time.
+  // The two numbers that actually matter the instant he hits the clock,
+  // computed once here rather than requiring you to drag anything first.
+  const marketNow = suggestedDollar(p.mv, p.pos, p.name);
+  const wa = myIdx>=0 ? walkAwayPrice(p) : null;
+  const walkVal = wa && wa.walk > 0 ? wa.walk : null;
+  const waNote = wa ? wa.note : '';
+
+  // Build the shell ONCE per player selection. The price field is never
+  // touched again after this, typing into it only patches the readout below.
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
       <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${p.pos}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}</h4>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
-    <p class="panel-sub" style="margin-top:2px;" id="bidStaticNote"></p>
+
+    <div class="bid-key-numbers">
+      <div class="bkn-box"><div class="bkn-label">Suggested</div><div class="bkn-value">$${marketNow}</div></div>
+      <div class="bkn-box walk"><div class="bkn-label">Walk away</div><div class="bkn-value">${walkVal?('$'+walkVal):'&mdash;'}</div></div>
+    </div>
+    ${waNote?`<p class="panel-sub" style="margin:6px 0 0;">${waNote}</p>`:''}
+
+    <p class="panel-sub" style="margin-top:10px;" id="bidStaticNote"></p>
     <div class="stat-strip" id="bidStatStrip"></div>
 
     <p class="panel-sub" style="margin:8px 0 4px;font-size:12px;">
@@ -5470,10 +5575,11 @@ function renderBidPanel(){
     </p>
     <div style="margin:4px 0;" id="bidderPillWrap">${bidderPills || '<span class="panel-sub">No other teams to track, so nobody can outbid you.</span>'}</div>
 
-    <div class="bid-slider-wrap" style="display:flex;align-items:center;gap:10px;">
-      <input type="range" id="bidSlider" min="1" max="20" value="1" style="flex:1;">
+    <div class="bid-price-track" style="display:flex;align-items:center;gap:9px;">
+      <span class="row-act" tabindex="0" role="button" id="bidStepDown" title="One dollar less">&minus;</span>
       <span style="font-family:'JetBrains Mono',monospace;color:var(--chalk-3);">$</span>
-      <input type="number" id="bidNumberInput" min="1" max="20" value="1" style="width:64px;" title="Exact bid amount -- syncs with the slider">
+      <input type="number" id="bidNumberInput" min="1" value="1" style="width:64px;" title="What's currently on the table in the room -- your next bid is one more than this">
+      <span class="row-act" tabindex="0" role="button" id="bidStepUp" title="One dollar more">&plus;</span>
     </div>
     <div class="bid-readout" id="bidReadout"></div>
 
@@ -5501,17 +5607,21 @@ function renderBidPanel(){
       <div><label>Winning team</label><select id="pickTeamSelect">${teamOptions}</select></div>
       <button class="primary" id="logPickBtn">Log pick at $<span id="logPickPriceLabel">1</span></button>
     </div>
-    <p class="panel-sub" style="margin-top:4px;">Logs at whatever the slider's on right now. Contract length gets assigned after the draft per the rules, so every pick logs here as a 1-year placeholder, fix the real length later in the draft board below.</p>
+    <p class="panel-sub" style="margin-top:4px;">Logs at whatever price is in the field above. Contract length gets assigned after the draft per the rules, so every pick logs here as a 1-year placeholder, fix the real length later in the draft board below.</p>
   `;
 
-  document.getElementById('bidSlider').addEventListener('input', (e)=>{
-    currentBidValue = Number(e.target.value);
-    updateBidDynamicParts();
-  });
   document.getElementById('bidNumberInput').addEventListener('input', (e)=>{
     const v = Math.round(Number(e.target.value));
     if(!v || v<1) return;   // mid-typing (empty/partial), don't fight the field
     currentBidValue = v;
+    updateBidDynamicParts();
+  });
+  document.getElementById('bidStepUp').addEventListener('click', ()=>{
+    currentBidValue += 1;
+    updateBidDynamicParts();
+  });
+  document.getElementById('bidStepDown').addEventListener('click', ()=>{
+    currentBidValue = Math.max(1, currentBidValue - 1);
     updateBidDynamicParts();
   });
   document.querySelectorAll('.bidder-pill').forEach(pill=>{
@@ -5585,21 +5695,16 @@ function updateBidDynamicParts(){
     if(c>fieldBest){ fieldBest = c; fieldBestOwner = t.owner; fieldBestDemand = demandStateFor(i, p.pos); }
   });
 
-  const slider = document.getElementById('bidSlider');
   const numInput = document.getElementById('bidNumberInput');
-  const sliderMax = Math.max(myMax, fieldBest, marketAdjusted, 20, currentBidValue);
-  if(currentBidValue > sliderMax) currentBidValue = sliderMax;
-  slider.max = sliderMax;
-  slider.value = currentBidValue;
+  if(currentBidValue < 1) currentBidValue = 1;
   if(numInput){
-    numInput.max = sliderMax;
     // Don't stomp on what's mid-typing in the field itself.
     if(document.activeElement !== numInput) numInput.value = currentBidValue;
   }
 
   // The verdict drives everything below, including the colour of the big number.
-  /* The slider follows the bidding in the room, so the number on it is what
-     someone else has ALREADY said. You cannot win at that price. The only
+  /* The price field follows the bidding in the room, so the number in it is
+     what someone else has ALREADY said. You cannot win at that price. The only
      decision in front of you is whether to go one higher, so that is the
      price everything here is judged at. Getting this wrong flatters every
      verdict by exactly one dollar, which is the difference between a walk-away
@@ -5705,7 +5810,7 @@ function updateBidDynamicParts(){
     } else { altBlock.innerHTML=''; }
   }
   document.getElementById('bidStaticNote').innerHTML =
-    `Suggested $${suggested} \u00b7 scarcity-adjusted $${marketAdjusted} \u00b7 your ${p.pos} demand: ${demandLabels[myDemand]}` +
+    `Scarcity-adjusted $${marketAdjusted} \u00b7 your ${p.pos} demand: ${demandLabels[myDemand]}` +
     (exp ? ` \u00b7 <span style="color:${exp.cls==='ok'?'var(--jade)':(exp.cls==='bad'?'var(--coral)':'var(--chalk-2)')}">${exp.label}</span>` : '');
 
   const readout = document.getElementById('bidReadout');
@@ -7197,6 +7302,24 @@ function lineupValue(players){
   let bench = 0;
   pool.forEach((p,idx)=>{ if(!used.has(idx)) bench += vor(p); });
   return { starters, bench, total: starters + bench*BENCH_WEIGHT };
+}
+/* Same greedy pass as lineupValue, exposing WHICH player landed in each slot
+   instead of just the totals -- for showing a team's roster as starters vs
+   bench rather than just scoring it. Best-VOR-first into the most valuable
+   slot he's eligible for, same as lineupValue, so "starter" here always means
+   exactly what it means everywhere else in the tool. Naturally self-correcting
+   as a roster fills in: an early pick who looked like a starter slides to
+   bench the moment something better takes his slot, with no special-casing. */
+function assignLineup(players){
+  const pool = players.slice().sort((a,b)=>vor(b)-vor(a));
+  const used = new Set();
+  const starters = {};
+  SLOTS.forEach(slot=>{
+    const i = pool.findIndex((p,idx)=>!used.has(idx) && slot.eligible.includes(p.pos));
+    if(i >= 0){ used.add(i); starters[slot.key] = pool[i]; }
+  });
+  const bench = pool.filter((p,idx)=>!used.has(idx));
+  return { starters, bench };
 }
 
 /* The best starting lineup reachable from here, given a cap and a set of
