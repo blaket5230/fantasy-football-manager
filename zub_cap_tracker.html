@@ -1785,24 +1785,14 @@
   <div class="view" id="view-draft">
     <div class="draft-layout">
       <div class="draft-rail-left">
-        <div class="panel">
-          <h3 style="font-size:12px;">Pool by tier</h3>
-          <p class="panel-sub">Who's actually left, grouped by natural price gaps -- same tier read the live bid panel uses on a specific player, so the numbers here match his.</p>
-          <div id="poolTierBody"></div>
-        </div>
-      </div>
-
-      <div class="draft-sidebar">
-        <!-- Six reference panels stacked down the side meant six things
-             competing for attention while you had ten seconds to bid. They are
-             all still here, but one at a time, behind tabs you can reach
-             without scrolling. -->
+        <!-- Everything about YOUR team: current roster, the best team your
+             money could still build, and your own real-dollar costs. One at
+             a time behind tabs rather than stacked, same pattern the other
+             two side boxes use. -->
         <div class="panel side-panel">
-          <div class="side-tabs" id="sideTabs">
+          <div class="side-tabs" id="myTeamTabs">
             <button class="side-tab active" data-side="roster">Roster</button>
             <button class="side-tab" data-side="ideal">Ideal team</button>
-            <button class="side-tab" data-side="board">Board</button>
-            <button class="side-tab" data-side="market">Market</button>
             <button class="side-tab" data-side="money">Money</button>
           </div>
 
@@ -1820,21 +1810,37 @@
             <div id="solverBody"></div>
           </div>
 
-          <div class="side-body" data-pane="board" hidden>
-            <p class="panel-sub">Every team's cap space, plus what quality is left and whose money has to move.</p>
-            <h3 style="font-size:12px;">Cap space</h3>
-            <div id="draftBudgets"></div>
-            <div id="boardStateBody" style="margin-top:16px;"></div>
+          <div class="side-body" data-pane="money" hidden>
+            <p class="panel-sub">Out of pocket, not cap. Entry fee, in-season moves, and the long contracts you owe at each draft.</p>
+            <div id="realMoneyBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="draft-sidebar">
+        <!-- The player pool and what it says about the draft as a whole:
+             who's actually left, how thin each position is running, and
+             whether the room is overpaying or underpaying right now. -->
+        <div class="panel side-panel">
+          <div class="side-tabs" id="poolTabs">
+            <button class="side-tab active" data-side="pool">Pool by tier</button>
+            <button class="side-tab" data-side="quality">Quality left</button>
+            <button class="side-tab" data-side="market">Market</button>
+          </div>
+
+          <div class="side-body" data-pane="pool">
+            <p class="panel-sub">Who's actually left, grouped by natural price gaps -- same tier read the live bid panel uses on a specific player, so the numbers here match his.</p>
+            <div id="poolTierBody"></div>
+          </div>
+
+          <div class="side-body" data-pane="quality" hidden>
+            <p class="panel-sub">Who's actually thinning out, position by position, so you're not finding out for the first time mid-bid.</p>
+            <div id="draftScarcityBody"></div>
           </div>
 
           <div class="side-body" data-pane="market" hidden>
             <p class="panel-sub">Whether the room is overpaying or underpaying right now.</p>
             <div id="inflationBody"></div>
-          </div>
-
-          <div class="side-body" data-pane="money" hidden>
-            <p class="panel-sub">Out of pocket, not cap. Entry fee, in-season moves, and the long contracts you owe at each draft.</p>
-            <div id="realMoneyBody"></div>
           </div>
         </div>
       </div>
@@ -1972,10 +1978,25 @@
       </div>
 
       <div class="draft-rail-right">
-        <div class="panel">
-          <h3 style="font-size:12px;">Other rosters</h3>
-          <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
-          <div id="otherRostersBody"></div>
+        <!-- Everyone ELSE at the table: their rosters, and what their cap
+             space and spending pressure says about what they do next. -->
+        <div class="panel side-panel">
+          <div class="side-tabs" id="otherTabs">
+            <button class="side-tab active" data-side="rosters">Rosters</button>
+            <button class="side-tab" data-side="money">Money</button>
+          </div>
+
+          <div class="side-body" data-pane="rosters">
+            <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
+            <div id="otherRostersBody"></div>
+          </div>
+
+          <div class="side-body" data-pane="money" hidden>
+            <p class="panel-sub">Every team's cap space, plus whose money is under real pressure to move.</p>
+            <h3 style="font-size:12px;">Cap space</h3>
+            <div id="draftBudgets"></div>
+            <div id="draftOtherMoneyBody" style="margin-top:16px;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -4699,23 +4720,31 @@ function bindMockDraftControls(){
 }
 
 
-/* One reference pane at a time. Everything the engines produce is still here,
-   but six panels stacked down the side meant nothing stood out and you had to
-   scroll past five things to reach the sixth mid-auction. */
-let sidePane = 'roster';
-function bindSideTabs(){
-  const wrap = document.getElementById('sideTabs');
+/* One reference pane at a time, in each of three independent side boxes (My
+   team, Player pool/analytics, Other teams). Each box gets its own tab group
+   rather than one global one, so switching a tab in one box can't touch the
+   other two -- everything below is scoped to a containerId. */
+let sidePanes = { myTeamTabs:'roster', poolTabs:'pool', otherTabs:'rosters' };
+function bindSideTabs(containerId){
+  const wrap = document.getElementById(containerId);
   if(!wrap || wrap.dataset.bound) return;
   wrap.dataset.bound = '1';
   wrap.querySelectorAll('[data-side]').forEach(b=>
-    b.addEventListener('click', ()=>showSidePane(b.dataset.side)));
+    b.addEventListener('click', ()=>showSidePane(containerId, b.dataset.side)));
 }
-function showSidePane(key){
-  sidePane = key;
-  if(key === 'ideal') setTimeout(()=>{ try{ renderSolver(); }catch(e){} }, 0);
-  document.querySelectorAll('.side-tab').forEach(b=>
+function showSidePane(containerId, key){
+  sidePanes[containerId] = key;
+  const root = document.getElementById(containerId);
+  if(!root) return;
+  const scope = root.parentElement;
+  if(containerId === 'myTeamTabs' && key === 'ideal') setTimeout(()=>{ try{ renderSolver(); }catch(e){} }, 0);
+  // Pool by tier's own QB/RB/WR/... tabs reuse .side-tab for the same look
+  // and live nested inside this same scope (inside the "pool" side-body), so
+  // this can only touch buttons that are direct children of THIS group's own
+  // tab bar, never any tab bar nested one level deeper inside a pane.
+  root.querySelectorAll(':scope > .side-tab').forEach(b=>
     b.classList.toggle('active', b.dataset.side === key));
-  document.querySelectorAll('.side-body').forEach(el=>{
+  scope.querySelectorAll(':scope > .side-body').forEach(el=>{
     if(el.dataset.pane === key) el.removeAttribute('hidden');
     else el.setAttribute('hidden','');
   });
@@ -4724,8 +4753,10 @@ function showSidePane(key){
 /* A dot on a tab when something there wants looking at, so you can ignore the
    sidebar entirely until it earns your attention. */
 function markSideAlerts(){
-  const set = (key, on, sel)=>{
-    const b = document.querySelector(`${sel||'.side-tab'}[data-${sel?'sub':'side'}="${key}"]`);
+  const set = (containerId, key, on, sel)=>{
+    const scopeEl = containerId ? document.getElementById(containerId) : document;
+    if(!scopeEl) return;
+    const b = sel ? scopeEl.querySelector(`${sel}[data-sub="${key}"]`) : scopeEl.querySelector(`:scope > .side-tab[data-side="${key}"]`);
     if(!b) return;
     const has = b.querySelector('.dot');
     if(on && !has){ const d=document.createElement('span'); d.className='dot'; b.appendChild(d); }
@@ -4735,16 +4766,16 @@ function markSideAlerts(){
     const r = runState();
     const e = endgame();
     const inf = inflationState();
-    set('board', !!(r.active || r.coming));
-    set('market', inf.picks >= 5 && Math.abs((inf.rate||1)-1) > 0.08);
-    set('ideal', !!(e && !e.done && e.tight));
+    set('poolTabs', 'quality', !!(r.active || r.coming));
+    set('poolTabs', 'market', inf.picks >= 5 && Math.abs((inf.rate||1)-1) > 0.08);
+    set('myTeamTabs', 'ideal', !!(e && !e.done && e.tight));
 
     /* Badge the sub-tabs too, so a run starting or your board emptying is
        visible without leaving the bid panel to go looking for it. */
     const bs = boardStatus();
     const exhausted = bs.some(x=>!x.slotDone && x.entries.length && !x.entries.some(y=>y.status==='open'));
-    set('plan', exhausted, '.sub-tab');
-    set('nominate', !!(r.coming), '.sub-tab');
+    set(null, 'plan', exhausted, '.sub-tab');
+    set(null, 'nominate', !!(r.coming), '.sub-tab');
   }catch(err){}
 }
 
@@ -4772,7 +4803,9 @@ function bindDraftSubs(){
 }
 
 function renderDraftView(){
-  bindSideTabs();
+  bindSideTabs('myTeamTabs');
+  bindSideTabs('poolTabs');
+  bindSideTabs('otherTabs');
   bindDraftSubs();
   bindMockDraftControls();
   /* The top status strip (cap space, active players, open slots, dead money)
@@ -4874,12 +4907,15 @@ function renderEndgame(){
 }
 
 function renderBoardState(){
-  /* Shows in the Draft Day sidebar and, so scarcity is visible while
-     planning too (not just live), in Squad Plan's Prep panel. Cheap to
-     compute -- no reason to gate this one the way the solver is gated. */
-  const els = ['boardStateBody','boardStateBodyPlan'].map(id=>document.getElementById(id)).filter(Boolean);
-  if(!els.length) return;
-  const el = { set innerHTML(v){ els.forEach(e=>e.innerHTML=v); } };
+  /* Draft Day splits this across two boxes now: scarcity (a player-pool read)
+     goes in the Player pool/analytics box, money (cap space and spending
+     pressure, both about what OTHER teams do next) goes in the Other teams
+     box. Squad Plan's Prep panel has no such split -- it's one panel there,
+     so boardStateBodyPlan still gets the combined content, unchanged. */
+  const scarcityEl = document.getElementById('draftScarcityBody');
+  const moneyEl = document.getElementById('draftOtherMoneyBody');
+  const planEl = document.getElementById('boardStateBodyPlan');
+  if(!scarcityEl && !moneyEl && !planEl) return;
   const dep = tierDepletion();
   const fm = forcedMoney();
 
@@ -4925,15 +4961,21 @@ function renderBoardState(){
       ? `<span style="color:var(--jade)">${fm.scraping} team${fm.scraping===1?'':'s'} down to dollar bids. That much of the room is out of the running on anyone real.</span>`
       : '<span style="color:var(--chalk-3)">Nobody is under pressure yet, so prices should track value.</span>');
 
-  el.innerHTML = `
+  const scarcityHTML = `
     <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Quality left</div>
     ${depRows}
-    <p class="panel-sub" style="margin:8px 0 14px;">${note}</p>
-    ${surplusRows ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin:12px 0 4px;">Money per real hole</div>${surplusRows}
+    <p class="panel-sub" style="margin:8px 0 0;">${note}</p>`;
+
+  const moneyHTML = `
+    ${surplusRows ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Money per real hole</div>${surplusRows}
     <p class="panel-sub" style="margin:8px 0 16px;">Money against the starting slots that actually cost something. <span class="th-help" title="Kicker and defence are priced out separately because nobody competes for a $1 slot. Teams near the top can go harder on any one player than their cap space suggests, so expect them to be difficult to outbid early. Hover a row to see what each still needs.">Why not just cap space</span></p>` : ''}
     <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Spending pressure</div>
     ${pressureRows}
     <p class="panel-sub" style="margin:8px 0 0;">${money}</p>`;
+
+  if(scarcityEl) scarcityEl.innerHTML = scarcityHTML;
+  if(moneyEl) moneyEl.innerHTML = moneyHTML;
+  if(planEl) planEl.innerHTML = scarcityHTML + `<div style="margin-top:14px;"></div>` + moneyHTML;
 }
 
 /* Everything else in this sidebar (run alert, board scarcity, inflation,
@@ -5013,7 +5055,7 @@ function renderSolver(suffix){
      lookup for a hidden tab. The Squad Plan instance (suffix 'Plan') has no
      such concept of "on screen", it's just part of that view, so it always
      computes and relies on the cache for cheapness. */
-  if(suffix === '' && typeof sidePane !== 'undefined' && sidePane !== 'ideal'){ return; }
+  if(suffix === '' && typeof sidePanes !== 'undefined' && sidePanes.myTeamTabs !== 'ideal'){ return; }
   const tg = document.getElementById('solverToggle'+suffix);
   if(tg && !tg.dataset.bound){
     tg.dataset.bound='1';
