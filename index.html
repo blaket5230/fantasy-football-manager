@@ -1015,7 +1015,7 @@
      quirk) -- so the outer column stays sticky, and the actual height cap +
      scrollbar sit on the .panel it wraps. .draft-main was never sticky, so
      it doesn't have this problem and keeps the cap directly. */
-  .draft-layout{display:grid;grid-template-columns:280px 380px 1fr 340px 320px;gap:18px;align-items:start;}
+  .draft-layout{display:grid;grid-template-columns:340px 380px 1fr 340px 320px;gap:18px;align-items:start;}
   .draft-sidebar{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px;min-width:0;min-height:0;}
   .draft-sidebar .panel{margin-bottom:0;min-width:0;}
   .draft-main{min-width:0;min-height:0;}
@@ -1043,7 +1043,7 @@
      falling back to the original three-column layout at the same breakpoint
      it already used. */
   @media (max-width:1900px){
-    .draft-layout{grid-template-columns:280px 380px 1fr 340px;}
+    .draft-layout{grid-template-columns:340px 380px 1fr 340px;}
     .draft-rail-right{grid-column:1 / -1;position:static;max-height:none;order:99;}
   }
   @media (max-width:1600px){
@@ -1073,12 +1073,14 @@
   .or-slot-empty{color:var(--chalk-3);opacity:.5;}
 
   /* ---------- POOL-BY-TIER RAIL ---------- */
-  .pt-pos-head{display:flex;justify-content:space-between;align-items:center;margin:10px 0 8px;}
-  .pt-pos-count{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--chalk-3);}
-  .pt-tier{margin-bottom:10px;}
-  .pt-tier-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:3px;}
-  .pt-player-row{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;padding:2px 0;color:var(--chalk-2);}
-  .pt-player-price{font-family:'JetBrains Mono',monospace;color:var(--chalk-3);flex-shrink:0;}
+  .pt-pos-head{display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px;}
+  .pt-pos-count{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);}
+  .pt-tier{margin-bottom:7px;}
+  .pt-tier-label{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin-bottom:2px;}
+  .pt-tier-players{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;}
+  .pt-player-row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10.5px;padding:1px 0;color:var(--chalk-2);min-width:0;}
+  .pt-player-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+  .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -5244,7 +5246,7 @@ let poolTierSelectedPos = 'RB';
 // separate real players, collapse the replacement-level tail into one line,
 // and let a click reveal the rest for whoever wants to dig into the bench.
 let poolTierExpanded = false;
-const POOL_TIER_DEFAULT_CAP = 16;
+const POOL_TIER_DEFAULT_CAP = 29;
 function renderPoolTierRail(){
   const wrap = document.getElementById('poolTierBody');
   if(!wrap) return;
@@ -5293,9 +5295,9 @@ function renderPoolTierRail(){
           const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
           const capped = i===partialAt ? names.slice(0, partialShow) : names;
           const rows = capped.map(p=>
-            `<div class="pt-player-row"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`
+            `<div class="pt-player-row" title="${p.name}"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`
           ).join('');
-          return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div>${rows}</div>`;
+          return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
 
         const toggle = hiddenTierCount
