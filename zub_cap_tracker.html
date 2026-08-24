@@ -4915,10 +4915,31 @@ function renderBoardState(){
     : st==='tight' ? 'var(--gold)'
     : st==='deepest' ? 'var(--jade)' : 'var(--chalk-3)';
 
-  const depRows = dep.filter(d=>!['PK','DST'].includes(d.pos)).map(d=>
-    `<div class="budget-row" title="${d.quality} players in the top two tiers that fill a ${d.slot} slot, against ${d.needing} teams that still need one">
+  // Counts alone ("6 left vs 3 needing") answer "how worried should I be"
+  // but not "should I act on THIS nomination" -- that needs the actual
+  // names, or it's just a second trip to Pool by Tier to find out who they
+  // are. Naming the top few up front is what makes this tab a decision
+  // rather than a stat.
+  const depRows = dep.filter(d=>!['PK','DST'].includes(d.pos)).map(d=>{
+    const shown = d.qualityPlayers.slice(0,4).map(p=>p.name);
+    const rest = d.quality - shown.length;
+    const names = shown.length
+      ? `<p class="panel-sub" style="margin:2px 0 8px;font-size:11px;">${shown.join(', ')}${rest>0?`, +${rest} more`:''}</p>`
+      : '';
+    return `<div class="budget-row" title="${d.quality} players in the top two tiers that fill a ${d.slot} slot, against ${d.needing} teams that still need one">
       <span class="b-name">${posLabel(d.pos)}</span>
       <span class="b-nums"><strong style="color:${col(d.state)}">${d.quality}</strong> <span style="color:var(--chalk-3);font-size:11px;">left vs ${d.needing} needing</span></span>
+    </div>${names}`;
+  }).join('');
+
+  // Nobody competes for a $1 slot, so PK/DST never get the same urgency
+  // read -- but "how many decent ones are even left" is still a real
+  // question once the room starts filling those slots late, and leaving
+  // it out entirely was most of why this tab felt bare early in a draft.
+  const kickerDstRows = dep.filter(d=>['PK','DST'].includes(d.pos)).map(d=>
+    `<div class="budget-row" title="${d.quality} players in the top two ${d.slot} tiers still on the board">
+      <span class="b-name">${posLabel(d.pos)}</span>
+      <span class="b-nums"><strong style="color:var(--chalk-2)">${d.quality}</strong> <span style="color:var(--chalk-3);font-size:11px;">left</span></span>
     </div>`).join('');
 
   const thinnest = dep.find(d=>!['PK','DST'].includes(d.pos));
@@ -4955,7 +4976,8 @@ function renderBoardState(){
   const scarcityHTML = `
     <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Quality left</div>
     ${depRows}
-    <p class="panel-sub" style="margin:8px 0 0;">${note}</p>`;
+    <p class="panel-sub" style="margin:8px 0 0;">${note}</p>
+    ${kickerDstRows ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin:14px 0 4px;">Kicker &amp; D/ST left</div>${kickerDstRows}` : ''}`;
 
   const moneyHTML = `
     ${surplusRows ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Money per real hole</div>${surplusRows}
@@ -8133,7 +8155,9 @@ function tierDepletion(){
     const needing = state.teams.filter((t,i)=>
       effOpenSlots(i) > 0 && demandStateFor(i,pos) !== 'stacked').length;
     const cover = quality / Math.max(1, needing);
-    out.push({ pos, slot:posLabel(pos), top, two, quality, needing, cover });
+    const qualityPlayers = [...(tiers[0]||[]), ...(tiers[1]||[])]
+      .sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
+    out.push({ pos, slot:posLabel(pos), top, two, quality, needing, cover, qualityPlayers });
   });
 
   /* Banding on absolute cover reads "thin" for everything on the first
