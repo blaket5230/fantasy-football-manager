@@ -1009,7 +1009,12 @@
   .draft-layout{display:grid;grid-template-columns:340px 1fr 380px;gap:18px;align-items:start;}
   .draft-history-col,.draft-sidebar,.draft-main{
     min-width:0;min-height:0;height:var(--draft-col-max-h, 640px);overflow-y:auto;
+    scrollbar-width:thin;scrollbar-color:var(--line) transparent;
   }
+  .draft-history-col::-webkit-scrollbar,.draft-sidebar::-webkit-scrollbar,.draft-main::-webkit-scrollbar{width:9px;}
+  .draft-history-col::-webkit-scrollbar-track,.draft-sidebar::-webkit-scrollbar-track,.draft-main::-webkit-scrollbar-track{background:transparent;}
+  .draft-history-col::-webkit-scrollbar-thumb,.draft-sidebar::-webkit-scrollbar-thumb,.draft-main::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;}
+  .draft-history-col::-webkit-scrollbar-thumb:hover,.draft-sidebar::-webkit-scrollbar-thumb:hover,.draft-main::-webkit-scrollbar-thumb:hover{background:#31405A;}
   .draft-history-col .panel,.draft-sidebar .panel{margin-bottom:0;min-width:0;}
   .draft-rosters-col{grid-column:1 / -1;min-width:0;}
 
