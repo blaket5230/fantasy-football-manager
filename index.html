@@ -1071,6 +1071,8 @@
   .ar-card{background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:9px 10px 10px;min-width:0;}
   .ar-card.ar-mine{border-color:rgba(229,181,103,.5);}
   .ar-pressure{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);margin:-2px 0 6px;}
+  .ar-maxbid{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);margin:-2px 0 6px;}
+  .ar-maxbid strong{color:var(--gold);font-weight:700;}
   @media (max-width:1400px){ .all-rosters-grid{grid-template-columns:repeat(4,1fr);} }
   @media (max-width:900px){ .all-rosters-grid{grid-template-columns:repeat(2,1fr);} }
   @media (max-width:520px){ .all-rosters-grid{grid-template-columns:1fr;} }
@@ -4592,13 +4594,20 @@ function renderAllRostersGrid(){
 
     const myFm = fm.rows.find(r=>r.idx===i);
     const capColor = myFm ? (pressureColor[myFm.pressure]||'var(--chalk)') : 'var(--chalk)';
-    const pressureLine = myFm && myFm.pressure!=='done'
-      ? `<div class="ar-pressure">$${(myFm.perMan||0).toFixed(1)} a man &middot; ${myFm.pressure}</div>`
+    /* The number that actually matters mid-bid: not cap left, but the most
+       this team could legally put on ONE player right now -- cap left minus
+       $1 held back for each of its other open slots (effMaxLegalBid, same
+       rule the bid panel's own "legal max" verdict uses). Folded onto the
+       same line as the spend-pressure read rather than a separate row, since
+       most cards already run long with a full 18-slot roster underneath. */
+    const pressureTail = myFm && myFm.pressure!=='done'
+      ? ` &middot; $${(myFm.perMan||0).toFixed(1)}/man &middot; ${myFm.pressure}`
       : '';
+    const maxBidLine = `<div class="ar-maxbid">Max bid <strong>$${effMaxLegalBid(i)}</strong>${pressureTail}</div>`;
 
     return `<div class="ar-card${i===myIdx?' ar-mine':''}">
       <div class="or-team-head"><span>${i===myIdx?'&#9733; ':''}${t.owner}</span><span class="or-team-cap" style="color:${capColor}">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
-      ${pressureLine}
+      ${maxBidLine}
       <div class="or-slot-group-label">Starters</div>
       ${starterRows}
       <div class="or-slot-group-label">Bench</div>
