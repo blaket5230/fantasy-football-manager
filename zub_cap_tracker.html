@@ -4086,9 +4086,9 @@ function qualityCountAtPos(teamIdx, pos){
 }
 function demandStateFor(teamIdx, pos){
   if(!['QB','RB','WRTE'].includes(pos)){
-    // PK/DST: 1 starter + 1 earmarked bench cover (see BENCH_SLOTS below) is
-    // the intended full complement, not "stacked" -- planBudget() deliberately
-    // budgets for that 2nd one (bye-week cover). Only a genuine 3rd is excess.
+    // PK/DST: a starter plus one bye-week backup is a normal, full
+    // complement, not "stacked" -- nobody drafts these ahead of time, and a
+    // team that already has two isn't in the market for a third.
     const held = effPosCounts(teamIdx)[pos] || 0;
     if(held >= 2) return 'stacked';
     return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'moderate';
@@ -7034,10 +7034,8 @@ function assignLineup(players){
   return { starters, bench };
 }
 /* Same idea, one level down: which of the players assignLineup() left on the
-   bench fills which of the 10 bench spots. BENCH_SLOTS reserves the first two
-   for a kicker and defense cover, so those get first claim on a bench PK/DST
-   before anything else does -- everyone left over fills the 8 open slots
-   best-VOR-first, and anything past 18 total (dead-cap aside, shouldn't
+   bench fills which of the 10 bench spots, best-VOR-first since every spot
+   takes any position now. Anything past 18 total (dead-cap aside, shouldn't
    normally happen) still shows up rather than silently vanishing. */
 function assignBench(benchPlayers){
   const pool = benchPlayers.slice().sort((a,b)=>vor(b)-vor(a));
@@ -7906,7 +7904,7 @@ function achievableRoster(opts){
   const cap = plan.cap;
   const roomLeft = effOpenSlots(myIdx);
   const openStart = plan.openSlots.map(s=>({key:s.key,label:s.label,eligible:s.eligible,starter:true}));
-  const openBench = (plan.openBenchSlots||[]).map(b=>({key:b.key,label:b.label,eligible:b.eligible,starter:false,earmark:!!b.earmark}));
+  const openBench = (plan.openBenchSlots||[]).map(b=>({key:b.key,label:b.label,eligible:b.eligible,starter:false}));
   const slots = [...openStart, ...openBench].slice(0, Math.max(0, roomLeft));
   if(!slots.length) return { slots:[],picks:[],spend:0,budget:cap,leftover:cap,value:0,heldValue:0,totalValue:0 };
 
@@ -8034,26 +8032,6 @@ function achievableRoster(opts){
     return starter && rosterNames.has(starter) ? starter : null;
   };
 
-  /* Worst case in this league: a bye-week "cover" that shares the exact
-     bye it's supposed to cover, which makes it worthless for the one job
-     it exists to do. Look up the actual DRAFT_POOL record for a name
-     rather than trust whatever abbreviated shape (held/bought) is on hand
-     -- byeWeek() wants a real nfl team code, and held/bought entries don't
-     carry one. The starter's bye is whichever PK/DST just got bought for
-     the starting slot this solve, or whichever one is already held if
-     that slot didn't need filling. */
-  const byeWeekOf = name => { const src = DRAFT_POOL.find(d=>d.name===name); return src ? byeWeek(src) : null; };
-  const starterOf = (slotKey, pos) => {
-    const bought1 = picks.find(x=>x.slot.key===slotKey && x.p);
-    if(bought1) return bought1.p.name;
-    const held1 = held.find(h=>h.pos===pos);
-    return held1 ? held1.name : null;
-  };
-  const starterPKName = starterOf('PK', 'PK');
-  const starterDSTName = starterOf('DST', 'DST');
-  const starterPKBye = starterPKName ? byeWeekOf(starterPKName) : null;
-  const starterDSTBye = starterDSTName ? byeWeekOf(starterDSTName) : null;
-
   /* Decided FIRST, against the full remaining bench budget, not in slot
      order. Deciding them in slot order priced them out every time: by the
      time their assigned slot came up near the end of the bench, the loop
@@ -8061,7 +8039,6 @@ function achievableRoster(opts){
      real $3-4 handcuff never fit even though the money was there at the
      start of the bench. */
   const reservedBySlot = new Map(); // slot object -> {p, d}
-  const openBenchSlotObjs = keepBench.filter(s=>!s.earmark);
   const reserveBudget = () => Math.max(1, cap - spend - (keepBench.length - reservedBySlot.size - 1));
 
   /* RB and true-WR floors -- the mirror image of the QB ceiling above, and
@@ -8083,7 +8060,7 @@ function achievableRoster(opts){
 
   function reserveFloor(need, matches){
     while(need > 0){
-      const slot = openBenchSlotObjs.find(s=>!reservedBySlot.has(s));
+      const slot = keepBench.find(s=>!reservedBySlot.has(s));
       if(!slot) break; // out of bench room -- get as close as the roster allows
       const pick = availablePool()
         .filter(p => slot.eligible.includes(p.pos) && !taken.has(p.name)
@@ -8101,8 +8078,8 @@ function achievableRoster(opts){
   reserveFloor(Math.max(0, RB_FLOOR - rbCount), p=>p.pos==='RB');
   reserveFloor(Math.max(0, WR_FLOOR - wrCount), isTrueWR);
 
-  if(openBenchSlotObjs.length){
-    const hcSlot = openBenchSlotObjs[openBenchSlotObjs.length-1];
+  if(keepBench.length){
+    const hcSlot = keepBench[keepBench.length-1];
     const handcuffPick = availablePool()
       .filter(p => hcSlot.eligible.includes(p.pos) && !taken.has(p.name)
                  && playerTag(p.name)!=='avoid'
@@ -8117,7 +8094,7 @@ function achievableRoster(opts){
     // else: none of your RBs have a real handcuff worth grabbing right now --
     // this slot falls through to a normal value pick below.
   }
-  const stashEligibleSlots = openBenchSlotObjs.filter(s=>!reservedBySlot.has(s));
+  const stashEligibleSlots = keepBench.filter(s=>!reservedBySlot.has(s));
   if(stashEligibleSlots.length){
     const stSlot = stashEligibleSlots[stashEligibleSlots.length-1];
     const stashPick = stashCandidates(40)
@@ -8146,9 +8123,7 @@ function achievableRoster(opts){
       .filter(x=>slot.eligible.includes(x.pos) && !taken.has(x.name)
               && playerTag(x.name)!=='avoid'
               && priceOf(x) <= Math.max(1,spendable)
-              && (x.pos!=='QB' || qbRoomLeft())
-              && !(slot.key==='BN1' && starterPKBye!=null && byeWeekOf(x.name)===starterPKBye)
-              && !(slot.key==='BN2' && starterDSTBye!=null && byeWeekOf(x.name)===starterDSTBye))
+              && (x.pos!=='QB' || qbRoomLeft()))
       .map(x=>({x,d:priceOf(x),v:vor(x)*benchDecay(x.pos),t:playerTag(x.name)}));
     if(!cands.length){ picks.push({slot,p:null,d:0}); return; }
     const w=o=>o.t==='target'?1.25:1;
@@ -9910,16 +9885,13 @@ const SLOTS = [
   { key:'DST',   label:'DST',           eligible:['DST'],         weight:0.02 },
 ];
 
-/* 18 roster spots: the 8 starters above, and these 10 bench spots. Two are
-   earmarked for a backup kicker and defense, because replacing one in season
-   costs $5 out of pocket under rule I.I while covering the bye on draft night
-   costs $1 of cap and nothing real. The other eight are open depth.        */
-const BENCH_SLOTS = [
-  { key:'BN1', label:'PK cover',  eligible:['PK'],  earmark:true },
-  { key:'BN2', label:'DST cover', eligible:['DST'], earmark:true },
-  ...Array.from({length:8}, (_,i)=>({ key:'BN'+(i+3), label:'Bench '+(i+1),
-      eligible:['QB','RB','WRTE'], earmark:false }))
-];
+/* 18 roster spots: the 8 starters above, and these 10 bench spots. Used to
+   reserve the first two specifically for a backup kicker and defense, but
+   not every team wants to pay for that bye-week cover -- plenty would rather
+   spend those two spots on a handcuff or a stash instead. All ten are just
+   open depth now, any position. */
+const BENCH_SLOTS = Array.from({length:10}, (_,i)=>({ key:'BN'+(i+1), label:'Bench '+(i+1),
+    eligible:['QB','RB','WRTE','PK','DST'] }));
 const BENCH_RESERVE_PER_SLOT = 1;
 
 function planBudget(){
@@ -9960,15 +9932,10 @@ function planBudget(){
   // everyone who did not claim a starting slot is bench depth
   const benchDepth = held.filter(h=>!Object.values(filled).some(f=>f.name===h.name));
 
-  // seat the bench: the two earmarked cover spots take a matching player if you
-  // own one, otherwise everyone else falls into the open depth spots in order
+  // seat the bench: everyone falls into the open depth spots in order
   const benchPool = benchDepth.slice();
   const benchFilled = {};
-  BENCH_SLOTS.filter(b=>b.earmark).forEach(b=>{
-    const i = benchPool.findIndex(x=>b.eligible.includes(x.pos));
-    if(i>=0){ benchFilled[b.key] = benchPool[i]; benchPool.splice(i,1); }
-  });
-  BENCH_SLOTS.filter(b=>!b.earmark).forEach(b=>{
+  BENCH_SLOTS.forEach(b=>{
     if(benchPool.length){ benchFilled[b.key] = benchPool.shift(); }
   });
 
@@ -10340,42 +10307,13 @@ function renderPlanView(){
         <div class="prow-pick"><b style="cursor:default">${got.name}</b> ${posLabel(got.pos)}${bye?` &middot; bye ${bye}`:''}<span class="row-act to-start" tabindex="0" role="button" data-role-start="${got.name.replace(/"/g,'&quot;')}" title="Move into the starting lineup">&uarr; start</span></div>
       </div>`;
     }
-    // open bench spot: suggest something that actually fits its purpose
+    // open bench spot: suggest a stash candidate, ranked position matching
+    // this slot's place among the other still-open bench spots
     let sug = null;
-    if(b.earmark){
-      // A cover is only a cover if it is a different player on a different bye.
-      // Whoever the starting slot is aiming at gets excluded, and we prefer a
-      // bye that does not collide with his, otherwise you own two players who
-      // sit out the same week and still have to pay $5 to patch it.
-      const startKey = b.eligible[0] === 'PK' ? 'PK' : 'DST';
-      const startSlot = SLOTS.find(x=>x.key===startKey);
-      const startPlayer = plan.filled[startKey];
-      const ranked = ((state.slotTargets||{})[startKey] || [])[0];
-      let starterName = null, starterBye = null;
-      if(startPlayer){ starterName = startPlayer.name; }
-      else if(ranked){ starterName = ranked; }
-      else if(startSlot){
-        const auto = slotTargets(startSlot, plan.alloc[startKey] || 2, 1)[0];
-        if(auto) starterName = auto.x.name;
-      }
-      const starterObj = starterName ? DRAFT_POOL.find(x=>x.name===starterName) : null;
-      if(starterObj) starterBye = byeWeek(starterObj);
-
-      const pool = availablePool()
-        .filter(x=>b.eligible.includes(x.pos) && x.name !== starterName)
-        .sort((a,b2)=>b2.mv-a.mv);
-      const differentBye = pool.filter(x=>starterBye === null || byeWeek(x) !== starterBye);
-      const pick = differentBye[0] || pool[0];
-      if(pick){
-        sug = { name:pick.name, pos:pick.pos, nfl:pick.nfl, d:suggestedDollar(pick.mv,pick.pos,pick.name), bye:byeWeek(pick),
-                clash: starterBye !== null && byeWeek(pick) === starterBye };
-      }
-    } else {
-      const st = stashCandidates(12);
-      const idx = BENCH_SLOTS.filter(x=>!x.earmark && !plan.benchFilled[x.key]).findIndex(x=>x.key===b.key);
-      const c = st[idx] || st[0];
-      if(c) sug = { name:c.p.name, pos:c.p.pos, nfl:c.p.nfl, d:c.s.price, bye:byeWeek(c.p) };
-    }
+    const st = stashCandidates(12);
+    const idx = BENCH_SLOTS.filter(x=>!plan.benchFilled[x.key]).findIndex(x=>x.key===b.key);
+    const c = st[idx] || st[0];
+    if(c) sug = { name:c.p.name, pos:c.p.pos, nfl:c.p.nfl, d:c.s.price, bye:byeWeek(c.p) };
     const benchChosen = (state.slotTargets||{})[b.key] || [];
     const benchOpenPicker = planExpanded[b.key];
     let benchPick;
@@ -10400,7 +10338,7 @@ function renderPlanView(){
       benchPick = `<div class="tgt-wrap">${benchPick}</div>`;
     } else {
       benchPick = sug
-        ? `${pickLink(sug.name)} <span class="pos-tag pos-${sug.pos}">${posLabel(sug.pos)}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${sug.nfl||''}</span> <span style="color:${sug.clash?'var(--coral)':'var(--chalk-3)'}">$${sug.d}${sug.bye?` &middot; bye ${sug.bye}${sug.clash?' (same bye as your starter)':''}`:''}</span>`
+        ? `${pickLink(sug.name)} <span class="pos-tag pos-${sug.pos}">${posLabel(sug.pos)}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${sug.nfl||''}</span> <span style="color:var(--chalk-3)">$${sug.d}${sug.bye?` &middot; bye ${sug.bye}`:''}</span>`
         : '<span style="color:var(--chalk-3)">open</span>';
     }
     const benchBudget = plan.alloc[b.key] || 1;
