@@ -999,40 +999,45 @@
      quirk) -- so the outer column stays sticky, and the actual height cap +
      scrollbar sit on the .panel it wraps. .draft-main was never sticky, so
      it doesn't have this problem and keeps the cap directly. */
-  /* Three columns up top -- your team (rosters/money/ideal), bidding in the
-     middle, the player pool on the right -- with the draft board as its own
-     full-width row underneath instead of a fourth or fifth sticky column.
-     Fewer, wider columns fits comfortably at a real laptop width without
-     the narrow-column cropping five ever needed, and the board reads better
-     as a wide row of picks than a squeezed sidebar anyway. Because the board
-     is now below the fold on a shorter screen rather than a column that has
-     to fit beside everything else, the page scrolls normally here -- no
-     forced-fit sticky/height-cap/overflow-hidden combination to keep in
-     sync the way the five-column layout needed. */
-  .draft-layout{display:grid;grid-template-columns:1fr 380px;gap:18px;align-items:start;}
-  .draft-sidebar{position:sticky;top:16px;min-width:0;}
-  .draft-sidebar .panel{margin-bottom:0;min-width:0;}
+  /* Three columns up top -- the draft board, bidding in the middle, the
+     player pool on the right -- with every team's roster as its own
+     full-width row underneath. The board goes back to being a persistent
+     side column instead of a full-width row now that there's genuinely
+     room for it beside bidding; the roster grid is the one that needs the
+     full width, since it is trying to show 12 teams at once instead of one
+     running sheet. */
+  .draft-layout{display:grid;grid-template-columns:340px 1fr 380px;gap:18px;align-items:start;}
+  .draft-history-col,.draft-sidebar{position:sticky;top:16px;min-width:0;}
+  .draft-history-col .panel,.draft-sidebar .panel{margin-bottom:0;min-width:0;}
   .draft-main{min-width:0;}
-  .draft-history-col,.draft-rosters-col{grid-column:1 / -1;min-width:0;}
+  .draft-rosters-col{grid-column:1 / -1;min-width:0;}
 
-  /* Only two columns now (bidding, player pool), so there's real headroom --
-     down to phone width before the pool needs to drop to full-width below
-     bidding instead of beside it. */
-  @media (max-width:760px){
+  /* Player pool drops first (least urgent while nothing's on the clock),
+     landing full-width between bidding and the roster grid; below that even
+     a 340px board column is too cramped alongside bidding, so it drops too. */
+  @media (max-width:1150px){
+    .draft-layout{grid-template-columns:340px 1fr;}
+    .draft-sidebar{grid-column:1 / -1;position:static;}
+  }
+  @media (max-width:820px){
     .draft-layout{grid-template-columns:1fr;}
-    .draft-sidebar{position:static;}
+    .draft-history-col{position:static;}
   }
 
-  /* Every team's roster in one grid instead of a dropdown -- cards wrap to
-     fit whatever width is available, one column on a phone, four or five
-     across on a real monitor. Money folds into each card's own header
-     rather than living as a separate tab: cap space colored by the same
-     spending-pressure read the bid panel already trusts, plus the actual
-     $-per-man detail underneath. */
-  .all-rosters-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
-  .ar-card{background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:10px 12px 12px;min-width:0;}
+  /* Every team's roster in one grid instead of a dropdown, six across so 12
+     teams reads as two clean rows rather than a ragged wrap -- narrower
+     screens step down to four, then two, then one, so a card never gets so
+     thin a name has to break mid-word. Money folds into each card's own
+     header rather than living as a separate tab: cap space colored by the
+     same spending-pressure read the bid panel already trusts, plus the
+     actual $-per-man detail underneath. */
+  .all-rosters-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;}
+  .ar-card{background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:9px 10px 10px;min-width:0;}
   .ar-card.ar-mine{border-color:rgba(229,181,103,.5);}
-  .ar-pressure{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--chalk-3);margin:-2px 0 6px;}
+  .ar-pressure{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);margin:-2px 0 6px;}
+  @media (max-width:1400px){ .all-rosters-grid{grid-template-columns:repeat(4,1fr);} }
+  @media (max-width:900px){ .all-rosters-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:520px){ .all-rosters-grid{grid-template-columns:1fr;} }
 
   /* ---------- OTHER ROSTERS RAIL ---------- */
   .or-team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:2px;color:var(--chalk);}
@@ -1780,6 +1785,33 @@
   <!-- DRAFT DAY -->
   <div class="view" id="view-draft">
     <div class="draft-layout">
+      <!-- The one thing you want visible the entire time, the same way a
+           live auction room's own running sheet always is -- back to a
+           persistent column instead of a full-width row, now that there's
+           real room for it beside bidding. -->
+      <div class="draft-history-col">
+        <div class="panel">
+          <h3>Draft board</h3>
+          <p class="panel-sub">Live and fully editable. Reassign the team, change the price, or remove a pick entirely. Contract length isn't a factor here, that gets set after the draft per the rules, everything logs as a placeholder until you commit.</p>
+          <div id="draftHistoryTable"></div>
+          <div class="field-row" style="margin-top:12px;align-items:center;">
+            <span id="undoBar"></span>
+            <span class="row-act" tabindex="0" role="button" id="exportBoardBtn" title="Copy the draft board as text">export board</span>
+            <span class="row-act" tabindex="0" role="button" id="exportRosterBtn" title="Copy your roster as text">export my roster</span>
+            <span class="row-act" tabindex="0" role="button" id="downloadBoardBtn" title="Download every pick logged so far as a real file, so a crashed tab or cleared storage can't lose your draft">download board backup</span>
+            <span class="row-act" tabindex="0" role="button" id="restoreBoardBtn" title="Restore the draft board from a previously downloaded backup file">restore board backup</span>
+            <input type="file" id="restoreBoardFile" accept=".json,application/json" style="display:none;">
+          </div>
+          <p class="panel-sub" id="exportNote" style="margin:0 0 8px;"></p>
+          <p class="panel-sub" id="boardBackupNote" style="margin:0 0 8px;min-height:1.2em;"></p>
+          <textarea id="exportBox" style="display:none;width:100%;height:140px;background:var(--ink);border:1px solid var(--line);border-radius:7px;color:var(--chalk-2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px;"></textarea>
+          <div class="field-row" style="margin-top:16px;">
+            <button class="primary" id="commitDraftBtn">Commit draft to rosters</button>
+            <span class="panel-sub" style="margin:0;">Only do this once the auction is actually over, it assigns real contract lengths and permanently moves every pick into the cap ledger.</span>
+          </div>
+        </div>
+      </div>
+
       <div class="draft-main">
         <div id="mockDraftIdle" style="margin-bottom:10px;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span class="th-help" title="Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.">Rehearse before the real thing?</span>
@@ -1937,28 +1969,6 @@
            breathe, it's a full-width row underneath instead, which reads
            better as a running sheet of picks than a squeezed sidebar ever
            did. -->
-      <div class="draft-history-col">
-        <div class="panel">
-          <h3>Draft board</h3>
-          <p class="panel-sub">Live and fully editable. Reassign the team, change the price, or remove a pick entirely. Contract length isn't a factor here, that gets set after the draft per the rules, everything logs as a placeholder until you commit.</p>
-          <div id="draftHistoryTable"></div>
-          <div class="field-row" style="margin-top:12px;align-items:center;">
-            <span id="undoBar"></span>
-            <span class="row-act" tabindex="0" role="button" id="exportBoardBtn" title="Copy the draft board as text">export board</span>
-            <span class="row-act" tabindex="0" role="button" id="exportRosterBtn" title="Copy your roster as text">export my roster</span>
-            <span class="row-act" tabindex="0" role="button" id="downloadBoardBtn" title="Download every pick logged so far as a real file, so a crashed tab or cleared storage can't lose your draft">download board backup</span>
-            <span class="row-act" tabindex="0" role="button" id="restoreBoardBtn" title="Restore the draft board from a previously downloaded backup file">restore board backup</span>
-            <input type="file" id="restoreBoardFile" accept=".json,application/json" style="display:none;">
-          </div>
-          <p class="panel-sub" id="exportNote" style="margin:0 0 8px;"></p>
-          <p class="panel-sub" id="boardBackupNote" style="margin:0 0 8px;min-height:1.2em;"></p>
-          <textarea id="exportBox" style="display:none;width:100%;height:140px;background:var(--ink);border:1px solid var(--line);border-radius:7px;color:var(--chalk-2);font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px;"></textarea>
-          <div class="field-row" style="margin-top:16px;">
-            <button class="primary" id="commitDraftBtn">Commit draft to rosters</button>
-            <span class="panel-sub" style="margin:0;">Only do this once the auction is actually over, it assigns real contract lengths and permanently moves every pick into the cap ledger.</span>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
