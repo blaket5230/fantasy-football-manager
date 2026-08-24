@@ -1165,6 +1165,16 @@
   .bkn-value{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:800;color:var(--chalk);margin-top:1px;}
   .bkn-box.walk .bkn-value{color:var(--gold);}
 
+  .bid-insights{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft);}
+  .bi-col-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px;}
+  .bi-col-label.pro{color:var(--jade);}
+  .bi-col-label.con{color:var(--coral);}
+  .bi-item{display:flex;gap:6px;align-items:flex-start;font-size:12px;line-height:1.4;padding:3px 0;color:var(--chalk-2);}
+  .bi-mark{flex-shrink:0;font-weight:800;width:10px;}
+  .bi-item.pro .bi-mark{color:var(--jade);}
+  .bi-item.con .bi-mark{color:var(--coral);}
+  .bi-empty{color:var(--chalk-3);font-size:12px;font-style:italic;}
+
   .bid-price-track{margin:20px 0 6px;}
   .bid-price-track #bidNumberInput{
     background:var(--ink);border:1px solid var(--line);border-radius:var(--r-ctrl);
@@ -5770,13 +5780,97 @@ function clearTheClock(){
   renderBidPanel();
 }
 
+/* Short, scannable reasons to go up or pass, not a verdict. The suggested
+   range and your ceiling already say what to pay; this says WHY he might be
+   worth stretching for or letting go, in whatever time you have between
+   nominations. Each item is a fact, not a recommendation -- deliberately no
+   score, no weighting, no headline call, just green/red so the read is
+   instant. */
+function bidQuickInsights(p, myIdx){
+  const out = [];
+  if(myIdx < 0) return out;
+  const pro = text => out.push({sign:1, text});
+  const con = text => out.push({sign:-1, text});
+
+  const myHeld = state.teams[myIdx].players.filter(h=>!h.deadCap).map(h=>({name:h.name,pos:h.pos}))
+    .concat(picksForTeam(myIdx).map(h=>({name:h.name,pos:h.pos})));
+  const byeWeekOf = name => { const src = DRAFT_POOL.find(d=>d.name===name); return src ? byeWeek(src) : null; };
+
+  // Handcuff: real backup/starter pairing, and you actually own the starter.
+  const starterName = handcuffFor(p.name);
+  if(starterName && myHeld.some(h=>h.name===starterName)){
+    pro(`Handcuffs ${starterName}, already on your roster.`);
+  }
+
+  // Bye week: same internal position, same week, already yours.
+  const myBye = byeWeekOf(p.name);
+  if(myBye){
+    const clash = myHeld.find(h=>h.pos===p.pos && h.name!==p.name && byeWeekOf(h.name)===myBye);
+    if(clash) con(`Same Week ${myBye} bye as ${clash.name}, already yours.`);
+  }
+
+  // Tier value: is he the bargain of his group, or is there a cheaper twin
+  // still on the board, or is he the last real option at this level at all.
+  const ti = tierInfoFor(p);
+  if(ti && ti.size > 1){
+    if(ti.isCheapest) pro(`Best value in his tier of ${ti.size}.`);
+    else {
+      const cd = suggestedDollar(ti.cheapest.mv, ti.cheapest.pos, ti.cheapest.name);
+      con(`${ti.cheapest.name} is in the same tier for about $${cd} less.`);
+    }
+  } else if(ti){
+    pro(`Alone in his tier, no real fallback if you pass.`);
+  }
+
+  // Roster fit: do you actually need this position, or are you already set.
+  const demand = myIdx>=0 ? demandStateFor(myIdx, p.pos) : null;
+  if(demand==='hungry') pro(`No real quality at ${posLabel(p.pos)} on your roster yet.`);
+  if(demand==='stacked') con(`You're already stacked at ${posLabel(p.pos)}.`);
+
+  // Expert consensus, and separately your own rating of him if you set one.
+  const exp = expertRead(p.name);
+  if(exp && exp.kind==='target') pro(`${exp.t} analyst${exp.t===1?'':'s'} have him as a target.`);
+  if(exp && exp.kind==='avoid') con(`${exp.a} analyst${exp.a===1?'':'s'} flag him to fade.`);
+  const myRd = myRead(p.name);
+  if(myRd==='target'||myRd==='chase') pro(`You rated him ${READ_BY_KEY[myRd].label}.`);
+  if(myRd==='avoid'||myRd==='fade') con(`You rated him ${READ_BY_KEY[myRd].label}.`);
+
+  // Age: past the point his position typically starts declining.
+  const age = playerAge(p);
+  const declineAge = AGE_CURVE[p.pos];
+  if(age!=null && declineAge<90 && age>=declineAge) con(`Age ${Math.round(age)}, past the typical decline age for a ${posLabel(p.pos)}.`);
+
+  // Market heat: a run happening right now, or one about to start, at his position.
+  const runs = runState();
+  if(runs.active && runs.active.pos===p.pos) con(`Run on ${posLabel(p.pos)}s right now, prices running hot.`);
+  if(runs.coming && runs.coming.pos===p.pos) pro(`${posLabel(p.pos)}s thinning out, room hasn't reacted yet.`);
+
+  // Room pressure: a lot of the table priced out of anyone real.
+  const fm = forcedMoney();
+  if(fm.scraping >= 5) pro(`${fm.scraping} teams down to $1 bids, less real competition than it looks.`);
+
+  // Dead-cap history: a rule complication if his old team is the one bidding.
+  const history = deadCapHistoryFor(p.name);
+  if(history.length) con(`Dead-cap history with ${history.join(', ')} -- complications if they bid.`);
+
+  // Roster construction: QB cap is 2, a 3rd is bench dead weight, not a plan.
+  if(p.pos==='QB'){
+    const heldQBs = myHeld.filter(h=>h.pos==='QB').length;
+    if(heldQBs >= 2) con(`You already have ${heldQBs} QBs on the roster.`);
+  }
+
+  return out;
+}
+
 /* No live bid tracking, no verdict, no bidder tagging -- just what to
    nominate/watch for, a suggested range, and your own personal ceiling.
    The room moves the actual price; you decide against these two numbers in
    your head and log whoever actually won him once it's over. bidVerdict()
    and the interactive price-tracking UI it drove are still defined further
    down (mock draft's own ticking auction is unrelated and untouched), just
-   no longer the thing this panel shows. */
+   no longer the thing this panel shows. Quick pros/cons (bidQuickInsights)
+   sit alongside those two numbers instead: short, scannable, no verdict of
+   its own, so the call is still yours. */
 function renderBidPanel(){
   const panel = document.getElementById('draftBidPanel');
   if(!selectedDraftPlayer){
@@ -5808,6 +5902,17 @@ function renderBidPanel(){
 
   currentBidValue = market;
 
+  const insights = bidQuickInsights(p, myIdx);
+  const pros = insights.filter(x=>x.sign>0);
+  const cons = insights.filter(x=>x.sign<0);
+  const insightCol = (list, cls, label, emptyText) => `
+    <div class="bi-col">
+      <div class="bi-col-label ${cls}">${label}</div>
+      ${list.length
+        ? list.map(x=>`<div class="bi-item ${cls}"><span class="bi-mark">${cls==='pro'?'+':'&minus;'}</span><span>${x.text}</span></div>`).join('')
+        : `<div class="bi-empty">${emptyText}</div>`}
+    </div>`;
+
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
@@ -5818,6 +5923,11 @@ function renderBidPanel(){
     <div class="bid-key-numbers">
       <div class="bkn-box"><div class="bkn-label">Suggested bid</div><div class="bkn-value">${rangeText}</div></div>
       <div class="bkn-box walk"><div class="bkn-label">Max bid for you${maxNote?` <span class="th-help" title="${maxNote.replace(/"/g,'&quot;')}">why</span>`:''}</div><div class="bkn-value">${maxVal?('$'+maxVal):'&mdash;'}</div></div>
+    </div>
+
+    <div class="bid-insights">
+      ${insightCol(pros, 'pro', 'Pros', 'Nothing notable')}
+      ${insightCol(cons, 'con', 'Cons', 'Nothing notable')}
     </div>
 
     <div class="field-row bid-log-row" style="margin-top:16px;border-top:1px solid var(--line);padding:12px 0 2px;">
