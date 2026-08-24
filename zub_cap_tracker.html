@@ -1028,20 +1028,28 @@
      that, .draft-rail-left/right and the history column already fall back to
      stacked full-width blocks (see the breakpoints below), and that stack
      needs to scroll normally like any other page, the same as it always
-     could before this rework. 1600px is deliberately the same threshold
-     where the rails themselves stop being real side columns. */
-  @media (min-width:1600px){
+     could before this rework. 821px is deliberately the same threshold
+     where the layout collapses to one true full-width column. */
+  @media (min-width:821px){
     .draft-sidebar .panel{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
     .draft-main{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
     .draft-history-col .panel{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
     .draft-rail-left .panel,.draft-rail-right .panel{max-height:var(--draft-col-max-h, calc(100vh - 32px));overflow-y:auto;}
   }
-  /* Two extra rails only earn their keep once there is genuinely room for the
-     center bid panel to breathe alongside them -- drop the right one first
-     (least urgent while nothing's on the clock), then the left one, before
-     falling back to the original three-column layout at the same breakpoint
-     it already used. */
-  /* A roster list (18 slots, mostly "-") was built for a 320-340px rail and
+  /* All five columns fit down to a real laptop width (~1350px) just by
+     narrowing them and tightening the gap -- a laptop screen is exactly the
+     case worth keeping all five for, since that's most people's actual
+     draft-night setup, not a monitor wide enough for the original spacious
+     widths. Below that there's no honest way to shrink further without
+     truncating names or crushing the bid panel, so this is where dropping
+     a rail actually starts, one at a time, same order as before (right rail
+     first since it's least urgent while nothing's on the clock, then left),
+     each time reclaiming its width for what's left rather than staying this
+     cramped once a whole panel is gone. */
+  @media (max-width:1899px) and (min-width:1420px){
+    .draft-layout{grid-template-columns:250px 290px minmax(240px,1fr) 250px 230px;gap:14px;}
+  }
+  /* A roster list (18 slots, mostly "-") was built for a narrow rail and
      stays exactly that narrow even once its box goes full-width below --
      nothing about promoting the GRID ITEM to span the row reflows what's
      INSIDE it, so it just sits as a tall, narrow column in the middle of a
@@ -1051,16 +1059,16 @@
      same trick a full CSS Grid uses for spanning headers between
      auto-flowed cells. Reverts to one column again on a phone-width screen,
      where two would just break names mid-word. */
-  @media (max-width:1900px){
-    .draft-layout{grid-template-columns:340px 380px 1fr 340px;}
+  @media (max-width:1419px){
+    .draft-layout{grid-template-columns:300px 340px 1fr 300px;gap:16px;}
     .draft-rail-right{grid-column:1 / -1;position:static;max-height:none;order:99;}
     .draft-rail-right #otherRostersBody{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;}
     .draft-rail-right #otherRostersBody>select,
     .draft-rail-right #otherRostersBody>.or-team-head,
     .draft-rail-right #otherRostersBody>.or-slot-group-label{grid-column:1 / -1;}
   }
-  @media (max-width:1600px){
-    .draft-layout{grid-template-columns:380px 1fr 340px;}
+  @media (max-width:1150px){
+    .draft-layout{grid-template-columns:340px 1fr 300px;}
     .draft-rail-left{grid-column:1 / -1;position:static;max-height:none;order:99;}
     .draft-rail-left #myRosterPanel{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;}
     .draft-rail-left #myRosterPanel>.or-slot-group-label,
@@ -1070,11 +1078,11 @@
     .draft-rail-right #otherRostersBody,
     .draft-rail-left #myRosterPanel{grid-template-columns:1fr;}
   }
-  @media (max-width:1400px){
-    .draft-layout{grid-template-columns:340px 1fr;}
+  @media (max-width:1000px){
+    .draft-layout{grid-template-columns:300px 1fr;}
     .draft-history-col{grid-column:1 / -1;position:static;}
   }
-  @media (max-width:920px){
+  @media (max-width:820px){
     .draft-layout{grid-template-columns:1fr;}
     .draft-sidebar{position:static;}
     .draft-history-col{position:static;}
