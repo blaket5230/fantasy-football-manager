@@ -1084,8 +1084,16 @@
   .or-slot-group-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin:10px 0 4px;}
   .or-slot{display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0;border-bottom:1px solid var(--line-soft);}
   .or-slot:last-child{border-bottom:none;}
+  /* Keepers were already on the roster when tonight started; everything else
+     is a live pick from this session. A full-bleed tint (not just the text)
+     is what actually reads at a glance once the board is 15 picks deep and
+     every card is a wall of names -- margin/padding mirror .ar-card's own
+     10px side padding so the highlight reaches the card's edges instead of
+     floating short of them. */
+  .or-slot.or-keeper{background:rgba(123,143,247,.10);margin:0 -10px;padding:2px 10px;}
   .or-slot-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.05em;color:var(--chalk-3);width:60px;flex-shrink:0;text-transform:uppercase;}
-  .or-slot-name{color:var(--chalk-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .or-slot-name{flex:1;min-width:0;color:var(--chalk-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .or-slot-price{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--gold);flex-shrink:0;}
   .or-slot-empty{color:var(--chalk-3);opacity:.5;}
 
   /* ---------- POOL-BY-TIER RAIL ---------- */
@@ -1977,7 +1985,7 @@
       <div class="draft-rosters-col">
         <div class="panel">
           <h3>All rosters</h3>
-          <p class="panel-sub">Live, including tonight's picks. Cap space is colored by spending pressure, same read the bid panel already uses.</p>
+          <p class="panel-sub">Live, including tonight's picks. Cap space is colored by spending pressure, same read the bid panel already uses. <span style="background:rgba(123,143,247,.18);padding:1px 5px;border-radius:3px;">Highlighted</span> names were already on the roster coming into tonight; everything else was drafted this session.</p>
           <div id="allRostersBody"></div>
         </div>
       </div>
@@ -4573,24 +4581,27 @@ function renderAllRostersGrid(){
   const pressureColor = { 'must spend':'var(--coral)', scraping:'var(--chalk-3)', flexible:'var(--chalk-2)', done:'var(--jade)' };
   const railLabel = slot => slot.key==='FLEX' ? 'FLEX' : slot.label;
 
+  /* A player is either a keeper -- already on the roster when tonight
+     started -- or a live pick logged during this session. Carrying that
+     through as `keeper` (and the $ actually on the books for him, from the
+     same two sources renderAllRostersGrid already reads elsewhere: a
+     keeper's cap hit this year, a fresh pick's winning bid) is what lets the
+     board highlight the two apart as it fills up, instead of every name
+     reading the same regardless of when he was acquired. */
+  const rowHTML = (label, pl) => pl
+    ? `<div class="or-slot${pl.keeper?' or-keeper':''}"><span class="or-slot-label">${label}</span><span class="or-slot-name">${pl.name}</span><span class="or-slot-price">$${pl.price}</span></div>`
+    : `<div class="or-slot"><span class="or-slot-label">${label}</span><span class="or-slot-empty">—</span></div>`;
+
   const cards = state.teams.map((t,i)=>{
     const deadN = t.players.filter(p=>p.deadCap).length;
-    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
-      .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
+    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos,price:p.years[state.currentYear]||p.base||0,keeper:true}))
+      .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos,price:p.price||0,keeper:false})));
     const { starters, bench } = assignLineup(held);
     const { slots: benchSlots, overflow } = assignBench(bench);
 
-    const starterRows = SLOTS.map(slot=>{
-      const pl = starters[slot.key];
-      return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
-    }).join('');
-    const benchRows = BENCH_SLOTS.map(slot=>{
-      const pl = benchSlots[slot.key];
-      return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
-    }).join('');
-    const overflowRows = overflow.map(pl=>
-      `<div class="or-slot"><span class="or-slot-label">Extra</span><span class="or-slot-name">${pl.name}</span></div>`
-    ).join('');
+    const starterRows = SLOTS.map(slot=>rowHTML(railLabel(slot), starters[slot.key])).join('');
+    const benchRows = BENCH_SLOTS.map(slot=>rowHTML(railLabel(slot), benchSlots[slot.key])).join('');
+    const overflowRows = overflow.map(pl=>rowHTML('Extra', pl)).join('');
 
     const myFm = fm.rows.find(r=>r.idx===i);
     const capColor = myFm ? (pressureColor[myFm.pressure]||'var(--chalk)') : 'var(--chalk)';
