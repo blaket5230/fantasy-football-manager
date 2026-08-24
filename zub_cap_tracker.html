@@ -486,6 +486,36 @@
   .pcard-links a{color:var(--peri);text-decoration:none;font-size:12px;margin-right:16px;}
   .pcard-links a:hover{text-decoration:underline;}
 
+  /* Read-only pill, wherever a tag needs to show next to a name in a list
+     (pool rows, tier rail) without the click target that assigns one. */
+  .tag-chip{
+    display:inline-block;padding:1px 6px;border-radius:4px;margin-left:4px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:.04em;border:1px solid transparent;vertical-align:middle;
+  }
+  /* The clickable version, on the player card -- outlined when off, filled
+     with the tag's own color when on, so "which of these do I already have"
+     reads at a glance across a growing list of custom tags. */
+  .tag-picker{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px;}
+  .tag-pick{
+    display:inline-block;padding:4px 10px;border-radius:999px;cursor:pointer;user-select:none;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+    border:1px solid var(--tag-color);color:var(--tag-color);
+    transition:all var(--fast) var(--ease);
+  }
+  .tag-pick:hover{background:color-mix(in srgb, var(--tag-color) 15%, transparent);}
+  .tag-pick.on{background:var(--tag-color);color:var(--ink);}
+  .tag-manager{
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .tagmgr-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .tagmgr-swatches{display:flex;gap:5px;}
+  .tagmgr-swatch{
+    width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid transparent;
+  }
+  .tagmgr-swatch.on{border-color:var(--chalk);}
+
   /* The card used to be seven pcard-sec blocks stacked in one long scroll --
      real content, no organization, so finding "what do the experts think"
      meant scrolling past contract math to get to it. Identity (header) and
@@ -1109,6 +1139,8 @@
   .pt-player-row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10.5px;padding:1px 0;color:var(--chalk-2);min-width:0;}
   .pt-player-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;}
+  .tag-dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle;}
+  .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
   .pt-player-row[data-pt-nom]{cursor:pointer;}
@@ -3018,6 +3050,7 @@ async function loadState(){
             slotTargets: parsed.slotTargets || {},
             customPlayers: parsed.customPlayers || [],
             playerTags: parsed.playerTags || {},
+            customTags: parsed.customTags || [],
             myRatings: parsed.myRatings || {},
             myReads: parsed.myReads || {},
             rosterRole: parsed.rosterRole || state.rosterRole,
@@ -3106,6 +3139,7 @@ function savePayload(){
     slotTargets: state.slotTargets || {},
     customPlayers: state.customPlayers || [],
     playerTags: state.playerTags || {},
+    customTags: state.customTags || [],
     myRatings: state.myRatings || {},
     myReads: state.myReads || {},
     rosterRole: state.rosterRole || {},
@@ -4722,7 +4756,7 @@ function renderPoolTierRail(){
             const gone = taken.has(p.name);
             const nomAttr = gone ? '' : ` data-pt-nom="${p.name.replace(/"/g,'&quot;')}"`;
             const posBadge = pos==='OVERALL' ? `<span class="pos-tag pos-${p.pos}" style="margin-right:5px;">${posLabel(p.pos)}</span>` : '';
-            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${gone?p.name:`Put ${p.name} on the clock`}"${nomAttr}><span class="pt-player-name">${posBadge}${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
+            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${gone?p.name:`Put ${p.name} on the clock`}"${nomAttr}><span class="pt-player-name">${posBadge}${p.name}${tagDotsHTML(p.name)}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
@@ -6009,6 +6043,16 @@ function renderPlayerCard(){
       </p>
     </div>
 
+    <div class="pcard-sec">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">
+        <h4 style="margin-bottom:0;">Tags</h4>
+        <span class="row-act" tabindex="0" role="button" id="tagMgrToggle">${tagManagerOpen?'close':'manage tags'}</span>
+      </div>
+      <p class="panel-sub" style="margin:4px 0 8px;">Target and Avoid are the two that move any number -- everything else is just a label for yourself. Tap any to toggle; stack as many as you want.</p>
+      ${tagPickerHTML(p.name)}
+      ${tagManagerOpen ? tagManagerHTML() : ''}
+    </div>
+
     <!-- Everything above is what you check on every player. Everything below
          is a different KIND of question -- what outsiders think, what he
          actually costs, how his situation is trending -- so it moves behind
@@ -6086,6 +6130,15 @@ function renderPlayerCard(){
       renderPlayerCard();
       renderPoolView();
     }));
+  host.querySelectorAll('[data-tag-toggle]').forEach(d=>
+    d.addEventListener('click', ()=>{
+      togglePlayerTagKey(p.name, d.dataset.tagToggle);
+      renderPlayerCard();
+      renderPoolView();
+    }));
+  const tmt = document.getElementById('tagMgrToggle');
+  if(tmt) tmt.addEventListener('click', ()=>{ tagManagerOpen = !tagManagerOpen; renderPlayerCard(); });
+  bindTagManagerControls(host, ()=>{ renderPlayerCard(); renderPoolView(); });
   /* Scoped to this card's own host, never document, so switching a tab here
      can't touch the identically-styled sub-tabs elsewhere in the app and a
      click on those can't touch this. */
@@ -6308,25 +6361,189 @@ function migrateRatings(){
    applied on top rather than argued with.
 
    target : nudged up the plan and marked on the board
-   avoid  : never planned around, never suggested, whatever the numbers say  */
+   avoid  : never planned around, never suggested, whatever the numbers say
+
+   Every player can carry more than one label now -- Target and Avoid still
+   mean the above and are the only two that move any number, but Sleeper and
+   whatever custom tags get built are purely informational, just a way to
+   mark a name for yourself. state.playerTags used to store one string per
+   player; it now stores an array, and tagsFor() reads either shape so a save
+   file from before this existed still loads correctly. */
+function tagsFor(name){
+  const raw = (state.playerTags || {})[name];
+  if(!raw) return [];
+  return Array.isArray(raw) ? raw : [raw];
+}
 function playerTag(name){
-  const explicit = (state.playerTags || {})[name];
-  if(explicit) return explicit;
+  const tags = tagsFor(name);
+  if(tags.includes('avoid')) return 'avoid';
+  if(tags.includes('target')) return 'target';
   // a rating is a stronger statement than a tag, so let it speak
   const r = myRead(name);
   if(r === 'avoid') return 'avoid';
   if(r === 'chase' || r === 'target') return 'target';
   return null;
 }
+// Target/Avoid stay mutually exclusive with each other (the star/avoid/clear
+// cycle used in a couple of places), but this only ever touches those two
+// keys -- any Sleeper or custom tags already on the player are left alone.
 function setPlayerTag(name, tag){
   state.playerTags = state.playerTags || {};
-  if(!tag) delete state.playerTags[name]; else state.playerTags[name] = tag;
+  const kept = tagsFor(name).filter(k=>k!=='target' && k!=='avoid');
+  const next = tag ? [...kept, tag] : kept;
+  if(next.length) state.playerTags[name] = next; else delete state.playerTags[name];
   saveState();
 }
 function cycleTag(name){
   const cur = playerTag(name);
   setPlayerTag(name, cur==='target' ? 'avoid' : (cur==='avoid' ? null : 'target'));
   return playerTag(name);
+}
+// The general multi-select version: any tag, on or off, everyone else on the
+// player untouched. This is what the tag-chip picker uses.
+function togglePlayerTagKey(name, key){
+  state.playerTags = state.playerTags || {};
+  const cur = tagsFor(name);
+  const next = cur.includes(key) ? cur.filter(k=>k!==key) : [...cur, key];
+  if(next.length) state.playerTags[name] = next; else delete state.playerTags[name];
+  saveState();
+}
+
+/* ---------- TAG REGISTRY ----------
+   Target and Avoid are the two tags wired into scoring (see playerTag()
+   above) and can't be renamed or removed -- too much of the tool assumes
+   they exist and mean what they say. Sleeper ships as a third built-in
+   because it was the other name called out by name; anything past that is
+   a custom tag, stored on state so it's there next session. */
+const BUILTIN_TAGS = [
+  { key:'target',  label:'Target',  color:'#3FB68B', builtin:true },
+  { key:'avoid',   label:'Avoid',   color:'#E5675F', builtin:true },
+  { key:'sleeper', label:'Sleeper', color:'#7B8FF7', builtin:true },
+];
+// A fixed swatch rather than a free-form color picker -- fewer decisions,
+// and every custom tag stays readable against the dark background instead
+// of whatever a hex input produces.
+const CUSTOM_TAG_SWATCHES = ['#E5B567','#C9A0F0','#5EC8E0','#F0A868','#E58FC9','#8FD14F'];
+function allTagDefs(){ return BUILTIN_TAGS.concat(state.customTags || []); }
+function tagDefFor(key){ return allTagDefs().find(t=>t.key===key) || null; }
+function addCustomTag(label){
+  label = (label||'').trim();
+  if(!label) return null;
+  state.customTags = state.customTags || [];
+  const key = 'c_' + label.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') + '_' + Date.now().toString(36);
+  const used = new Set(allTagDefs().map(t=>t.color));
+  const color = CUSTOM_TAG_SWATCHES.find(c=>!used.has(c)) || CUSTOM_TAG_SWATCHES[state.customTags.length % CUSTOM_TAG_SWATCHES.length];
+  state.customTags.push({ key, label, color, builtin:false });
+  saveState();
+  return key;
+}
+function renameCustomTag(key, label){
+  const t = (state.customTags||[]).find(x=>x.key===key);
+  if(!t || t.builtin) return;
+  label = (label||'').trim();
+  if(!label) return;
+  t.label = label;
+  saveState();
+}
+function recolorCustomTag(key, color){
+  const t = (state.customTags||[]).find(x=>x.key===key);
+  if(!t || t.builtin) return;
+  t.color = color;
+  saveState();
+}
+function deleteCustomTag(key){
+  const t = (state.customTags||[]).find(x=>x.key===key);
+  if(!t || t.builtin) return;
+  state.customTags = state.customTags.filter(x=>x.key!==key);
+  // Strip the deleted tag off every player who had it, rather than leaving
+  // a dangling key that tagsFor() would still return but no def would match.
+  Object.keys(state.playerTags||{}).forEach(name=>{
+    const left = tagsFor(name).filter(k=>k!==key);
+    if(left.length) state.playerTags[name] = left; else delete state.playerTags[name];
+  });
+  saveState();
+}
+
+/* Read-only, compact -- small colored pills next to a name wherever the pool
+   is scanned as a list, so a tag is visible without opening the card that
+   actually assigns it. Empty string when nobody has tagged him, so callers
+   can drop it in without an extra length check. */
+function tagChipsHTML(name){
+  const tags = tagsFor(name).map(tagDefFor).filter(Boolean);
+  if(!tags.length) return '';
+  return tags.map(t=>`<span class="tag-chip" style="color:${t.color};border-color:${t.color}66;background:${t.color}22;">${t.label}</span>`).join('');
+}
+// Same idea, sized for the tier rail's tight 2-column rows where a full text
+// pill would blow out the layout -- a color still says "tagged, and with
+// which one" on hover without needing the label spelled out.
+function tagDotsHTML(name){
+  const tags = tagsFor(name).map(tagDefFor).filter(Boolean);
+  if(!tags.length) return '';
+  return `<span class="tag-dots">${tags.map(t=>`<span class="tag-dot" style="background:${t.color};" title="${t.label}"></span>`).join('')}</span>`;
+}
+
+/* The actual assignment control: every tag definition as a toggle, on if
+   this player already carries it. Lives on the player card since that is
+   the one place already built to hold a growing list of per-player judgment
+   calls (see "Your read" just above it) rather than inventing a second,
+   floating picker with its own positioning to get right. */
+function tagPickerHTML(name){
+  const cur = new Set(tagsFor(name));
+  const chips = allTagDefs().map(t=>{
+    const on = cur.has(t.key);
+    return `<span class="tag-pick${on?' on':''}" data-tag-toggle="${t.key}" style="--tag-color:${t.color};" title="${on?'Remove':'Add'} ${t.label}${t.builtin&&(t.key==='target'||t.key==='avoid')?' -- this one affects scoring':''}">${t.label}</span>`;
+  }).join('');
+  return `<div class="tag-picker">${chips}</div>`;
+}
+
+/* Custom tags only -- Target/Avoid/Sleeper are listed but fixed, since too
+   much of the tool already assumes the first two exist and mean what they
+   say. Inline add/rename/recolor/delete rather than a modal: there are at
+   most a handful of these and none of it needs its own screen. */
+let tagManagerOpen = false;
+function tagManagerHTML(){
+  const rows = allTagDefs().map(t=>{
+    if(t.builtin){
+      return `<div class="tagmgr-row">
+        <span class="tag-chip" style="color:${t.color};border-color:${t.color}66;background:${t.color}22;">${t.label}</span>
+        <span class="panel-sub" style="margin:0;font-size:11px;">built in, can't be renamed or removed</span>
+      </div>`;
+    }
+    const swatches = CUSTOM_TAG_SWATCHES.map(c=>
+      `<span class="tagmgr-swatch${c===t.color?' on':''}" data-tagmgr-recolor="${t.key}" data-color="${c}" style="background:${c};"></span>`
+    ).join('');
+    return `<div class="tagmgr-row">
+      <input type="text" value="${t.label.replace(/"/g,'&quot;')}" data-tagmgr-rename="${t.key}" style="width:110px;">
+      <span class="tagmgr-swatches">${swatches}</span>
+      <span class="row-act" tabindex="0" role="button" data-tagmgr-delete="${t.key}" title="Delete this tag everywhere it's assigned">remove</span>
+    </div>`;
+  }).join('');
+  return `<div class="tag-manager">
+    ${rows}
+    <div class="tagmgr-row" style="margin-top:6px;">
+      <input type="text" id="tagMgrNewLabel" placeholder="New tag name" style="width:140px;">
+      <button class="row-act" tabindex="0" role="button" id="tagMgrAdd">add tag</button>
+    </div>
+  </div>`;
+}
+function bindTagManagerControls(host, rerender){
+  const addBtn = host.querySelector('#tagMgrAdd');
+  const addInput = host.querySelector('#tagMgrNewLabel');
+  if(addBtn && addInput){
+    const doAdd = ()=>{ if(addCustomTag(addInput.value)) rerender(); };
+    addBtn.addEventListener('click', doAdd);
+    addInput.addEventListener('keydown', e=>{ if(e.key==='Enter') doAdd(); });
+  }
+  host.querySelectorAll('[data-tagmgr-rename]').forEach(inp=>
+    inp.addEventListener('change', ()=>{ renameCustomTag(inp.dataset.tagmgrRename, inp.value); rerender(); }));
+  host.querySelectorAll('[data-tagmgr-recolor]').forEach(sw=>
+    sw.addEventListener('click', ()=>{ recolorCustomTag(sw.dataset.tagmgrRecolor, sw.dataset.color); rerender(); }));
+  host.querySelectorAll('[data-tagmgr-delete]').forEach(btn=>
+    btn.addEventListener('click', ()=>{
+      if(!confirm(`Delete the "${tagDefFor(btn.dataset.tagmgrDelete)?.label}" tag? This removes it from every player who has it.`)) return;
+      deleteCustomTag(btn.dataset.tagmgrDelete);
+      rerender();
+    }));
 }
 
 /* ---------- WALK-AWAY PRICE ----------
@@ -7961,7 +8178,7 @@ function achievableRoster(opts){
   ].map(p=>{ const src=DRAFT_POOL.find(d=>d.name===p.name);
              return { name:p.name, pos:p.pos, mv: src?src.mv:(p.mv||0) }; });
   const heldNames = new Set(held.map(h=>h.name));
-  const avoided = Object.keys(state.playerTags||{}).filter(n=>state.playerTags[n]==='avoid');
+  const avoided = Object.keys(state.playerTags||{}).filter(n=>tagsFor(n).includes('avoid'));
 
   const priceOf = p => Math.max(1, opts.raw
     ? suggestedDollar(p.mv,p.pos,p.name)
@@ -9771,7 +9988,7 @@ function poolTableHTML(list, opts){
         ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}
         <span class="pos-tag pos-${p.pos}" style="margin-left:4px;">${posLabel(p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${logoHTML(p.nfl,14)} ${p.nfl}</span>
-        ${flags}${goneBadge}
+        ${flags}${goneBadge}${tagChipsHTML(p.name)}
       </td>
       <td>${rateCell}</td>
       <td>${sTxt}</td>
