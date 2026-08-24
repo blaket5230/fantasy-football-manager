@@ -8381,31 +8381,11 @@ function achievableRoster(opts){
     ? suggestedDollar(p.mv,p.pos,p.name)
     : inflatedValue(p).value);
 
-  /* A hard ceiling on real tight ends, on top of the merged WR/TE value math
-     above: at most 1 starting, at most 1 more on the bench. The merge is
-     still right about VALUE -- there's no dedicated TE slot, so a good TE
-     and a good WR really do compete for the same spot on equal footing --
-     but nobody actually wants to run out and DRAFT that logic to its
-     conclusion. This is a real, requested constraint on the final roster
-     shape, not a value judgment about any individual player. Starters: hold
-     the single best available true TE eligible and exclude every other one
-     from the solve entirely, so the solver can never seat two -- a bonus
-     added to the ranking couldn't win this the same way it couldn't win the
-     handcuff/stash problem below, so this uses the same fix: a real
-     reservation instead of a thumb on the scale. */
-  const heldTECount = held.filter(h=>TRUE_TE.has(h.name)).length;
-  let starterAvoided = avoided;
-  if(heldTECount >= 1){
-    starterAvoided = [...avoided, ...[...TRUE_TE].filter(n=>!heldNames.has(n))];
-  } else {
-    const bestAvailableTE = availablePool()
-      .filter(p=>TRUE_TE.has(p.name) && !avoided.includes(p.name))
-      .sort((a,b)=>vor(b)-vor(a))[0];
-    starterAvoided = bestAvailableTE
-      ? [...avoided, ...[...TRUE_TE].filter(n=>n!==bestAvailableTE.name)]
-      : [...avoided, ...TRUE_TE];
-  }
-
+  /* No TE cap: now that projectedPpg() no longer misreads position rank as
+     combined-pool rank (see its own comment), TE value here is honest --
+     the top of the pool (Bowers, McBride) is genuinely competitive with a
+     real WR at the same price, not an artifact of the old bug, and the
+     rest lands wherever real value actually puts it. */
   const baseBenchReserve = Math.min(openBench.length, Math.max(0, roomLeft - openStart.length));
   /* A few extra dollars of headroom for a real handcuff (~$3-4) and a real
      dynasty stash (also gated <=$4 in stashProfile, see below) -- both cost
@@ -8414,7 +8394,7 @@ function achievableRoster(opts){
      out of the budget before the bench even gets decided. */
   const handcuffStashReserve = baseBenchReserve >= 2 ? 4 : 0;
   const forStarters = Math.max(0, cap - baseBenchReserve - handcuffStashReserve);
-  const solved = bestLineupFrom(held, forStarters, starterAvoided);
+  const solved = bestLineupFrom(held, forStarters, avoided);
   const bought = solved.roster.filter(x=>!heldNames.has(x.name));
 
   /* Two things the lineup solver does not police, because they are not its
@@ -8453,13 +8433,12 @@ function achievableRoster(opts){
      past ROOM is worth 40% of the last, compounding -- not zero, so a
      genuine outlier can still win, just not mistaken for the first.
 
-     QB is a hard cap instead of a decay, same reasoning and same fix as the
-     TE ceiling below: this is a single-QB league, so a backup's own
-     projected line is close to zero and a decay can still lose to a
-     genuinely-productive $1 body once the cheap WRTE options thin out late
-     in the bench -- explicitly not wanted here, since a real backup for bye
-     and injury cover is plenty and a third or fourth is dead roster space,
-     not upside. */
+     QB is a hard cap instead of a decay: this is a single-QB league, so a
+     backup's own projected line is close to zero and a decay can still
+     lose to a genuinely-productive $1 body once the cheap WRTE options
+     thin out late in the bench -- explicitly not wanted here, since a real
+     backup for bye and injury cover is plenty and a third or fourth is
+     dead roster space, not upside. */
   const QB_CAP = 2;
   const qbRoomLeft = () => (counts.QB||0) < QB_CAP;
   const BENCH_ROOM = { PK:1, DST:1, RB:3 };
@@ -8508,16 +8487,25 @@ function achievableRoster(opts){
     return starter && rosterNames.has(starter) ? starter : null;
   };
 
-  /* The other half of the TE ceiling from above: at most 2 more on the
-     bench. Starts counted from whichever held/bought true TEs did NOT make
-     the starting lineup -- those are already sitting on the real bench --
-     then increments as bench slots below actually add one, capping out at
-     BENCH_TE_CAP either way. */
-  const BENCH_TE_CAP = 1;
-  const startingTENames = new Set(picks.filter(x=>x.slot.starter && x.p && TRUE_TE.has(x.p.name)).map(x=>x.p.name));
-  let benchTECount = [...held, ...bought]
-    .filter(x=>TRUE_TE.has(x.name) && !startingTENames.has(x.name)).length;
-  const teRoomLeft = () => benchTECount < BENCH_TE_CAP;
+  /* Worst case in this league: a bye-week "cover" that shares the exact
+     bye it's supposed to cover, which makes it worthless for the one job
+     it exists to do. Look up the actual DRAFT_POOL record for a name
+     rather than trust whatever abbreviated shape (held/bought) is on hand
+     -- byeWeek() wants a real nfl team code, and held/bought entries don't
+     carry one. The starter's bye is whichever PK/DST just got bought for
+     the starting slot this solve, or whichever one is already held if
+     that slot didn't need filling. */
+  const byeWeekOf = name => { const src = DRAFT_POOL.find(d=>d.name===name); return src ? byeWeek(src) : null; };
+  const starterOf = (slotKey, pos) => {
+    const bought1 = picks.find(x=>x.slot.key===slotKey && x.p);
+    if(bought1) return bought1.p.name;
+    const held1 = held.find(h=>h.pos===pos);
+    return held1 ? held1.name : null;
+  };
+  const starterPKName = starterOf('PK', 'PK');
+  const starterDSTName = starterOf('DST', 'DST');
+  const starterPKBye = starterPKName ? byeWeekOf(starterPKName) : null;
+  const starterDSTBye = starterDSTName ? byeWeekOf(starterDSTName) : null;
 
   /* Decided FIRST, against the full remaining bench budget, not in slot
      order. Deciding them in slot order priced them out every time: by the
@@ -8529,12 +8517,12 @@ function achievableRoster(opts){
   const openBenchSlotObjs = keepBench.filter(s=>!s.earmark);
   const reserveBudget = () => Math.max(1, cap - spend - (keepBench.length - reservedBySlot.size - 1));
 
-  /* RB and true-WR floors -- the mirror image of the QB/TE ceilings, and
+  /* RB and true-WR floors -- the mirror image of the QB ceiling above, and
      reserved FIRST, ahead of handcuff/stash, because a viable roster shape
-     is a harder requirement than either optimization. QB and TE needed a
-     ceiling because the WR/TE merge made them look equally valuable per
-     dollar when a roster doesn't need many of either. RB and WR need a
-     floor for the reverse reason: a genuinely useless $1 RB is common,
+     is a harder requirement than either optimization. QB needed a ceiling
+     because a single-QB league has no real use for a third or fourth one.
+     RB and WR need a floor for the reverse reason: a genuinely useless $1 RB
+     is common,
      real NFL backfields don't hand replacement-level backs usable volume,
      while a genuinely useful $1 WR is common too -- so pure value ranking
      correctly avoids bad RBs on their own merits, and can quietly leave
@@ -8590,12 +8578,10 @@ function achievableRoster(opts){
       .find(p => !taken.has(p.name) && stSlot.eligible.includes(p.pos)
                && playerTag(p.name)!=='avoid'
                && priceOf(p) <= reserveBudget()
-               && (!TRUE_TE.has(p.name) || teRoomLeft())
                && (p.pos!=='QB' || qbRoomLeft()));
     if(stashPick){
       const d = priceOf(stashPick);
       taken.add(stashPick.name); counts[stashPick.pos]=(counts[stashPick.pos]||0)+1; spend+=d;
-      if(TRUE_TE.has(stashPick.name)) benchTECount++;
       reservedBySlot.set(stSlot, {p:stashPick, d});
     }
     // else: no real stash candidate fits the budget -- falls through too.
@@ -8613,15 +8599,15 @@ function achievableRoster(opts){
       .filter(x=>slot.eligible.includes(x.pos) && !taken.has(x.name)
               && playerTag(x.name)!=='avoid'
               && priceOf(x) <= Math.max(1,spendable)
-              && (!TRUE_TE.has(x.name) || teRoomLeft())
-              && (x.pos!=='QB' || qbRoomLeft()))
+              && (x.pos!=='QB' || qbRoomLeft())
+              && !(slot.key==='BN1' && starterPKBye!=null && byeWeekOf(x.name)===starterPKBye)
+              && !(slot.key==='BN2' && starterDSTBye!=null && byeWeekOf(x.name)===starterDSTBye))
       .map(x=>({x,d:priceOf(x),v:vor(x)*benchDecay(x.pos),t:playerTag(x.name)}));
     if(!cands.length){ picks.push({slot,p:null,d:0}); return; }
     const w=o=>o.t==='target'?1.25:1;
     cands.sort((a,b)=>((b.v*w(b)+0.01)/b.d)-((a.v*w(a)+0.01)/a.d));
     const pk=cands[0];
     taken.add(pk.x.name); counts[pk.x.pos]=(counts[pk.x.pos]||0)+1; spend+=pk.d;
-    if(TRUE_TE.has(pk.x.name)) benchTECount++;
     picks.push({slot,p:pk.x,d:pk.d});
   });
 
