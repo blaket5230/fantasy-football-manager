@@ -8346,6 +8346,31 @@ function achievableRoster(opts){
     ? suggestedDollar(p.mv,p.pos,p.name)
     : inflatedValue(p).value);
 
+  /* A hard ceiling on real tight ends, on top of the merged WR/TE value math
+     above: at most 1 starting, at most 2 more on the bench. The merge is
+     still right about VALUE -- there's no dedicated TE slot, so a good TE
+     and a good WR really do compete for the same spot on equal footing --
+     but nobody actually wants to run out and DRAFT that logic to its
+     conclusion. This is a real, requested constraint on the final roster
+     shape, not a value judgment about any individual player. Starters: hold
+     the single best available true TE eligible and exclude every other one
+     from the solve entirely, so the solver can never seat two -- a bonus
+     added to the ranking couldn't win this the same way it couldn't win the
+     handcuff/stash problem below, so this uses the same fix: a real
+     reservation instead of a thumb on the scale. */
+  const heldTECount = held.filter(h=>TRUE_TE.has(h.name)).length;
+  let starterAvoided = avoided;
+  if(heldTECount >= 1){
+    starterAvoided = [...avoided, ...[...TRUE_TE].filter(n=>!heldNames.has(n))];
+  } else {
+    const bestAvailableTE = availablePool()
+      .filter(p=>TRUE_TE.has(p.name) && !avoided.includes(p.name))
+      .sort((a,b)=>vor(b)-vor(a))[0];
+    starterAvoided = bestAvailableTE
+      ? [...avoided, ...[...TRUE_TE].filter(n=>n!==bestAvailableTE.name)]
+      : [...avoided, ...TRUE_TE];
+  }
+
   const baseBenchReserve = Math.min(openBench.length, Math.max(0, roomLeft - openStart.length));
   /* A few extra dollars of headroom for a real handcuff (~$3-4) and a real
      dynasty stash (also gated <=$4 in stashProfile, see below) -- both cost
@@ -8354,7 +8379,7 @@ function achievableRoster(opts){
      out of the budget before the bench even gets decided. */
   const handcuffStashReserve = baseBenchReserve >= 2 ? 4 : 0;
   const forStarters = Math.max(0, cap - baseBenchReserve - handcuffStashReserve);
-  const solved = bestLineupFrom(held, forStarters, avoided);
+  const solved = bestLineupFrom(held, forStarters, starterAvoided);
   const bought = solved.roster.filter(x=>!heldNames.has(x.name));
 
   /* Two things the lineup solver does not police, because they are not its
@@ -8438,6 +8463,16 @@ function achievableRoster(opts){
     return starter && rosterNames.has(starter) ? starter : null;
   };
 
+  /* The other half of the TE ceiling from above: at most 2 more on the
+     bench. Starts counted from whichever held/bought true TEs did NOT make
+     the starting lineup -- those are already sitting on the real bench --
+     then increments as bench slots below actually add one, capping out at 2
+     either way. */
+  const startingTENames = new Set(picks.filter(x=>x.slot.starter && x.p && TRUE_TE.has(x.p.name)).map(x=>x.p.name));
+  let benchTECount = [...held, ...bought]
+    .filter(x=>TRUE_TE.has(x.name) && !startingTENames.has(x.name)).length;
+  const teRoomLeft = () => benchTECount < 2;
+
   /* Decided FIRST, against the full remaining bench budget, not in slot
      order. Deciding them in slot order priced them out every time: by the
      time their assigned slot came up near the end of the bench, the loop
@@ -8471,10 +8506,12 @@ function achievableRoster(opts){
       .map(o=>o.p)
       .find(p => !taken.has(p.name) && stSlot.eligible.includes(p.pos)
                && playerTag(p.name)!=='avoid'
-               && priceOf(p) <= reserveBudget());
+               && priceOf(p) <= reserveBudget()
+               && (!TRUE_TE.has(p.name) || teRoomLeft()));
     if(stashPick){
       const d = priceOf(stashPick);
       taken.add(stashPick.name); counts[stashPick.pos]=(counts[stashPick.pos]||0)+1; spend+=d;
+      if(TRUE_TE.has(stashPick.name)) benchTECount++;
       reservedBySlot.set(stSlot, {p:stashPick, d});
     }
     // else: no real stash candidate fits the budget -- falls through too.
@@ -8491,13 +8528,15 @@ function achievableRoster(opts){
     const cands=availablePool()
       .filter(x=>slot.eligible.includes(x.pos) && !taken.has(x.name)
               && playerTag(x.name)!=='avoid'
-              && priceOf(x) <= Math.max(1,spendable))
+              && priceOf(x) <= Math.max(1,spendable)
+              && (!TRUE_TE.has(x.name) || teRoomLeft()))
       .map(x=>({x,d:priceOf(x),v:vor(x)*benchDecay(x.pos),t:playerTag(x.name)}));
     if(!cands.length){ picks.push({slot,p:null,d:0}); return; }
     const w=o=>o.t==='target'?1.25:1;
     cands.sort((a,b)=>((b.v*w(b)+0.01)/b.d)-((a.v*w(a)+0.01)/a.d));
     const pk=cands[0];
     taken.add(pk.x.name); counts[pk.x.pos]=(counts[pk.x.pos]||0)+1; spend+=pk.d;
+    if(TRUE_TE.has(pk.x.name)) benchTECount++;
     picks.push({slot,p:pk.x,d:pk.d});
   });
 
@@ -9274,6 +9313,15 @@ const CBS_AUCTION = {"Jahmyr Gibbs":27,"Bijan Robinson":26,"Jonathan Taylor":23,
 
 const SOS_2026 = {"DET":{"RB":1,"WR":7,"TE":13,"DST":1},"LAR":{"RB":2,"WR":32,"TE":2,"DST":27},"PHI":{"RB":3,"WR":6,"TE":4,"DST":32},"SEA":{"RB":4,"WR":21,"TE":15,"DST":24},"IND":{"RB":5,"WR":11,"TE":21,"DST":2},"WAS":{"RB":6,"WR":29,"TE":32,"DST":26},"DAL":{"RB":7,"WR":31,"TE":29,"DST":31},"NYG":{"RB":8,"WR":5,"TE":20,"DST":29},"JAC":{"RB":9,"WR":4,"TE":16,"DST":19},"GB":{"RB":10,"WR":2,"TE":25,"DST":23},"HOU":{"RB":11,"WR":20,"TE":10,"DST":22},"MIN":{"RB":12,"WR":1,"TE":11,"DST":30},"NO":{"RB":13,"WR":13,"TE":24,"DST":6},"BAL":{"RB":14,"WR":12,"TE":7,"DST":3},"MIA":{"RB":15,"WR":19,"TE":1,"DST":16},"TEN":{"RB":16,"WR":17,"TE":17,"DST":21},"CLE":{"RB":17,"WR":16,"TE":12,"DST":4},"NYJ":{"RB":18,"WR":8,"TE":9,"DST":7},"KC":{"RB":19,"WR":26,"TE":3,"DST":14},"LAC":{"RB":20,"WR":23,"TE":8,"DST":18},"NE":{"RB":21,"WR":25,"TE":5,"DST":13},"CHI":{"RB":22,"WR":15,"TE":26,"DST":25},"TB":{"RB":23,"WR":3,"TE":31,"DST":11},"PIT":{"RB":24,"WR":18,"TE":27,"DST":5},"SF":{"RB":25,"WR":30,"TE":23,"DST":20},"ATL":{"RB":26,"WR":14,"TE":19,"DST":12},"LV":{"RB":27,"WR":24,"TE":14,"DST":8},"CIN":{"RB":28,"WR":10,"TE":22,"DST":10},"DEN":{"RB":29,"WR":28,"TE":6,"DST":9},"BUF":{"RB":30,"WR":9,"TE":18,"DST":15},"ARI":{"RB":31,"WR":27,"TE":28,"DST":28},"CAR":{"RB":32,"WR":22,"TE":30,"DST":17}};
 const RB_HANDCUFF = {"Tyler Allgeier":"Jeremiyah Love","Brian Robinson Jr.":"Bijan Robinson","Justice Hill":"Derrick Henry","Ray Davis":"James Cook III","Jonathon Brooks":"Chuba Hubbard","Kyle Monangai":"D'Andre Swift","Samaje Perine":"Chase Brown","Dylan Sampson":"Quinshon Judkins","Jaydon Blue":"Javonte Williams","RJ Harvey":"J.K. Dobbins","Isiah Pacheco":"Jahmyr Gibbs","MarShawn Lloyd":"Josh Jacobs","Woody Marks":"David Montgomery","DJ Giddens":"Jonathan Taylor","Chris Rodriguez Jr.":"Bhayshul Tuten","Emmett Johnson":"Kenneth Walker III","Kimani Vidal":"Omarion Hampton","Blake Corum":"Kyren Williams","Mike Washington Jr.":"Ashton Jeanty","Ollie Gordon II":"De'Von Achane","Aaron Jones Sr.":"Jordan Mason","Rhamondre Stevenson":"TreVeyon Henderson","Alvin Kamara":"Travis Etienne Jr.","Tyrone Tracy Jr.":"Cam Skattebo","Braelon Allen":"Breece Hall","Tank Bigsby":"Saquon Barkley","Jaylen Warren":"Rico Dowdle","Emanuel Wilson":"Jadarian Price","Jordan James":"Christian McCaffrey","Kenny Gainwell":"Bucky Irving","Tyjae Spears":"Tony Pollard","Jacory Croskey-Merritt":"Rachaad White"};
+
+/* WR and TE share one roster label (pos:"WRTE") because there's no
+   dedicated TE slot in this league's rules -- but a human drafter still
+   wants a real ceiling on how many of the merged group are actually tight
+   ends, independent of that pooled value math. This is the real-world
+   position each WRTE player actually plays, used ONLY for that ceiling
+   (achievableRoster()'s TE_CAP below), not for pricing, tiers, or anything
+   else the merge already handles correctly. */
+const TRUE_TE = new Set(["AJ Barner","Adam Trautman","Austin Hooper","Ben Sinnott","Brenton Strange","Brock Bowers","Cade Otton","Charlie Kolar","Chig Okonkwo","Colby Parkinson","Cole Kmet","Colston Loveland","Dallas Goedert","Dalton Kincaid","Dalton Schultz","Daniel Bellinger","Darnell Washington","Darren Waller","David Njoku","Dawson Knox","Eli Raridon","Eli Stowers","Elijah Arroyo","Elijah Higgins","Erick All Jr.","Evan Engram","George Kittle","Greg Dulcich","Gunnar Helm","Harold Fannin Jr.","Hunter Henry","Isaiah Likely","Ja'Tavion Sanders","Jackson Hawes","Jake Ferguson","Jake Tonges","John Bates","Jonnu Smith","Josh Oliver","Justin Joly","Juwan Johnson","Kenyon Sadiq","Kyle Pitts Sr.","Luke Musgrave","Luke Schoonmaker","Mark Andrews","Marlin Klein","Mason Taylor","Max Klare","Michael Mayer","Mike Gesicki","Mitchell Evans","Mo Alie-Cox","Nate Boerkircher","Noah Fant","Noah Gray","Oronde Gadsden II","Oscar Delp","Pat Freiermuth","Sam LaPorta","T.J. Hockenson","Tanner Koziol","Taysom Hill","Terrance Ferguson","Theo Johnson","Tommy Myers","Tommy Tremble","Travis Kelce","Trey McBride","Tucker Kraft","Tyler Higbee","Tyler Warren","Will Kacmarek","Zach Ertz"]);
 
 /* ---------- TWO MORE FANTASYPROS REPORTS ----------
    QB_TD_REGRESSION is their touchdown regression model: how far a quarterback
