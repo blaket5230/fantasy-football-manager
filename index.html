@@ -1082,6 +1082,9 @@
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
+  .pt-player-row[data-pt-nom]{cursor:pointer;}
+  .pt-player-row[data-pt-nom]:hover{color:var(--chalk);}
+  .pt-player-row[data-pt-nom]:hover .pt-player-name{text-decoration:underline;}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -5309,7 +5312,8 @@ function renderPoolTierRail(){
           const capped = i===partialAt ? names.slice(0, partialShow) : names;
           const rows = capped.map(p=>{
             const gone = taken.has(p.name);
-            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${p.name}"><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
+            const nomAttr = gone ? '' : ` data-pt-nom="${p.name.replace(/"/g,'&quot;')}"`;
+            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${gone?p.name:`Put ${p.name} on the clock`}"${nomAttr}><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
@@ -5333,6 +5337,13 @@ function renderPoolTierRail(){
   if(toggleBtn) toggleBtn.addEventListener('click', ()=>{
     poolTierExpanded = !poolTierExpanded;
     renderPoolTierRail();
+  });
+  // Still-available players double as a nomination shortcut -- click a name
+  // here to put him on the clock, same action the Nominate table's rows use.
+  // Already-drafted (struck-through) rows carry no data-pt-nom, so they're
+  // inert.
+  wrap.querySelectorAll('.pt-player-row[data-pt-nom]').forEach(row=>{
+    row.addEventListener('click', ()=> putOnTheClock(row.dataset.ptNom));
   });
 }
 
