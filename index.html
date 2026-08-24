@@ -1791,7 +1791,6 @@
           <div class="side-tabs" id="myTeamTabs">
             <button class="side-tab active" data-side="roster">Roster</button>
             <button class="side-tab" data-side="ideal">Ideal team</button>
-            <button class="side-tab" data-side="money">Money</button>
           </div>
 
           <div class="side-body" data-pane="roster">
@@ -1806,11 +1805,6 @@
             </div>
             <p class="panel-sub" style="margin-top:4px;">The strongest team your money could still buy, given who has gone and what the room is paying. Best case, not forecast. Tap the star to mark a player as yours, again to avoid him.</p>
             <div id="solverBody"></div>
-          </div>
-
-          <div class="side-body" data-pane="money" hidden>
-            <p class="panel-sub">Out of pocket, not cap. Entry fee, in-season moves, and the long contracts you owe at each draft.</p>
-            <div id="realMoneyBody"></div>
           </div>
         </div>
       </div>
@@ -2024,6 +2018,11 @@
       </div>
       <p class="panel-sub" style="margin-top:4px;">The strongest team your money could still buy, given who's gone and what the room is paying. Best case, not forecast.</p>
       <div id="solverBodyPlan"></div>
+    </div>
+    <div class="panel">
+      <h3>Real dollars</h3>
+      <p class="panel-sub">Out of pocket, not cap. Entry fee, in-season moves, and the long contracts you owe at each draft.</p>
+      <div id="realMoneyBody"></div>
     </div>
           </div>
   <!-- PLAYER POOL -->
@@ -4826,7 +4825,6 @@ function renderDraftView(){
   renderRunAlert();
   renderSolver();
   renderInflation();
-  renderRealMoney();
   renderPlanView();
   renderBoardStatus();
   renderNominateView();
@@ -10569,6 +10567,7 @@ function renderPlanView(){
   renderTargetBoard();
   renderBoardState();
   renderSolver('Plan');
+  renderRealMoney();
   const plan = planBudget();
   const els = ['planBody','planBodyTab'].map(id=>document.getElementById(id)).filter(Boolean);
   if(!els.length) return;
