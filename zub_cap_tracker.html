@@ -8381,21 +8381,38 @@ function achievableRoster(opts){
 
   const taken=new Set([...heldNames,...used]);
   const counts={}; [...held,...bought].forEach(x=>{counts[x.pos]=(counts[x.pos]||0)+1;});
-  // TE matches QB's cap on purpose: only one ever starts, so a bench TE
-  // carries none of the bye/injury-replacement value that makes bench RB/WR
-  // worth owning. A pure value-per-dollar solve would happily stack three or
-  // four of them since TE is often the cheapest position with positive VOR
-  // left on the board -- this stops it from mistaking "cheap" for "useful."
-  const POS_MAX={QB:2,PK:2,DST:2,RB:7,WR:8,TE:2};
+  /* No hard position cap -- if a $1 TE truly is the best dollar on the board,
+     take him. There is no TE1 in this league's rules: WR and TE compete for
+     the exact same WRTE1/WRTE2/flex slots and nothing requires either one
+     specifically, so they are not two positions competing for separate
+     redundancy budgets, they are ONE pool wearing two labels (the same
+     grouping replacementLevel() already shares for pricing them). A team of
+     0 TEs and 8 WRs is exactly as legal as one of 4 TEs and 4 WRs, so within
+     that combined pool this applies no penalty at all -- just take whichever
+     WR/TE-eligible player is genuinely best, in whatever mix that produces.
+     QB, PK, and DST are different: each has exactly one real starting slot
+     and nothing else competes for it, so a second copy really is redundant
+     the moment you already have one, and decays hard. RB gets its own room
+     for the same reason WR/TE gets none -- it doesn't share a slot with
+     anything else, so "how many RBs is normal" is a real, distinct question.
+     Each copy past ROOM is worth 40% of the last, compounding -- not zero,
+     so a genuine outlier can still win, just not mistaken for the first. */
+  const BENCH_ROOM = { QB:1, PK:1, DST:1, RB:3 };
+  const benchDecay = pos => {
+    if(substitutePositions(pos).length > 1) return 1; // WR/TE: one shared pool, no redundancy penalty
+    const already = counts[pos]||0;
+    const room = BENCH_ROOM[pos] ?? 3;
+    const over = Math.max(0, already - room + 1);
+    return over <= 0 ? 1 : Math.pow(0.4, over);
+  };
   keepBench.forEach((slot,i)=>{
     const left=keepBench.length-i-1;
     const spendable=cap-spend-left;
     const cands=availablePool()
       .filter(x=>slot.eligible.includes(x.pos) && !taken.has(x.name)
               && playerTag(x.name)!=='avoid'
-              && (counts[x.pos]||0) < (POS_MAX[x.pos] ?? 6)
               && priceOf(x) <= Math.max(1,spendable))
-      .map(x=>({x,d:priceOf(x),v:vor(x),t:playerTag(x.name)}));
+      .map(x=>({x,d:priceOf(x),v:vor(x)*benchDecay(x.pos),t:playerTag(x.name)}));
     if(!cands.length){ picks.push({slot,p:null,d:0}); return; }
     const w=o=>o.t==='target'?1.25:1;
     cands.sort((a,b)=>((b.v*w(b)+0.01)/b.d)-((a.v*w(a)+0.01)/a.d));
