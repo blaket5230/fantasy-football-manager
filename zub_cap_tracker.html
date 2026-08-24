@@ -1009,17 +1009,43 @@
      which floors it at its own UNCLAMPED content height regardless of any
      height set on it, so without this override the draft board would still
      force the row (and the page) taller every time a pick is logged even
-     though it visually clips and scrolls correctly on its own. */
+     though it visually clips and scrolls correctly on its own.
+
+     The 640px is on this outer column, though, not on the card you actually
+     see -- the visible thing is the bordered .panel nested inside it, and
+     that panel was still only ever as tall as its own content, sitting flush
+     at the top with plain unbordered column background below it. Early in a
+     draft the board and pool panels are short, so that showed up as a dead
+     gap before the roster grid starts, same complaint as the ragged bottom
+     edge just from the other direction. Making the column a flex column and
+     letting its one visible .panel take flex:1 is what stretches the card's
+     own border down to the column's real bottom instead of just the column
+     background. draft-main is the one column with more than a single fixed
+     card in it -- the mock-draft prompt and the sub-tab nav sit above
+     whichever sub-body is active -- so flex:1 goes on the active sub-body
+     itself first (to soak up whatever room the prompt/nav don't use) and
+     then on that sub-body's own last .panel, since "my plan" has a chunk of
+     plain text above its "Your board" panel that should stay its natural
+     size while the panel below it is what actually grows. */
   .draft-layout{display:grid;grid-template-columns:340px 1fr 380px;gap:18px;align-items:start;}
   .draft-history-col,.draft-sidebar,.draft-main{
     min-width:0;min-height:0;height:640px;overflow-y:auto;
+    display:flex;flex-direction:column;
     scrollbar-width:thin;scrollbar-color:var(--line) transparent;
   }
   .draft-history-col::-webkit-scrollbar,.draft-sidebar::-webkit-scrollbar,.draft-main::-webkit-scrollbar{width:9px;}
   .draft-history-col::-webkit-scrollbar-track,.draft-sidebar::-webkit-scrollbar-track,.draft-main::-webkit-scrollbar-track{background:transparent;}
   .draft-history-col::-webkit-scrollbar-thumb,.draft-sidebar::-webkit-scrollbar-thumb,.draft-main::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;}
   .draft-history-col::-webkit-scrollbar-thumb:hover,.draft-sidebar::-webkit-scrollbar-thumb:hover,.draft-main::-webkit-scrollbar-thumb:hover{background:#31405A;}
-  .draft-history-col .panel,.draft-sidebar .panel{margin-bottom:0;min-width:0;}
+  .draft-history-col .panel,.draft-sidebar .panel,.draft-main>.sub-body:not([hidden])>.panel:last-child{margin-bottom:0;min-width:0;}
+  .draft-history-col>.panel,.draft-sidebar>.panel{flex:1 0 auto;}
+  /* :not([hidden]) matters here, not just style -- .sub-body's own [hidden]
+     attribute is what keeps the other three sub-tabs display:none, and an
+     unqualified selector here has higher specificity than that UA default
+     and was overriding it, turning all four into real flex boxes stacked
+     inside draft-main at once instead of one at a time. */
+  .draft-main>.sub-body:not([hidden]){display:flex;flex-direction:column;flex:1 0 auto;}
+  .draft-main>.sub-body:not([hidden])>.panel:last-child{flex:1 0 auto;}
   .draft-rosters-col{grid-column:1 / -1;min-width:0;}
 
   /* Player pool drops first (least urgent while nothing's on the clock),
