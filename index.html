@@ -740,8 +740,7 @@
      rendered in the same flat blue no matter what position it was. */
   .pos-tag.pos-QB{ color:#F0C782; background:rgba(229,181,103,.14); border-color:rgba(229,181,103,.30); }
   .pos-tag.pos-RB{ color:#5FD3A3; background:rgba(63,182,139,.14);  border-color:rgba(63,182,139,.32); }
-  .pos-tag.pos-WR{ color:#94A6FF; background:rgba(123,143,247,.15); border-color:rgba(123,143,247,.32); }
-  .pos-tag.pos-TE{ color:#E8A0D8; background:rgba(214,124,196,.15); border-color:rgba(214,124,196,.32); }
+  .pos-tag.pos-WRTE{ color:#94A6FF; background:rgba(123,143,247,.15); border-color:rgba(123,143,247,.32); }
   .pos-tag.pos-PK{ color:#8FA3B8; background:rgba(143,163,184,.12); border-color:rgba(143,163,184,.28); }
   .pos-tag.pos-DST{color:#C9A0F0; background:rgba(170,130,230,.14); border-color:rgba(170,130,230,.30); }
 
@@ -1676,8 +1675,7 @@
         <select id="newPlayerPos">
           <option value="QB">QB</option>
           <option value="RB">RB</option>
-          <option value="WR">WR</option>
-          <option value="TE">TE</option>
+          <option value="WRTE">WR/TE</option>
           <option value="PK">PK</option>
           <option value="DST">DST</option>
         </select>
@@ -1894,7 +1892,7 @@
               <div><label>Name</label><input type="text" id="newPoolName" placeholder="Player name"></div>
               <div><label>Position</label>
                 <select id="newPoolPos">
-                  <option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option>
+                  <option value="RB">RB</option><option value="WRTE">WR/TE</option>
                   <option value="QB">QB</option><option value="PK">PK</option><option value="DST">DST</option>
                 </select>
               </div>
@@ -2081,25 +2079,25 @@
 const SEED_TEAMS = [
   {owner:"Justin McDonald", team:"Big Mac", players:[
     {name:"Kyren Williams", pos:"RB", base:1, years:{2026:3,2027:3}},
-    {name:"Matthew Golden", pos:"WR", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
-    {name:"Treylon Burks", pos:"WR", base:1, years:{2026:1,2027:1}, deadCap:true},
-    {name:"Cedric Tillman", pos:"WR", base:1, years:{2026:1,2027:1,2028:1}, deadCap:true},
-    {name:"Ricky Pearsall", pos:"WR", base:1, years:{2026:1,2027:1,2028:1,2029:1}, deadCap:true}
+    {name:"Matthew Golden", pos:"WRTE", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
+    {name:"Treylon Burks", pos:"WRTE", base:1, years:{2026:1,2027:1}, deadCap:true},
+    {name:"Cedric Tillman", pos:"WRTE", base:1, years:{2026:1,2027:1,2028:1}, deadCap:true},
+    {name:"Ricky Pearsall", pos:"WRTE", base:1, years:{2026:1,2027:1,2028:1,2029:1}, deadCap:true}
   ]},
   {owner:"Brett Booker", team:"Mike Vick in a Box", players:[
     {name:"Zach Charbonnet", pos:"RB", base:3, years:{2026:6}},
     {name:"Kenneth Walker III", pos:"RB", base:4, years:{2026:9}},
     {name:"Kenneth Gainwell", pos:"RB", base:1, years:{2026:3,2027:3}},
-    {name:"DJ Moore", pos:"WR", base:1, years:{2026:3}},
-    {name:"Ladd McConkey", pos:"WR", base:2, years:{2026:4}},
-    {name:"Marvin Mims Jr.", pos:"WR", base:1, years:{2026:1,2027:1}, deadCap:true},
+    {name:"DJ Moore", pos:"WRTE", base:1, years:{2026:3}},
+    {name:"Ladd McConkey", pos:"WRTE", base:2, years:{2026:4}},
+    {name:"Marvin Mims Jr.", pos:"WRTE", base:1, years:{2026:1,2027:1}, deadCap:true},
     {name:"Justin Fields", pos:"QB", base:1, years:{2026:1,2027:1,2028:1}, deadCap:true}
   ]},
   {owner:"Blake Taylor", team:"The John Waynes", players:[
     {name:"Caleb Williams", pos:"QB", base:3, years:{2026:6,2027:6,2028:7}},
     {name:"Jayden Daniels", pos:"QB", base:2, years:{2026:4,2027:5,2028:5}},
     {name:"Ty Chandler", pos:"RB", base:1, years:{2026:1,2027:1}, deadCap:true},
-    {name:"Quentin Johnston", pos:"WR", base:3, years:{2026:1,2027:1}, deadCap:true},
+    {name:"Quentin Johnston", pos:"WRTE", base:3, years:{2026:1,2027:1}, deadCap:true},
     {name:"Roschon Johnson", pos:"RB", base:2, years:{2026:1,2027:1}, deadCap:true},
     {name:"Trey Benson", pos:"RB", base:4, years:{2026:1,2027:1,2028:1}, deadCap:true}
   ]},
@@ -2107,27 +2105,27 @@ const SEED_TEAMS = [
     
   ]},
   {owner:"JS Bull", team:"texas SUCKS", players:[
-    {name:"Nico Collins", pos:"WR", base:1, years:{2026:3,2027:3}},
-    {name:"Quentin Johnston", pos:"WR", base:1, years:{2026:3,2027:3}},
+    {name:"Nico Collins", pos:"WRTE", base:1, years:{2026:3,2027:3}},
+    {name:"Quentin Johnston", pos:"WRTE", base:1, years:{2026:3,2027:3}},
     {name:"Alexander Mattison", pos:"RB", base:1, years:{2026:1}, deadCap:true},
     {name:"Desmond Ridder", pos:"QB", base:1, years:{2026:1}, deadCap:true},
     {name:"Kareem Hunt", pos:"RB", base:4, years:{2026:1}, deadCap:true},
-    {name:"Rashid Shaheed", pos:"WR", base:1, years:{2026:1,2027:1}, deadCap:true}
+    {name:"Rashid Shaheed", pos:"WRTE", base:1, years:{2026:1,2027:1}, deadCap:true}
   ]},
   {owner:"Tom McDonald", team:"The Champs", players:[
     {name:"Jaxson Dart", pos:"QB", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
     {name:"Ollie Gordon II", pos:"RB", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
-    {name:"Jahan Dotson", pos:"WR", base:1, years:{2026:1}, deadCap:true}
+    {name:"Jahan Dotson", pos:"WRTE", base:1, years:{2026:1}, deadCap:true}
   ]},
   {owner:"PJ Humphreys", team:"Cardinal Inn", players:[
-    {name:"Puka Nacua", pos:"WR", base:1, years:{2026:3,2027:3}},
-    {name:"Garrett Wilson", pos:"WR", base:2, years:{2026:5}},
+    {name:"Puka Nacua", pos:"WRTE", base:1, years:{2026:3,2027:3}},
+    {name:"Garrett Wilson", pos:"WRTE", base:2, years:{2026:5}},
     {name:"Tyler Allgeier", pos:"RB", base:2, years:{2026:1}, deadCap:true},
-    {name:"Skyy Moore", pos:"WR", base:2, years:{2026:1}, deadCap:true},
-    {name:"Rondale Moore", pos:"WR", base:1, years:{2026:1}, deadCap:true},
+    {name:"Skyy Moore", pos:"WRTE", base:2, years:{2026:1}, deadCap:true},
+    {name:"Rondale Moore", pos:"WRTE", base:1, years:{2026:1}, deadCap:true},
     {name:"Tyrion Davis-Price", pos:"RB", base:1, years:{2026:1}, deadCap:true},
     {name:"Kenneth Gainwell", pos:"RB", base:1, years:{2026:1,2027:1}, deadCap:true},
-    {name:"Keon Coleman", pos:"WR", base:2, years:{2026:1,2027:1,2028:1}, deadCap:true}
+    {name:"Keon Coleman", pos:"WRTE", base:2, years:{2026:1,2027:1,2028:1}, deadCap:true}
   ]},
   {owner:"Brandon Hill", team:"King of the Hill", players:[
     
@@ -2142,7 +2140,7 @@ const SEED_TEAMS = [
   {owner:"Scott Bull", team:"PackNiners", players:[
     {name:"Keaton Mitchell", pos:"RB", base:1, years:{2026:3,2027:3}},
     {name:"Jaylen Warren", pos:"RB", base:5, years:{2026:8,2027:9}},
-    {name:"Adonai Mitchell", pos:"WR", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
+    {name:"Adonai Mitchell", pos:"WRTE", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
     {name:"Audric Estime", pos:"RB", base:2, years:{2026:1,2027:1}, deadCap:true},
     {name:"Will Levis", pos:"QB", base:2, years:{2026:1,2027:1}, deadCap:true},
     {name:"Kimani Vidal", pos:"RB", base:2, years:{2026:1,2027:1,2028:1}, deadCap:true},
@@ -2157,467 +2155,467 @@ const RBWR_FLEX_TOTAL = 5; // 2 RB (RB-only) + 2 WR/TE + 1 flex (RB/WR/TE), 5 co
 const DRAFT_POOL = [
   {name:"Jahmyr Gibbs",pos:"RB",nfl:"DET",mv:9098,age:24.4},
   {name:"Bijan Robinson",pos:"RB",nfl:"ATL",mv:9558,age:24.5},
-  {name:"Ja'Marr Chase",pos:"WR",nfl:"CIN",mv:10256,age:26.5},
-  {name:"Jaxon Smith-Njigba",pos:"WR",nfl:"SEA",mv:9854,age:24.5},
-  {name:"Amon-Ra St. Brown",pos:"WR",nfl:"DET",mv:9119,age:26.8},
+  {name:"Ja'Marr Chase",pos:"WRTE",nfl:"CIN",mv:10256,age:26.5},
+  {name:"Jaxon Smith-Njigba",pos:"WRTE",nfl:"SEA",mv:9854,age:24.5},
+  {name:"Amon-Ra St. Brown",pos:"WRTE",nfl:"DET",mv:9119,age:26.8},
   {name:"Jonathan Taylor",pos:"RB",nfl:"IND",mv:6306,age:27.6},
-  {name:"CeeDee Lamb",pos:"WR",nfl:"DAL",mv:9013,age:27.4},
+  {name:"CeeDee Lamb",pos:"WRTE",nfl:"DAL",mv:9013,age:27.4},
   {name:"Christian McCaffrey",pos:"RB",nfl:"SF",mv:4360,age:30.2},
   {name:"James Cook III",pos:"RB",nfl:"BUF",mv:6878,age:26.9},
-  {name:"Justin Jefferson",pos:"WR",nfl:"MIN",mv:9184,age:27.2},
+  {name:"Justin Jefferson",pos:"WRTE",nfl:"MIN",mv:9184,age:27.2},
   {name:"Derrick Henry",pos:"RB",nfl:"BAL",mv:1547,age:32.6},
-  {name:"Drake London",pos:"WR",nfl:"ATL",mv:7277,age:25.1},
-  {name:"A.J. Brown",pos:"WR",nfl:"NE",mv:5646,age:29.1},
+  {name:"Drake London",pos:"WRTE",nfl:"ATL",mv:7277,age:25.1},
+  {name:"A.J. Brown",pos:"WRTE",nfl:"NE",mv:5646,age:29.1},
   {name:"Saquon Barkley",pos:"RB",nfl:"PHI",mv:3289,age:29.5},
   {name:"Ashton Jeanty",pos:"RB",nfl:"LV",mv:8399,age:22.7},
-  {name:"Brock Bowers",pos:"TE",nfl:"LV",mv:5862,age:23.7},
-  {name:"George Pickens",pos:"WR",nfl:"DAL",mv:5008,age:25.4},
+  {name:"Brock Bowers",pos:"WRTE",nfl:"LV",mv:5862,age:23.7},
+  {name:"George Pickens",pos:"WRTE",nfl:"DAL",mv:5008,age:25.4},
   {name:"Chase Brown",pos:"RB",nfl:"CIN",mv:4160,age:26.4},
   {name:"Omarion Hampton",pos:"RB",nfl:"LAC",mv:7092,age:23.4},
   {name:"Josh Allen",pos:"QB",nfl:"BUF",mv:7075,age:30.2},
-  {name:"Trey McBride",pos:"TE",nfl:"ARI",mv:5425,age:26.7},
+  {name:"Trey McBride",pos:"WRTE",nfl:"ARI",mv:5425,age:26.7},
   {name:"De'Von Achane",pos:"RB",nfl:"MIA",mv:6145,age:24.8},
-  {name:"Chris Olave",pos:"WR",nfl:"NO",mv:6174,age:26.1},
-  {name:"Rashee Rice",pos:"WR",nfl:"KC",mv:3922,age:26.3},
+  {name:"Chris Olave",pos:"WRTE",nfl:"NO",mv:6174,age:26.1},
+  {name:"Rashee Rice",pos:"WRTE",nfl:"KC",mv:3922,age:26.3},
   {name:"Lamar Jackson",pos:"QB",nfl:"BAL",mv:4985,age:29.6},
-  {name:"Malik Nabers",pos:"WR",nfl:"NYG",mv:8032,age:23.0},
-  {name:"Zay Flowers",pos:"WR",nfl:"BAL",mv:4432,age:25.9},
-  {name:"Tee Higgins",pos:"WR",nfl:"CIN",mv:3699,age:27.6},
-  {name:"DeVonta Smith",pos:"WR",nfl:"PHI",mv:5152,age:27.7},
-  {name:"Emeka Egbuka",pos:"WR",nfl:"TB",mv:6350,age:23.8},
+  {name:"Malik Nabers",pos:"WRTE",nfl:"NYG",mv:8032,age:23.0},
+  {name:"Zay Flowers",pos:"WRTE",nfl:"BAL",mv:4432,age:25.9},
+  {name:"Tee Higgins",pos:"WRTE",nfl:"CIN",mv:3699,age:27.6},
+  {name:"DeVonta Smith",pos:"WRTE",nfl:"PHI",mv:5152,age:27.7},
+  {name:"Emeka Egbuka",pos:"WRTE",nfl:"TB",mv:6350,age:23.8},
   {name:"Josh Jacobs",pos:"RB",nfl:"GB",mv:1421,age:28.5},
   {name:"Drake Maye",pos:"QB",nfl:"NE",mv:5835,age:24.0},
-  {name:"Tetairoa McMillan",pos:"WR",nfl:"CAR",mv:6992,age:23.4},
+  {name:"Tetairoa McMillan",pos:"WRTE",nfl:"CAR",mv:6992,age:23.4},
   {name:"Javonte Williams",pos:"RB",nfl:"DAL",mv:1994,age:26.3},
-  {name:"Colston Loveland",pos:"TE",nfl:"CHI",mv:4340,age:22.3},
+  {name:"Colston Loveland",pos:"WRTE",nfl:"CHI",mv:4340,age:22.3},
   {name:"Breece Hall",pos:"RB",nfl:"NYJ",mv:5974,age:25.2},
   {name:"Jeremiyah Love",pos:"RB",nfl:"ARI",mv:7957,age:21.2,rookie:true},
   {name:"Joe Burrow",pos:"QB",nfl:"CIN",mv:3950,age:29.7},
-  {name:"Jaylen Waddle",pos:"WR",nfl:"DEN",mv:4516,age:27.7},
-  {name:"Davante Adams",pos:"WR",nfl:"LAR",mv:1087,age:33.6},
-  {name:"Terry McLaurin",pos:"WR",nfl:"WAS",mv:1858,age:30.9},
-  {name:"Jameson Williams",pos:"WR",nfl:"DET",mv:2910,age:25.4},
-  {name:"Christian Watson",pos:"WR",nfl:"GB",mv:2190,age:27.3},
+  {name:"Jaylen Waddle",pos:"WRTE",nfl:"DEN",mv:4516,age:27.7},
+  {name:"Davante Adams",pos:"WRTE",nfl:"LAR",mv:1087,age:33.6},
+  {name:"Terry McLaurin",pos:"WRTE",nfl:"WAS",mv:1858,age:30.9},
+  {name:"Jameson Williams",pos:"WRTE",nfl:"DET",mv:2910,age:25.4},
+  {name:"Christian Watson",pos:"WRTE",nfl:"GB",mv:2190,age:27.3},
   {name:"Travis Etienne Jr.",pos:"RB",nfl:"NO",mv:3058,age:27.5},
   {name:"Cam Skattebo",pos:"RB",nfl:"NYG",mv:1975,age:24.5},
   {name:"Quinshon Judkins",pos:"RB",nfl:"CLE",mv:2910,age:22.8},
   {name:"Bucky Irving",pos:"RB",nfl:"TB",mv:2094,age:24.0},
   {name:"D'Andre Swift",pos:"RB",nfl:"CHI",mv:1291,age:27.6},
   {name:"Jalen Hurts",pos:"QB",nfl:"PHI",mv:3630,age:28.0},
-  {name:"Luther Burden III",pos:"WR",nfl:"CHI",mv:4527,age:22.7},
+  {name:"Luther Burden III",pos:"WRTE",nfl:"CHI",mv:4527,age:22.7},
   {name:"David Montgomery",pos:"RB",nfl:"HOU",mv:1011,age:29.2},
-  {name:"Rome Odunze",pos:"WR",nfl:"CHI",mv:4309,age:24.2},
-  {name:"Mike Evans",pos:"WR",nfl:"SF",mv:985,age:33.0},
-  {name:"Tucker Kraft",pos:"TE",nfl:"GB",mv:3175,age:25.8},
+  {name:"Rome Odunze",pos:"WRTE",nfl:"CHI",mv:4309,age:24.2},
+  {name:"Mike Evans",pos:"WRTE",nfl:"SF",mv:985,age:33.0},
+  {name:"Tucker Kraft",pos:"WRTE",nfl:"GB",mv:3175,age:25.8},
   {name:"TreVeyon Henderson",pos:"RB",nfl:"NE",mv:3328,age:23.8},
-  {name:"Tyler Warren",pos:"TE",nfl:"IND",mv:3690,age:24.2},
+  {name:"Tyler Warren",pos:"WRTE",nfl:"IND",mv:3690,age:24.2},
   {name:"Bhayshul Tuten",pos:"RB",nfl:"JAC",mv:1418,age:23.5},
   {name:"Jadarian Price",pos:"RB",nfl:"SEA",mv:1966,age:22.8,rookie:true},
   {name:"Justin Herbert",pos:"QB",nfl:"LAC",mv:3328,age:28.4},
-  {name:"Marvin Harrison Jr.",pos:"WR",nfl:"ARI",mv:4581,age:24.0},
-  {name:"Carnell Tate",pos:"WR",nfl:"TEN",mv:5274,age:21.6,rookie:true},
-  {name:"Brian Thomas Jr.",pos:"WR",nfl:"JAC",mv:2528,age:23.8},
-  {name:"Parker Washington",pos:"WR",nfl:"JAC",mv:1398,age:24.4},
+  {name:"Marvin Harrison Jr.",pos:"WRTE",nfl:"ARI",mv:4581,age:24.0},
+  {name:"Carnell Tate",pos:"WRTE",nfl:"TEN",mv:5274,age:21.6,rookie:true},
+  {name:"Brian Thomas Jr.",pos:"WRTE",nfl:"JAC",mv:2528,age:23.8},
+  {name:"Parker Washington",pos:"WRTE",nfl:"JAC",mv:1398,age:24.4},
   {name:"Tony Pollard",pos:"RB",nfl:"TEN",mv:359,age:29.3},
-  {name:"Sam LaPorta",pos:"TE",nfl:"DET",mv:3813,age:25.6},
-  {name:"DK Metcalf",pos:"WR",nfl:"PIT",mv:2253,age:28.7},
+  {name:"Sam LaPorta",pos:"WRTE",nfl:"DET",mv:3813,age:25.6},
+  {name:"DK Metcalf",pos:"WRTE",nfl:"PIT",mv:2253,age:28.7},
   {name:"Trevor Lawrence",pos:"QB",nfl:"JAC",mv:2719,age:26.9},
   {name:"Dak Prescott",pos:"QB",nfl:"DAL",mv:1401,age:33.0},
   {name:"Rhamondre Stevenson",pos:"RB",nfl:"NE",mv:489,age:28.5},
-  {name:"Alec Pierce",pos:"WR",nfl:"IND",mv:1781,age:26.3},
+  {name:"Alec Pierce",pos:"WRTE",nfl:"IND",mv:1781,age:26.3},
   {name:"Rico Dowdle",pos:"RB",nfl:"PIT",mv:432,age:28.2},
   {name:"J.K. Dobbins",pos:"RB",nfl:"DEN",mv:252,age:27.7},
-  {name:"Courtland Sutton",pos:"WR",nfl:"DEN",mv:1008,age:30.8},
+  {name:"Courtland Sutton",pos:"WRTE",nfl:"DEN",mv:1008,age:30.8},
   {name:"Chuba Hubbard",pos:"RB",nfl:"CAR",mv:464,age:27.2},
-  {name:"Harold Fannin Jr.",pos:"TE",nfl:"CLE",mv:2890,age:22.1},
+  {name:"Harold Fannin Jr.",pos:"WRTE",nfl:"CLE",mv:2890,age:22.1},
   {name:"Blake Corum",pos:"RB",nfl:"LAR",mv:608,age:25.7},
-  {name:"Kyle Pitts Sr.",pos:"TE",nfl:"ATL",mv:2751,age:25.9},
-  {name:"Jordyn Tyson",pos:"WR",nfl:"NO",mv:4016,age:22.0,rookie:true},
+  {name:"Kyle Pitts Sr.",pos:"WRTE",nfl:"ATL",mv:2751,age:25.9},
+  {name:"Jordyn Tyson",pos:"WRTE",nfl:"NO",mv:4016,age:22.0,rookie:true},
   {name:"Kyle Monangai",pos:"RB",nfl:"CHI",mv:672,age:24.2},
   {name:"Brock Purdy",pos:"QB",nfl:"SF",mv:2090,age:26.6},
-  {name:"Chris Godwin Jr.",pos:"WR",nfl:"TB",mv:745,age:30.5},
-  {name:"Jordan Addison",pos:"WR",nfl:"MIN",mv:1561,age:24.5},
+  {name:"Chris Godwin Jr.",pos:"WRTE",nfl:"TB",mv:745,age:30.5},
+  {name:"Jordan Addison",pos:"WRTE",nfl:"MIN",mv:1561,age:24.5},
   {name:"Jacory Croskey-Merritt",pos:"RB",nfl:"WAS",mv:235,age:25.3},
   {name:"Patrick Mahomes II",pos:"QB",nfl:"KC",mv:4474,age:30.9},
-  {name:"Michael Wilson",pos:"WR",nfl:"ARI",mv:1220,age:26.5},
-  {name:"George Kittle",pos:"TE",nfl:"SF",mv:866,age:32.8},
+  {name:"Michael Wilson",pos:"WRTE",nfl:"ARI",mv:1220,age:26.5},
+  {name:"George Kittle",pos:"WRTE",nfl:"SF",mv:866,age:32.8},
   {name:"Jonathon Brooks",pos:"RB",nfl:"CAR",mv:1090,age:23.1},
-  {name:"Makai Lemon",pos:"WR",nfl:"PHI",mv:3840,age:22.2,rookie:true},
+  {name:"Makai Lemon",pos:"WRTE",nfl:"PHI",mv:3840,age:22.2,rookie:true},
   {name:"Jordan Mason",pos:"RB",nfl:"MIN",mv:190,age:27.2},
   {name:"RJ Harvey",pos:"RB",nfl:"DEN",mv:897,age:25.5},
-  {name:"Dalton Kincaid",pos:"TE",nfl:"BUF",mv:2109,age:26.8},
+  {name:"Dalton Kincaid",pos:"WRTE",nfl:"BUF",mv:2109,age:26.8},
   {name:"Matthew Stafford",pos:"QB",nfl:"LAR",mv:383,age:38.5},
   {name:"Jared Goff",pos:"QB",nfl:"DET",mv:890,age:31.8},
-  {name:"Travis Kelce",pos:"TE",nfl:"KC",mv:252,age:36.9},
-  {name:"Jayden Reed",pos:"WR",nfl:"GB",mv:868,age:26.3},
-  {name:"Michael Pittman Jr.",pos:"WR",nfl:"PIT",mv:1819,age:28.9},
+  {name:"Travis Kelce",pos:"WRTE",nfl:"KC",mv:252,age:36.9},
+  {name:"Jayden Reed",pos:"WRTE",nfl:"GB",mv:868,age:26.3},
+  {name:"Michael Pittman Jr.",pos:"WRTE",nfl:"PIT",mv:1819,age:28.9},
   {name:"Rachaad White",pos:"RB",nfl:"WAS",mv:257,age:27.6},
-  {name:"Dallas Goedert",pos:"TE",nfl:"PHI",mv:422,age:31.6},
-  {name:"Isaiah Likely",pos:"TE",nfl:"NYG",mv:1192,age:26.3},
+  {name:"Dallas Goedert",pos:"WRTE",nfl:"PHI",mv:422,age:31.6},
+  {name:"Isaiah Likely",pos:"WRTE",nfl:"NYG",mv:1192,age:26.3},
   {name:"Kyler Murray",pos:"QB",nfl:"MIN",mv:492,age:29.0},
-  {name:"Mark Andrews",pos:"TE",nfl:"BAL",mv:433,age:30.9},
-  {name:"Jakobi Meyers",pos:"WR",nfl:"JAC",mv:849,age:29.8},
+  {name:"Mark Andrews",pos:"WRTE",nfl:"BAL",mv:433,age:30.9},
+  {name:"Jakobi Meyers",pos:"WRTE",nfl:"JAC",mv:849,age:29.8},
   {name:"Kenny Gainwell",pos:"RB",nfl:"TB",mv:312,age:27.4},
   {name:"Aaron Jones Sr.",pos:"RB",nfl:"MIN",mv:112,age:31.7},
   {name:"Baker Mayfield",pos:"QB",nfl:"TB",mv:726,age:31.3},
-  {name:"Xavier Worthy",pos:"WR",nfl:"KC",mv:944,age:23.3},
+  {name:"Xavier Worthy",pos:"WRTE",nfl:"KC",mv:944,age:23.3},
   {name:"Chris Rodriguez Jr.",pos:"RB",nfl:"JAC",mv:132,age:25.9},
-  {name:"Josh Downs",pos:"WR",nfl:"IND",mv:1075,age:25.0},
+  {name:"Josh Downs",pos:"WRTE",nfl:"IND",mv:1075,age:25.0},
   {name:"Jordan Love",pos:"QB",nfl:"GB",mv:1178,age:27.8},
-  {name:"Jayden Higgins",pos:"WR",nfl:"HOU",mv:1134,age:23.7},
+  {name:"Jayden Higgins",pos:"WRTE",nfl:"HOU",mv:1134,age:23.7},
   {name:"Tyler Shough",pos:"QB",nfl:"NO",mv:532,age:26.9},
-  {name:"Wan'Dale Robinson",pos:"WR",nfl:"TEN",mv:1175,age:25.6},
-  {name:"Jake Ferguson",pos:"TE",nfl:"DAL",mv:862,age:27.6},
+  {name:"Wan'Dale Robinson",pos:"WRTE",nfl:"TEN",mv:1175,age:25.6},
+  {name:"Jake Ferguson",pos:"WRTE",nfl:"DAL",mv:862,age:27.6},
   {name:"Tyrone Tracy Jr.",pos:"RB",nfl:"NYG",mv:212,age:26.7},
-  {name:"Romeo Doubs",pos:"WR",nfl:"NE",mv:562,age:26.3},
+  {name:"Romeo Doubs",pos:"WRTE",nfl:"NE",mv:562,age:26.3},
   {name:"Woody Marks",pos:"RB",nfl:"HOU",mv:210,age:25.6},
-  {name:"Jalen Coker",pos:"WR",nfl:"CAR",mv:556,age:24.8},
+  {name:"Jalen Coker",pos:"WRTE",nfl:"CAR",mv:556,age:24.8},
   {name:"Malik Willis",pos:"QB",nfl:"MIA",mv:408,age:27.2},
-  {name:"Stefon Diggs",pos:"WR",nfl:"WAS",mv:293,age:32.7},
-  {name:"KC Concepcion",pos:"WR",nfl:"CLE",mv:1832,age:21.9,rookie:true},
-  {name:"Khalil Shakir",pos:"WR",nfl:"BUF",mv:547,age:26.5},
+  {name:"Stefon Diggs",pos:"WRTE",nfl:"WAS",mv:293,age:32.7},
+  {name:"KC Concepcion",pos:"WRTE",nfl:"CLE",mv:1832,age:21.9,rookie:true},
+  {name:"Khalil Shakir",pos:"WRTE",nfl:"BUF",mv:547,age:26.5},
   {name:"Isiah Pacheco",pos:"RB",nfl:"DET",mv:92,age:27.5},
   {name:"C.J. Stroud",pos:"QB",nfl:"HOU",mv:1521,age:24.9},
-  {name:"Deebo Samuel Sr.",pos:"WR",nfl:"SF",mv:178,age:30.6},
+  {name:"Deebo Samuel Sr.",pos:"WRTE",nfl:"SF",mv:178,age:30.6},
   {name:"Sam Darnold",pos:"QB",nfl:"SEA",mv:431,age:29.2},
   {name:"Tank Bigsby",pos:"RB",nfl:"PHI",mv:84,age:25.0},
   {name:"Brian Robinson Jr.",pos:"RB",nfl:"ATL",mv:60,age:27.4},
-  {name:"Juwan Johnson",pos:"TE",nfl:"NO",mv:258,age:29.9},
+  {name:"Juwan Johnson",pos:"WRTE",nfl:"NO",mv:258,age:29.9},
   {name:"Alvin Kamara",pos:"RB",nfl:"NO",mv:58,age:31.1},
-  {name:"Hunter Henry",pos:"TE",nfl:"NE",mv:174,age:31.7},
+  {name:"Hunter Henry",pos:"WRTE",nfl:"NE",mv:174,age:31.7},
   {name:"Tyjae Spears",pos:"RB",nfl:"TEN",mv:104,age:25.2},
-  {name:"Brenton Strange",pos:"TE",nfl:"JAC",mv:777,age:25.6},
+  {name:"Brenton Strange",pos:"WRTE",nfl:"JAC",mv:777,age:25.6},
   {name:"Dylan Sampson",pos:"RB",nfl:"CLE",mv:147,age:21.9},
   {name:"Cam Ward",pos:"QB",nfl:"TEN",mv:620,age:24.2},
-  {name:"Oronde Gadsden II",pos:"TE",nfl:"LAC",mv:1134,age:23.1},
-  {name:"Chig Okonkwo",pos:"TE",nfl:"WAS",mv:425,age:26.9},
+  {name:"Oronde Gadsden II",pos:"WRTE",nfl:"LAC",mv:1134,age:23.1},
+  {name:"Chig Okonkwo",pos:"WRTE",nfl:"WAS",mv:425,age:26.9},
   {name:"Houston Texans",pos:"DST",nfl:"HOU",mv:43},
   {name:"Jonah Coleman",pos:"RB",nfl:"DEN",mv:359,age:23.0,rookie:true},
   {name:"Daniel Jones",pos:"QB",nfl:"IND",mv:328,age:29.2},
-  {name:"Denzel Boston",pos:"WR",nfl:"CLE",mv:1052,age:22.7,rookie:true},
-  {name:"Jerry Jeudy",pos:"WR",nfl:"CLE",mv:192,age:27.3},
-  {name:"Jauan Jennings",pos:"WR",nfl:"MIN",mv:269,age:29.1},
-  {name:"Jalen McMillan",pos:"WR",nfl:"TB",mv:308,age:24.7},
+  {name:"Denzel Boston",pos:"WRTE",nfl:"CLE",mv:1052,age:22.7,rookie:true},
+  {name:"Jerry Jeudy",pos:"WRTE",nfl:"CLE",mv:192,age:27.3},
+  {name:"Jauan Jennings",pos:"WRTE",nfl:"MIN",mv:269,age:29.1},
+  {name:"Jalen McMillan",pos:"WRTE",nfl:"TB",mv:308,age:24.7},
   {name:"Denver Broncos",pos:"DST",nfl:"DEN",mv:40},
-  {name:"De'Zhaun Stribling",pos:"WR",nfl:"SF",mv:380,age:23.7,rookie:true},
+  {name:"De'Zhaun Stribling",pos:"WRTE",nfl:"SF",mv:380,age:23.7,rookie:true},
   {name:"Seattle Seahawks",pos:"DST",nfl:"SEA",mv:40},
-  {name:"Omar Cooper Jr.",pos:"WR",nfl:"NYJ",mv:1087,age:22.7,rookie:true},
+  {name:"Omar Cooper Jr.",pos:"WRTE",nfl:"NYJ",mv:1087,age:22.7,rookie:true},
   {name:"Los Angeles Rams",pos:"DST",nfl:"LAR",mv:40},
   {name:"Bryce Young",pos:"QB",nfl:"CAR",mv:322,age:25.1},
-  {name:"Tre Tucker",pos:"WR",nfl:"LV",mv:60,age:25.4},
-  {name:"Travis Hunter",pos:"WR",nfl:"JAC",mv:528,age:23.2},
+  {name:"Tre Tucker",pos:"WRTE",nfl:"LV",mv:60,age:25.4},
+  {name:"Travis Hunter",pos:"WRTE",nfl:"JAC",mv:528,age:23.2},
   {name:"Philadelphia Eagles",pos:"DST",nfl:"PHI",mv:40},
   {name:"Ray Davis",pos:"RB",nfl:"BUF",mv:35,age:26.8},
-  {name:"Tre' Harris",pos:"WR",nfl:"LAC",mv:388,age:24.5},
+  {name:"Tre' Harris",pos:"WRTE",nfl:"LAC",mv:388,age:24.5},
   {name:"Emmett Johnson",pos:"RB",nfl:"KC",mv:156,age:22.8,rookie:true},
   {name:"Sean Tucker",pos:"RB",nfl:"TB",mv:30,age:24.8},
   {name:"Emanuel Wilson",pos:"RB",nfl:"SEA",mv:32,age:27.3},
-  {name:"AJ Barner",pos:"TE",nfl:"SEA",mv:299,age:24.3},
+  {name:"AJ Barner",pos:"WRTE",nfl:"SEA",mv:299,age:24.3},
   {name:"Pittsburgh Steelers",pos:"DST",nfl:"PIT",mv:40},
-  {name:"Kayshon Boutte",pos:"WR",nfl:"NE",mv:156,age:24.3},
+  {name:"Kayshon Boutte",pos:"WRTE",nfl:"NE",mv:156,age:24.3},
   {name:"New England Patriots",pos:"DST",nfl:"NE",mv:40},
   {name:"Minnesota Vikings",pos:"DST",nfl:"MIN",mv:40},
   {name:"Jacksonville Jaguars",pos:"DST",nfl:"JAC",mv:40},
-  {name:"Jalen Nailor",pos:"WR",nfl:"LV",mv:119,age:27.5},
+  {name:"Jalen Nailor",pos:"WRTE",nfl:"LV",mv:119,age:27.5},
   {name:"Mike Washington Jr.",pos:"RB",nfl:"LV",mv:84,age:23.1,rookie:true},
   {name:"Brandon Aubrey",pos:"PK",nfl:"DAL",mv:900},
-  {name:"Ryan Flournoy",pos:"WR",nfl:"DAL",mv:73,age:26.8},
+  {name:"Ryan Flournoy",pos:"WRTE",nfl:"DAL",mv:73,age:26.8},
   {name:"Los Angeles Chargers",pos:"DST",nfl:"LAC",mv:40},
-  {name:"Terrance Ferguson",pos:"TE",nfl:"LAR",mv:308,age:23.4},
-  {name:"Calvin Ridley",pos:"WR",nfl:"TEN",mv:63,age:31.6},
+  {name:"Terrance Ferguson",pos:"WRTE",nfl:"LAR",mv:308,age:23.4},
+  {name:"Calvin Ridley",pos:"WRTE",nfl:"TEN",mv:63,age:31.6},
   {name:"Nicholas Singleton",pos:"RB",nfl:"TEN",mv:185,age:22.6,rookie:true},
-  {name:"Dalton Schultz",pos:"TE",nfl:"HOU",mv:110,age:30.1},
+  {name:"Dalton Schultz",pos:"WRTE",nfl:"HOU",mv:110,age:30.1},
   {name:"Cameron Dicker",pos:"PK",nfl:"LAC",mv:750},
-  {name:"Dontayvion Wicks",pos:"WR",nfl:"PHI",mv:67,age:25.2},
+  {name:"Dontayvion Wicks",pos:"WRTE",nfl:"PHI",mv:67,age:25.2},
   {name:"Ka'imi Fairbairn",pos:"PK",nfl:"HOU",mv:700},
-  {name:"Rashod Bateman",pos:"WR",nfl:"BAL",mv:52,age:26.7},
+  {name:"Rashod Bateman",pos:"WRTE",nfl:"BAL",mv:52,age:26.7},
   {name:"Cam Little",pos:"PK",nfl:"JAC",mv:225},
   {name:"Baltimore Ravens",pos:"DST",nfl:"BAL",mv:40},
   {name:"MarShawn Lloyd",pos:"RB",nfl:"GB",mv:28,age:25.6},
-  {name:"Kenyon Sadiq",pos:"TE",nfl:"NYJ",mv:1719,age:21.4,rookie:true},
+  {name:"Kenyon Sadiq",pos:"WRTE",nfl:"NYJ",mv:1719,age:21.4,rookie:true},
   {name:"James Conner",pos:"RB",nfl:"ARI",mv:26,age:31.3},
   {name:"Jason Myers",pos:"PK",nfl:"SEA",mv:650},
   {name:"Green Bay Packers",pos:"DST",nfl:"GB",mv:40},
   {name:"Jacoby Brissett",pos:"QB",nfl:"ARI",mv:63,age:33.7},
   {name:"Kaytron Allen",pos:"RB",nfl:"WAS",mv:97,age:23.6,rookie:true},
-  {name:"Isaac TeSlaa",pos:"WR",nfl:"DET",mv:140,age:24.5},
-  {name:"Troy Franklin",pos:"WR",nfl:"DEN",mv:167,age:23.5},
+  {name:"Isaac TeSlaa",pos:"WRTE",nfl:"DET",mv:140,age:24.5},
+  {name:"Troy Franklin",pos:"WRTE",nfl:"DEN",mv:167,age:23.5},
   {name:"Tyler Loop",pos:"PK",nfl:"BAL",mv:240},
   {name:"Kansas City Chiefs",pos:"DST",nfl:"KC",mv:40},
   {name:"Eddy Pineiro",pos:"PK",nfl:"SF",mv:40},
-  {name:"Pat Bryant",pos:"WR",nfl:"DEN",mv:158,age:23.7},
-  {name:"Darnell Mooney",pos:"WR",nfl:"NYG",mv:60,age:28.8},
-  {name:"T.J. Hockenson",pos:"TE",nfl:"MIN",mv:235,age:29.1},
-  {name:"Jaylin Noel",pos:"WR",nfl:"HOU",mv:231,age:23.9},
-  {name:"Malik Washington",pos:"WR",nfl:"MIA",mv:51,age:25.6},
+  {name:"Pat Bryant",pos:"WRTE",nfl:"DEN",mv:158,age:23.7},
+  {name:"Darnell Mooney",pos:"WRTE",nfl:"NYG",mv:60,age:28.8},
+  {name:"T.J. Hockenson",pos:"WRTE",nfl:"MIN",mv:235,age:29.1},
+  {name:"Jaylin Noel",pos:"WRTE",nfl:"HOU",mv:231,age:23.9},
+  {name:"Malik Washington",pos:"WRTE",nfl:"MIA",mv:51,age:25.6},
   {name:"Jaydon Blue",pos:"RB",nfl:"DAL",mv:20,age:22.6},
-  {name:"Tank Dell",pos:"WR",nfl:"HOU",mv:381,age:26.8},
+  {name:"Tank Dell",pos:"WRTE",nfl:"HOU",mv:381,age:26.8},
   {name:"Cairo Santos",pos:"PK",nfl:"CHI",mv:300},
   {name:"Jaylen Wright",pos:"RB",nfl:"MIA",mv:22,age:23.4},
   {name:"Evan McPherson",pos:"PK",nfl:"CIN",mv:280},
   {name:"Detroit Lions",pos:"DST",nfl:"DET",mv:40},
-  {name:"Pat Freiermuth",pos:"TE",nfl:"PIT",mv:85,age:27.8},
+  {name:"Pat Freiermuth",pos:"WRTE",nfl:"PIT",mv:85,age:27.8},
   {name:"Jake Bates",pos:"PK",nfl:"DET",mv:600},
-  {name:"Gunnar Helm",pos:"TE",nfl:"TEN",mv:163,age:23.9},
-  {name:"Antonio Williams",pos:"WR",nfl:"WAS",mv:498,age:22.1,rookie:true},
+  {name:"Gunnar Helm",pos:"WRTE",nfl:"TEN",mv:163,age:23.9},
+  {name:"Antonio Williams",pos:"WRTE",nfl:"WAS",mv:498,age:22.1,rookie:true},
   {name:"Chase McLaughlin",pos:"PK",nfl:"TB",mv:260},
   {name:"Buffalo Bills",pos:"DST",nfl:"BUF",mv:40},
   {name:"Cleveland Browns",pos:"DST",nfl:"CLE",mv:40},
   {name:"Andy Borregales",pos:"PK",nfl:"NE",mv:40},
-  {name:"Zachariah Branch",pos:"WR",nfl:"ATL",mv:158,age:22.4,rookie:true},
-  {name:"Cooper Kupp",pos:"WR",nfl:"SEA",mv:25,age:33.2},
+  {name:"Zachariah Branch",pos:"WRTE",nfl:"ATL",mv:158,age:22.4,rookie:true},
+  {name:"Cooper Kupp",pos:"WRTE",nfl:"SEA",mv:25,age:33.2},
   {name:"Geno Smith",pos:"QB",nfl:"NYJ",mv:49,age:35.8},
   {name:"Harrison Mevis",pos:"PK",nfl:"LAR",mv:40},
-  {name:"David Njoku",pos:"TE",nfl:"LAC",mv:79,age:30.1},
-  {name:"Elic Ayomanor",pos:"WR",nfl:"TEN",mv:95,age:23.2},
+  {name:"David Njoku",pos:"WRTE",nfl:"LAC",mv:79,age:30.1},
+  {name:"Elic Ayomanor",pos:"WRTE",nfl:"TEN",mv:95,age:23.2},
   {name:"Aaron Rodgers",pos:"QB",nfl:"PIT",mv:51,age:42.7},
-  {name:"Chimere Dike",pos:"WR",nfl:"TEN",mv:86,age:24.7},
-  {name:"Cade Otton",pos:"TE",nfl:"TB",mv:80,age:27.3},
+  {name:"Chimere Dike",pos:"WRTE",nfl:"TEN",mv:86,age:24.7},
+  {name:"Cade Otton",pos:"WRTE",nfl:"TB",mv:80,age:27.3},
   {name:"Demond Claiborne",pos:"RB",nfl:"MIN",mv:45,age:22.8,rookie:true},
   {name:"George Holani",pos:"RB",nfl:"SEA",mv:7,age:26.7},
-  {name:"Greg Dulcich",pos:"TE",nfl:"MIA",mv:99,age:26.4},
+  {name:"Greg Dulcich",pos:"WRTE",nfl:"MIA",mv:99,age:26.4},
   {name:"Harrison Butker",pos:"PK",nfl:"KC",mv:500},
   {name:"Chris Boswell",pos:"PK",nfl:"PIT",mv:550},
-  {name:"Germie Bernard",pos:"WR",nfl:"PIT",mv:281,age:22.7,rookie:true},
-  {name:"Colby Parkinson",pos:"TE",nfl:"LAR",mv:20,age:27.6},
+  {name:"Germie Bernard",pos:"WRTE",nfl:"PIT",mv:281,age:22.7,rookie:true},
+  {name:"Colby Parkinson",pos:"WRTE",nfl:"LAR",mv:20,age:27.6},
   {name:"Jordan James",pos:"RB",nfl:"SF",mv:16,age:22.4},
-  {name:"Tory Horton",pos:"WR",nfl:"SEA",mv:81,age:23.7},
-  {name:"Evan Engram",pos:"TE",nfl:"DEN",mv:17,age:31.9},
+  {name:"Tory Horton",pos:"WRTE",nfl:"SEA",mv:81,age:23.7},
+  {name:"Evan Engram",pos:"WRTE",nfl:"DEN",mv:17,age:31.9},
   {name:"Justice Hill",pos:"RB",nfl:"BAL",mv:5,age:28.7},
   {name:"Kaelon Black",pos:"RB",nfl:"SF",mv:22,age:24.8,rookie:true},
   {name:"Isaiah Davis",pos:"RB",nfl:"NYJ",mv:11,age:24.5},
   {name:"Malik Davis",pos:"RB",nfl:"DAL",mv:7,age:27.7},
-  {name:"Tyquan Thornton",pos:"WR",nfl:"KC",mv:9,age:26.0},
-  {name:"Elijah Sarratt",pos:"WR",nfl:"BAL",mv:184,age:23.2,rookie:true},
+  {name:"Tyquan Thornton",pos:"WRTE",nfl:"KC",mv:9,age:26.0},
+  {name:"Elijah Sarratt",pos:"WRTE",nfl:"BAL",mv:184,age:23.2,rookie:true},
   {name:"Ty Johnson",pos:"RB",nfl:"BUF",mv:3,age:28.9},
-  {name:"Eli Stowers",pos:"TE",nfl:"PHI",mv:1270,age:23.3,rookie:true},
+  {name:"Eli Stowers",pos:"WRTE",nfl:"PHI",mv:1270,age:23.3,rookie:true},
   {name:"Chris Brooks",pos:"RB",nfl:"GB",mv:7,age:26.6},
-  {name:"Jack Bech",pos:"WR",nfl:"LV",mv:92,age:23.7},
+  {name:"Jack Bech",pos:"WRTE",nfl:"LV",mv:92,age:23.7},
   {name:"Fernando Mendoza",pos:"QB",nfl:"LV",mv:745,age:22.9,rookie:true},
-  {name:"Chris Bell",pos:"WR",nfl:"MIA",mv:354,age:22.2,rookie:true},
-  {name:"Christian Kirk",pos:"WR",nfl:"SF",mv:39,age:29.7},
-  {name:"Ted Hurst III",pos:"WR",nfl:"TB",mv:162,age:22.1,rookie:true},
-  {name:"Theo Johnson",pos:"TE",nfl:"NYG",mv:39,age:25.5},
+  {name:"Chris Bell",pos:"WRTE",nfl:"MIA",mv:354,age:22.2,rookie:true},
+  {name:"Christian Kirk",pos:"WRTE",nfl:"SF",mv:39,age:29.7},
+  {name:"Ted Hurst III",pos:"WRTE",nfl:"TB",mv:162,age:22.1,rookie:true},
+  {name:"Theo Johnson",pos:"WRTE",nfl:"NYG",mv:39,age:25.5},
   {name:"Samaje Perine",pos:"RB",nfl:"CIN",mv:40},
   {name:"DJ Giddens",pos:"RB",nfl:"IND",mv:11,age:23.0},
   {name:"Tua Tagovailoa",pos:"QB",nfl:"ATL",mv:106,age:28.5},
-  {name:"Ja'Kobi Lane",pos:"WR",nfl:"BAL",mv:123,age:22.0,rookie:true},
-  {name:"Malachi Fields",pos:"WR",nfl:"NYG",mv:112,age:23.0,rookie:true},
+  {name:"Ja'Kobi Lane",pos:"WRTE",nfl:"BAL",mv:123,age:22.0,rookie:true},
+  {name:"Malachi Fields",pos:"WRTE",nfl:"NYG",mv:112,age:23.0,rookie:true},
   {name:"Will Reichard",pos:"PK",nfl:"MIN",mv:40},
   {name:"Wil Lutz",pos:"PK",nfl:"DEN",mv:350},
-  {name:"Darius Slayton",pos:"WR",nfl:"NYG",mv:9,age:29.6},
-  {name:"Mason Taylor",pos:"TE",nfl:"NYJ",mv:111,age:22.3},
+  {name:"Darius Slayton",pos:"WRTE",nfl:"NYG",mv:9,age:29.6},
+  {name:"Mason Taylor",pos:"WRTE",nfl:"NYJ",mv:111,age:22.3},
   {name:"Devin Neal",pos:"RB",nfl:"NO",mv:23,age:23.0},
-  {name:"Xavier Legette",pos:"WR",nfl:"CAR",mv:27,age:25.5},
+  {name:"Xavier Legette",pos:"WRTE",nfl:"CAR",mv:27,age:25.5},
   {name:"Atlanta Falcons",pos:"DST",nfl:"ATL",mv:40},
   {name:"San Francisco 49ers",pos:"DST",nfl:"SF",mv:40},
   {name:"Emari Demercado",pos:"RB",nfl:"KC",mv:3,age:27.6},
-  {name:"Brandon Aiyuk",pos:"WR",nfl:"SF",mv:469,age:28.4},
-  {name:"Devaughn Vele",pos:"WR",nfl:"NO",mv:17,age:28.7},
+  {name:"Brandon Aiyuk",pos:"WRTE",nfl:"SF",mv:469,age:28.4},
+  {name:"Devaughn Vele",pos:"WRTE",nfl:"NO",mv:17,age:28.7},
   {name:"Kaleb Johnson",pos:"RB",nfl:"PIT",mv:44,age:23.0},
   {name:"Devin Singletary",pos:"RB",nfl:"NYG",mv:7,age:28.9},
   {name:"Adam Randall",pos:"RB",nfl:"BAL",mv:14,age:22.1,rookie:true},
-  {name:"Mike Gesicki",pos:"TE",nfl:"CIN",mv:11,age:30.9},
-  {name:"Kyle Williams",pos:"WR",nfl:"NE",mv:59,age:23.8},
+  {name:"Mike Gesicki",pos:"WRTE",nfl:"CIN",mv:11,age:30.9},
+  {name:"Kyle Williams",pos:"WRTE",nfl:"NE",mv:59,age:23.8},
   {name:"Kendre Miller",pos:"RB",nfl:"NO",mv:8,age:24.2},
   {name:"Seth McGowan",pos:"RB",nfl:"IND",mv:13,age:24.8,rookie:true},
   {name:"Michael Penix Jr.",pos:"QB",nfl:"ATL",mv:158,age:26.3},
-  {name:"Oscar Delp",pos:"TE",nfl:"NO",mv:105,age:23.0,rookie:true},
-  {name:"Keenan Allen",pos:"WR",nfl:"LAC",mv:18,age:34.3},
+  {name:"Oscar Delp",pos:"WRTE",nfl:"NO",mv:105,age:23.0,rookie:true},
+  {name:"Keenan Allen",pos:"WRTE",nfl:"LAC",mv:18,age:34.3},
   {name:"LeQuint Allen Jr.",pos:"RB",nfl:"JAC",mv:6,age:22.0},
-  {name:"Hollywood Brown",pos:"WR",nfl:"PHI",mv:20,age:29.2},
+  {name:"Hollywood Brown",pos:"WRTE",nfl:"PHI",mv:20,age:29.2},
   {name:"Shedeur Sanders",pos:"QB",nfl:"CLE",mv:80,age:24.5},
   {name:"Kirk Cousins",pos:"QB",nfl:"LV",mv:18,age:38.0},
   {name:"Brashard Smith",pos:"RB",nfl:"KC",mv:10,age:23.3},
   {name:"Deshaun Watson",pos:"QB",nfl:"CLE",mv:25,age:30.9},
   {name:"Najee Harris",pos:"RB",nfl:"LAC",mv:10,age:28.4},
-  {name:"Mack Hollins",pos:"WR",nfl:"NE",mv:40},
-  {name:"Tyreek Hill",pos:"WR",nfl:"FA",mv:368,age:32.5},
-  {name:"Caleb Douglas",pos:"WR",nfl:"MIA",mv:36,age:22.9,rookie:true},
+  {name:"Mack Hollins",pos:"WRTE",nfl:"NE",mv:40},
+  {name:"Tyreek Hill",pos:"WRTE",nfl:"FA",mv:368,age:32.5},
+  {name:"Caleb Douglas",pos:"WRTE",nfl:"MIA",mv:36,age:22.9,rookie:true},
   {name:"New Orleans Saints",pos:"DST",nfl:"NO",mv:40},
   {name:"Jerome Ford",pos:"RB",nfl:"WAS",mv:7,age:26.9},
-  {name:"Jake Tonges",pos:"TE",nfl:"SF",mv:18,age:27.1},
-  {name:"Skyler Bell",pos:"WR",nfl:"BUF",mv:100,age:24.1,rookie:true},
+  {name:"Jake Tonges",pos:"WRTE",nfl:"SF",mv:18,age:27.1},
+  {name:"Skyler Bell",pos:"WRTE",nfl:"BUF",mv:100,age:24.1,rookie:true},
   {name:"Isaac Guerendo",pos:"RB",nfl:"SF",mv:6,age:26.1},
   {name:"Trevor Etienne",pos:"RB",nfl:"CAR",mv:7,age:22.1},
   {name:"Indianapolis Colts",pos:"DST",nfl:"IND",mv:40},
-  {name:"Isaiah Bond",pos:"WR",nfl:"CLE",mv:15,age:22.4},
-  {name:"Andrei Iosivas",pos:"WR",nfl:"CIN",mv:9,age:26.8},
-  {name:"Cyrus Allen",pos:"WR",nfl:"KC",mv:21,age:23.5,rookie:true},
+  {name:"Isaiah Bond",pos:"WRTE",nfl:"CLE",mv:15,age:22.4},
+  {name:"Andrei Iosivas",pos:"WRTE",nfl:"CIN",mv:9,age:26.8},
+  {name:"Cyrus Allen",pos:"WRTE",nfl:"KC",mv:21,age:23.5,rookie:true},
   {name:"Charlie Smyth",pos:"PK",nfl:"NO",mv:40},
   {name:"Tahj Brooks",pos:"RB",nfl:"CIN",mv:6,age:24.3},
   {name:"Chicago Bears",pos:"DST",nfl:"CHI",mv:40},
   {name:"Jarquez Hunter",pos:"RB",nfl:"LAR",mv:11,age:23.6},
-  {name:"Darnell Washington",pos:"TE",nfl:"PIT",mv:17,age:25.0},
+  {name:"Darnell Washington",pos:"WRTE",nfl:"PIT",mv:17,age:25.0},
   {name:"Jaleel McLaughlin",pos:"RB",nfl:"DEN",mv:3,age:25.9},
-  {name:"Jalen Tolbert",pos:"WR",nfl:"MIA",mv:10,age:27.5},
-  {name:"Luke McCaffrey",pos:"WR",nfl:"WAS",mv:6,age:25.4},
+  {name:"Jalen Tolbert",pos:"WRTE",nfl:"MIA",mv:10,age:27.5},
+  {name:"Luke McCaffrey",pos:"WRTE",nfl:"WAS",mv:6,age:25.4},
   {name:"Will Shipley",pos:"RB",nfl:"PHI",mv:6,age:24.0},
-  {name:"Tez Johnson",pos:"WR",nfl:"TB",mv:29,age:24.2},
+  {name:"Tez Johnson",pos:"WRTE",nfl:"TB",mv:29,age:24.2},
   {name:"Joe Mixon",pos:"RB",nfl:"FA",mv:4},
-  {name:"Chris Brazzell II",pos:"WR",nfl:"CAR",mv:103,age:22.8,rookie:true},
-  {name:"Elijah Arroyo",pos:"TE",nfl:"SEA",mv:65,age:23.4},
-  {name:"Konata Mumpfield",pos:"WR",nfl:"LAR",mv:4,age:23.8},
-  {name:"Calvin Austin III",pos:"WR",nfl:"NYG",mv:5,age:27.4},
-  {name:"Max Klare",pos:"TE",nfl:"LAR",mv:106,age:23.1,rookie:true},
+  {name:"Chris Brazzell II",pos:"WRTE",nfl:"CAR",mv:103,age:22.8,rookie:true},
+  {name:"Elijah Arroyo",pos:"WRTE",nfl:"SEA",mv:65,age:23.4},
+  {name:"Konata Mumpfield",pos:"WRTE",nfl:"LAR",mv:4,age:23.8},
+  {name:"Calvin Austin III",pos:"WRTE",nfl:"NYG",mv:5,age:27.4},
+  {name:"Max Klare",pos:"WRTE",nfl:"LAR",mv:106,age:23.1,rookie:true},
   {name:"J.J. McCarthy",pos:"QB",nfl:"MIN",mv:87,age:23.6},
-  {name:"Tyler Higbee",pos:"TE",nfl:"LAR",mv:40},
-  {name:"Michael Mayer",pos:"TE",nfl:"LV",mv:37,age:25.1},
-  {name:"Cole Kmet",pos:"TE",nfl:"CHI",mv:12,age:27.4},
-  {name:"DeMario Douglas",pos:"WR",nfl:"NE",mv:27,age:25.7},
-  {name:"Ja'Tavion Sanders",pos:"TE",nfl:"CAR",mv:11,age:23.4},
-  {name:"Jalen Royals",pos:"WR",nfl:"KC",mv:16,age:23.5},
-  {name:"Noah Gray",pos:"TE",nfl:"KC",mv:40},
-  {name:"Dawson Knox",pos:"TE",nfl:"BUF",mv:40},
+  {name:"Tyler Higbee",pos:"WRTE",nfl:"LAR",mv:40},
+  {name:"Michael Mayer",pos:"WRTE",nfl:"LV",mv:37,age:25.1},
+  {name:"Cole Kmet",pos:"WRTE",nfl:"CHI",mv:12,age:27.4},
+  {name:"DeMario Douglas",pos:"WRTE",nfl:"NE",mv:27,age:25.7},
+  {name:"Ja'Tavion Sanders",pos:"WRTE",nfl:"CAR",mv:11,age:23.4},
+  {name:"Jalen Royals",pos:"WRTE",nfl:"KC",mv:16,age:23.5},
+  {name:"Noah Gray",pos:"WRTE",nfl:"KC",mv:40},
+  {name:"Dawson Knox",pos:"WRTE",nfl:"BUF",mv:40},
   {name:"Carson Beck",pos:"QB",nfl:"ARI",mv:33,age:24.7,rookie:true},
-  {name:"Olamide Zaccheaus",pos:"WR",nfl:"ATL",mv:40},
-  {name:"Joshua Palmer",pos:"WR",nfl:"BUF",mv:7,age:26.9},
+  {name:"Olamide Zaccheaus",pos:"WRTE",nfl:"ATL",mv:40},
+  {name:"Joshua Palmer",pos:"WRTE",nfl:"BUF",mv:7,age:26.9},
   {name:"Mac Jones",pos:"QB",nfl:"SF",mv:53,age:27.9},
   {name:"Dallas Cowboys",pos:"DST",nfl:"DAL",mv:40},
   {name:"Carolina Panthers",pos:"DST",nfl:"CAR",mv:40},
-  {name:"Brenen Thompson",pos:"WR",nfl:"LAC",mv:24,age:23.1,rookie:true},
-  {name:"Kendrick Bourne",pos:"WR",nfl:"ARI",mv:40},
-  {name:"Eli Raridon",pos:"TE",nfl:"NE",mv:101,age:22.5,rookie:true},
-  {name:"Erick All Jr.",pos:"TE",nfl:"CIN",mv:40},
+  {name:"Brenen Thompson",pos:"WRTE",nfl:"LAC",mv:24,age:23.1,rookie:true},
+  {name:"Kendrick Bourne",pos:"WRTE",nfl:"ARI",mv:40},
+  {name:"Eli Raridon",pos:"WRTE",nfl:"NE",mv:101,age:22.5,rookie:true},
+  {name:"Erick All Jr.",pos:"WRTE",nfl:"CIN",mv:40},
   {name:"Michael Carter",pos:"RB",nfl:"TEN",mv:40},
   {name:"Eli Heidenreich",pos:"RB",nfl:"PIT",mv:9,age:23.1,rookie:true},
-  {name:"Bryce Lance",pos:"WR",nfl:"NO",mv:52,age:24.0,rookie:true},
+  {name:"Bryce Lance",pos:"WRTE",nfl:"NO",mv:52,age:24.0,rookie:true},
   {name:"Tyler Bass",pos:"PK",nfl:"BUF",mv:250},
   {name:"Tampa Bay Buccaneers",pos:"DST",nfl:"TB",mv:40},
-  {name:"Darren Waller",pos:"TE",nfl:"CAR",mv:40},
-  {name:"Justin Joly",pos:"TE",nfl:"DEN",mv:41,age:22.1,rookie:true},
+  {name:"Darren Waller",pos:"WRTE",nfl:"CAR",mv:40},
+  {name:"Justin Joly",pos:"WRTE",nfl:"DEN",mv:41,age:22.1,rookie:true},
   {name:"Bam Knight",pos:"RB",nfl:"ARI",mv:40},
   {name:"Ty Simpson",pos:"QB",nfl:"LAR",mv:258,age:23.6,rookie:true},
   {name:"New York Giants",pos:"DST",nfl:"NYG",mv:40},
   {name:"Jake Elliott",pos:"PK",nfl:"PHI",mv:290},
-  {name:"Dont'e Thornton Jr.",pos:"WR",nfl:"LV",mv:3,age:23.7},
+  {name:"Dont'e Thornton Jr.",pos:"WRTE",nfl:"LV",mv:3,age:23.7},
   {name:"Jawhar Jordan",pos:"RB",nfl:"HOU",mv:40},
-  {name:"Savion Williams",pos:"WR",nfl:"GB",mv:40},
-  {name:"Tutu Atwell",pos:"WR",nfl:"MIA",mv:3,age:26.9},
+  {name:"Savion Williams",pos:"WRTE",nfl:"GB",mv:40},
+  {name:"Tutu Atwell",pos:"WRTE",nfl:"MIA",mv:3,age:26.9},
   {name:"Cincinnati Bengals",pos:"DST",nfl:"CIN",mv:40},
   {name:"Raheim Sanders",pos:"RB",nfl:"CLE",mv:40},
-  {name:"KaVontae Turpin",pos:"WR",nfl:"DAL",mv:40},
+  {name:"KaVontae Turpin",pos:"WRTE",nfl:"DAL",mv:40},
   {name:"Trey Smack",pos:"PK",nfl:"GB",mv:40},
-  {name:"Jaylin Lane",pos:"WR",nfl:"WAS",mv:4,age:24.3},
+  {name:"Jaylin Lane",pos:"WRTE",nfl:"WAS",mv:4,age:24.3},
   {name:"Nick Chubb",pos:"RB",nfl:"FA",mv:40},
-  {name:"John Metchie III",pos:"WR",nfl:"CAR",mv:3,age:26.1},
+  {name:"John Metchie III",pos:"WRTE",nfl:"CAR",mv:3,age:26.1},
   {name:"J'Mari Taylor",pos:"RB",nfl:"JAC",mv:4,age:24.4,rookie:true},
-  {name:"Xavier Hutchinson",pos:"WR",nfl:"HOU",mv:40},
-  {name:"Noah Fant",pos:"TE",nfl:"NO",mv:40},
-  {name:"Kevin Coleman Jr.",pos:"WR",nfl:"MIA",mv:19,age:22.9,rookie:true},
-  {name:"Charlie Kolar",pos:"TE",nfl:"LAC",mv:4,age:27.5},
+  {name:"Xavier Hutchinson",pos:"WRTE",nfl:"HOU",mv:40},
+  {name:"Noah Fant",pos:"WRTE",nfl:"NO",mv:40},
+  {name:"Kevin Coleman Jr.",pos:"WRTE",nfl:"MIA",mv:19,age:22.9,rookie:true},
+  {name:"Charlie Kolar",pos:"WRTE",nfl:"LAC",mv:4,age:27.5},
   {name:"Zane Gonzalez",pos:"PK",nfl:"MIA",mv:40},
   {name:"Anthony Richardson Sr.",pos:"QB",nfl:"IND",mv:243,age:24.2},
-  {name:"Luke Musgrave",pos:"TE",nfl:"GB",mv:40},
+  {name:"Luke Musgrave",pos:"WRTE",nfl:"GB",mv:40},
   {name:"Tennessee Titans",pos:"DST",nfl:"TEN",mv:40},
-  {name:"Kalif Raymond",pos:"WR",nfl:"CHI",mv:40},
+  {name:"Kalif Raymond",pos:"WRTE",nfl:"CHI",mv:40},
   {name:"Nick Folk",pos:"PK",nfl:"ATL",mv:185},
-  {name:"Nick Westbrook-Ikhine",pos:"WR",nfl:"IND",mv:40},
-  {name:"Ben Sinnott",pos:"TE",nfl:"WAS",mv:10,age:24.2},
+  {name:"Nick Westbrook-Ikhine",pos:"WRTE",nfl:"IND",mv:40},
+  {name:"Ben Sinnott",pos:"WRTE",nfl:"WAS",mv:10,age:24.2},
   {name:"Austin Ekeler",pos:"RB",nfl:"FA",mv:40},
-  {name:"Zavion Thomas",pos:"WR",nfl:"CHI",mv:4,age:22.5,rookie:true},
-  {name:"Tommy Tremble",pos:"TE",nfl:"CAR",mv:40},
+  {name:"Zavion Thomas",pos:"WRTE",nfl:"CHI",mv:4,age:22.5,rookie:true},
+  {name:"Tommy Tremble",pos:"WRTE",nfl:"CAR",mv:40},
   {name:"Blake Grupe",pos:"PK",nfl:"IND",mv:170},
   {name:"Phil Mafah",pos:"RB",nfl:"DAL",mv:40},
   {name:"Dameon Pierce",pos:"RB",nfl:"PHI",mv:40},
-  {name:"Ashton Dulin",pos:"WR",nfl:"IND",mv:40},
+  {name:"Ashton Dulin",pos:"WRTE",nfl:"IND",mv:40},
   {name:"Chad Ryland",pos:"PK",nfl:"ARI",mv:200},
-  {name:"Mitchell Evans",pos:"TE",nfl:"CAR",mv:3,age:23.4},
+  {name:"Mitchell Evans",pos:"WRTE",nfl:"CAR",mv:3,age:23.4},
   {name:"Rasheen Ali",pos:"RB",nfl:"BAL",mv:40},
   {name:"Daniel Carlson",pos:"PK",nfl:"LV",mv:195},
   {name:"Joe Flacco",pos:"QB",nfl:"CIN",mv:40},
   {name:"Miami Dolphins",pos:"DST",nfl:"MIA",mv:40},
   {name:"Brandon McManus",pos:"PK",nfl:"FA",mv:220},
   {name:"Ben Sauls",pos:"PK",nfl:"NYG",mv:40},
-  {name:"Jordan Whittington",pos:"WR",nfl:"LAR",mv:3,age:25.9},
-  {name:"Devontez Walker",pos:"WR",nfl:"BAL",mv:40},
-  {name:"John Bates",pos:"TE",nfl:"WAS",mv:40},
-  {name:"Daniel Bellinger",pos:"TE",nfl:"TEN",mv:40},
+  {name:"Jordan Whittington",pos:"WRTE",nfl:"LAR",mv:3,age:25.9},
+  {name:"Devontez Walker",pos:"WRTE",nfl:"BAL",mv:40},
+  {name:"John Bates",pos:"WRTE",nfl:"WAS",mv:40},
+  {name:"Daniel Bellinger",pos:"WRTE",nfl:"TEN",mv:40},
   {name:"Joey Slye",pos:"PK",nfl:"TEN",mv:190},
   {name:"Jake Moody",pos:"PK",nfl:"WAS",mv:40},
   {name:"Jam Miller",pos:"RB",nfl:"NE",mv:40},
-  {name:"CJ Daniels",pos:"WR",nfl:"LAR",mv:6,age:24.6,rookie:true},
+  {name:"CJ Daniels",pos:"WRTE",nfl:"LAR",mv:6,age:24.6,rookie:true},
   {name:"Kyle Juszczyk",pos:"RB",nfl:"SF",mv:40},
   {name:"Damien Martinez",pos:"RB",nfl:"GB",mv:40},
   {name:"Ryan Fitzgerald",pos:"PK",nfl:"CAR",mv:175},
-  {name:"Dyami Brown",pos:"WR",nfl:"WAS",mv:40},
-  {name:"Zach Ertz",pos:"TE",nfl:"FA",mv:40},
+  {name:"Dyami Brown",pos:"WRTE",nfl:"WAS",mv:40},
+  {name:"Zach Ertz",pos:"WRTE",nfl:"FA",mv:40},
   {name:"Terrell Jennings",pos:"RB",nfl:"NE",mv:40},
-  {name:"Malik Benson",pos:"WR",nfl:"LV",mv:4,age:23.8,rookie:true},
+  {name:"Malik Benson",pos:"WRTE",nfl:"LV",mv:4,age:23.8,rookie:true},
   {name:"Jameis Winston",pos:"QB",nfl:"NYG",mv:40},
   {name:"Sione Vaki",pos:"RB",nfl:"DET",mv:40},
-  {name:"Roman Wilson",pos:"WR",nfl:"PIT",mv:40},
+  {name:"Roman Wilson",pos:"WRTE",nfl:"PIT",mv:40},
   {name:"Marcus Mariota",pos:"QB",nfl:"WAS",mv:40},
   {name:"Spencer Shrader",pos:"PK",nfl:"IND",mv:230},
-  {name:"Tommy Myers",pos:"TE",nfl:"FA",mv:40},
-  {name:"Austin Hooper",pos:"TE",nfl:"ATL",mv:40},
+  {name:"Tommy Myers",pos:"WRTE",nfl:"FA",mv:40},
+  {name:"Austin Hooper",pos:"WRTE",nfl:"ATL",mv:40},
   {name:"New York Jets",pos:"DST",nfl:"NYJ",mv:40},
   {name:"Washington Commanders",pos:"DST",nfl:"WAS",mv:40},
-  {name:"Xavier Restrepo",pos:"WR",nfl:"TEN",mv:40},
-  {name:"Greg Dortch",pos:"WR",nfl:"DET",mv:40},
+  {name:"Xavier Restrepo",pos:"WRTE",nfl:"TEN",mv:40},
+  {name:"Greg Dortch",pos:"WRTE",nfl:"DET",mv:40},
   {name:"Cade Klubnik",pos:"QB",nfl:"NYJ",mv:12,age:22.8,rookie:true},
-  {name:"Jonnu Smith",pos:"TE",nfl:"FA",mv:40},
+  {name:"Jonnu Smith",pos:"WRTE",nfl:"FA",mv:40},
   {name:"Zavier Scott",pos:"RB",nfl:"MIN",mv:40},
   {name:"Joe Milton III",pos:"QB",nfl:"DAL",mv:40},
   {name:"Jeremy McNichols",pos:"RB",nfl:"WAS",mv:40},
   {name:"Antonio Gibson",pos:"RB",nfl:"FA",mv:40},
-  {name:"Demarcus Robinson",pos:"WR",nfl:"SF",mv:40},
+  {name:"Demarcus Robinson",pos:"WRTE",nfl:"SF",mv:40},
   {name:"Las Vegas Raiders",pos:"DST",nfl:"LV",mv:40},
-  {name:"Deion Burks",pos:"WR",nfl:"IND",mv:3,age:23.6,rookie:true},
+  {name:"Deion Burks",pos:"WRTE",nfl:"IND",mv:3,age:23.6,rookie:true},
   {name:"Khalil Herbert",pos:"RB",nfl:"SF",mv:40},
-  {name:"Marlin Klein",pos:"TE",nfl:"HOU",mv:6},
-  {name:"Brandin Cooks",pos:"WR",nfl:"FA",mv:40},
-  {name:"Taysom Hill",pos:"TE",nfl:"FA",mv:40},
-  {name:"Tyler Lockett",pos:"WR",nfl:"LV",mv:40},
+  {name:"Marlin Klein",pos:"WRTE",nfl:"HOU",mv:6},
+  {name:"Brandin Cooks",pos:"WRTE",nfl:"FA",mv:40},
+  {name:"Taysom Hill",pos:"WRTE",nfl:"FA",mv:40},
+  {name:"Tyler Lockett",pos:"WRTE",nfl:"LV",mv:40},
   {name:"Tyler Goodson",pos:"RB",nfl:"ATL",mv:40},
-  {name:"DeAndre Hopkins",pos:"WR",nfl:"BAL",mv:40},
+  {name:"DeAndre Hopkins",pos:"WRTE",nfl:"BAL",mv:40},
   {name:"Dylan Laube",pos:"RB",nfl:"LV",mv:40},
-  {name:"Mitch Tinsley",pos:"WR",nfl:"CIN",mv:40},
-  {name:"Jahdae Walker",pos:"WR",nfl:"CHI",mv:40},
-  {name:"Will Kacmarek",pos:"TE",nfl:"MIA",mv:40},
-  {name:"Colbie Young",pos:"WR",nfl:"CIN",mv:40},
+  {name:"Mitch Tinsley",pos:"WRTE",nfl:"CIN",mv:40},
+  {name:"Jahdae Walker",pos:"WRTE",nfl:"CHI",mv:40},
+  {name:"Will Kacmarek",pos:"WRTE",nfl:"MIA",mv:40},
+  {name:"Colbie Young",pos:"WRTE",nfl:"CIN",mv:40},
   {name:"Miles Sanders",pos:"RB",nfl:"FA",mv:40},
   {name:"Raheem Mostert",pos:"RB",nfl:"LV",mv:40},
-  {name:"Theo Wease Jr.",pos:"WR",nfl:"MIA",mv:40},
-  {name:"Elijah Moore",pos:"WR",nfl:"PHI",mv:40},
-  {name:"Odell Beckham Jr.",pos:"WR",nfl:"NYG",mv:40},
+  {name:"Theo Wease Jr.",pos:"WRTE",nfl:"MIA",mv:40},
+  {name:"Elijah Moore",pos:"WRTE",nfl:"PHI",mv:40},
+  {name:"Odell Beckham Jr.",pos:"WRTE",nfl:"NYG",mv:40},
   {name:"Robert Henry Jr.",pos:"RB",nfl:"WAS",mv:40},
-  {name:"Josh Oliver",pos:"TE",nfl:"MIN",mv:40},
-  {name:"Tai Felton",pos:"WR",nfl:"MIN",mv:40},
-  {name:"Xavier Smith",pos:"WR",nfl:"LAR",mv:40},
-  {name:"Diontae Johnson",pos:"WR",nfl:"FA",mv:40},
-  {name:"Jermaine Burton",pos:"WR",nfl:"FA",mv:40},
+  {name:"Josh Oliver",pos:"WRTE",nfl:"MIN",mv:40},
+  {name:"Tai Felton",pos:"WRTE",nfl:"MIN",mv:40},
+  {name:"Xavier Smith",pos:"WRTE",nfl:"LAR",mv:40},
+  {name:"Diontae Johnson",pos:"WRTE",nfl:"FA",mv:40},
+  {name:"Jermaine Burton",pos:"WRTE",nfl:"FA",mv:40},
   {name:"Hunter Luepke",pos:"RB",nfl:"DAL",mv:40},
-  {name:"Adam Trautman",pos:"TE",nfl:"DEN",mv:40},
+  {name:"Adam Trautman",pos:"WRTE",nfl:"DEN",mv:40},
   {name:"Sincere McCormick",pos:"RB",nfl:"SF",mv:40},
-  {name:"Jackson Hawes",pos:"TE",nfl:"BUF",mv:40},
+  {name:"Jackson Hawes",pos:"WRTE",nfl:"BUF",mv:40},
   {name:"Kalel Mullings",pos:"RB",nfl:"TEN",mv:40},
-  {name:"Marquez Valdes-Scantling",pos:"WR",nfl:"DAL",mv:40},
+  {name:"Marquez Valdes-Scantling",pos:"WRTE",nfl:"DAL",mv:40},
   {name:"Jalen Milroe",pos:"QB",nfl:"SEA",mv:16,age:23.7},
-  {name:"Mo Alie-Cox",pos:"TE",nfl:"IND",mv:40},
-  {name:"Nate Boerkircher",pos:"TE",nfl:"JAC",mv:40},
-  {name:"David Sills V",pos:"WR",nfl:"TB",mv:40},
+  {name:"Mo Alie-Cox",pos:"WRTE",nfl:"IND",mv:40},
+  {name:"Nate Boerkircher",pos:"WRTE",nfl:"JAC",mv:40},
+  {name:"David Sills V",pos:"WRTE",nfl:"TB",mv:40},
   {name:"Quinn Ewers",pos:"QB",nfl:"MIA",mv:12,age:23.3},
-  {name:"Tanner Koziol",pos:"TE",nfl:"JAC",mv:5},
-  {name:"Elijah Higgins",pos:"TE",nfl:"ARI",mv:40},
+  {name:"Tanner Koziol",pos:"WRTE",nfl:"JAC",mv:5},
+  {name:"Elijah Higgins",pos:"WRTE",nfl:"ARI",mv:40},
   {name:"Frank Gore Jr.",pos:"RB",nfl:"BUF",mv:40},
-  {name:"Michael Woods II",pos:"WR",nfl:"DEN",mv:40},
+  {name:"Michael Woods II",pos:"WRTE",nfl:"DEN",mv:40},
   {name:"Myles Montgomery",pos:"RB",nfl:"FA",mv:40},
-  {name:"Van Jefferson",pos:"WR",nfl:"WAS",mv:40},
+  {name:"Van Jefferson",pos:"WRTE",nfl:"WAS",mv:40},
   {name:"AJ Dillon",pos:"RB",nfl:"CAR",mv:40},
   {name:"Riley Leonard",pos:"QB",nfl:"IND",mv:40},
-  {name:"Jimmy Horn Jr.",pos:"WR",nfl:"CAR",mv:40},
-  {name:"Tim Patrick",pos:"WR",nfl:"NYJ",mv:40},
+  {name:"Jimmy Horn Jr.",pos:"WRTE",nfl:"CAR",mv:40},
+  {name:"Tim Patrick",pos:"WRTE",nfl:"NYJ",mv:40},
   {name:"Gardner Minshew II",pos:"QB",nfl:"ARI",mv:40},
   {name:"Roman Hemby",pos:"RB",nfl:"LV",mv:4},
-  {name:"Luke Schoonmaker",pos:"TE",nfl:"DAL",mv:40},
+  {name:"Luke Schoonmaker",pos:"WRTE",nfl:"DAL",mv:40},
   {name:"Jaydn Ott",pos:"RB",nfl:"KC",mv:40},
   {name:"Miles Davis",pos:"RB",nfl:"CAR",mv:40},
   {name:"Reggie Gilliam",pos:"RB",nfl:"NE",mv:40},
   {name:"Jaret Patterson",pos:"RB",nfl:"LAC",mv:40},
   {name:"Trey Lance",pos:"QB",nfl:"LAC",mv:40},
-  {name:"JuJu Smith-Schuster",pos:"WR",nfl:"NYG",mv:40},
-  {name:"Lil'Jordan Humphrey",pos:"WR",nfl:"DEN",mv:40},
+  {name:"JuJu Smith-Schuster",pos:"WRTE",nfl:"NYG",mv:40},
+  {name:"Lil'Jordan Humphrey",pos:"WRTE",nfl:"DEN",mv:40},
   {name:"Arizona Cardinals",pos:"DST",nfl:"ARI",mv:40}
 ];
 
@@ -2632,7 +2630,7 @@ const FP_NOTES = {"Jahmyr Gibbs":"Last year, Jahmyr Gibbs finished as the RB3 in
 // WR/TE and RB/WR/TE flex slots as everyone else, not a dedicated TE slot, so a
 // top TE (McBride, Bowers) prices off the WR curve instead, landing him where you'd
 // actually expect, upper teens to low $20s, not off in his own disconnected tier.
-const POS_TOP_DOLLAR = { QB:12, RB:32, WR:32, PK:3, DST:3 };
+const POS_TOP_DOLLAR = { QB:12, RB:32, WRTE:32, PK:3, DST:3 };
 const POS_SCALE = {};
 function rebuildPosScale(){
   Object.keys(POS_TOP_DOLLAR).forEach(pos=>{
@@ -2643,7 +2641,7 @@ function rebuildPosScale(){
 }
 rebuildPosScale();
 function derivedDollar(mv, pos){
-  const scale = POS_SCALE[pos] || POS_SCALE.WR;
+  const scale = POS_SCALE[pos] || POS_SCALE.WRTE;
   return Math.max(1, Math.round(mv / scale));
 }
 /* Real analyst auction dollars win where they exist; the derived curve covers
@@ -3524,7 +3522,7 @@ function renderTeamDetail(){
     }).join('');
     return `<tr class="${p.deadCap?'dead-cap':''}">
       <td class="player-name">${p.name}${p.deadCap?'<span class="dead-tag">Dead cap</span>':''}${p.mv?`<span class="pos-tag" style="margin-left:4px;color:var(--gold);border-color:rgba(229,181,103,0.3);background:rgba(229,181,103,0.1);">MV ${p.mv}</span>`:''}</td>
-      <td>${p.pos?`<span class="pos-tag pos-${p.pos}">${p.pos}</span>`:''}</td>
+      <td>${p.pos?`<span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>`:''}</td>
       <td>$${p.base}</td>
       ${cells}
       <td class="actions">
@@ -3779,9 +3777,15 @@ function computeTrade(){
 }
 
 /* ---------- TRADE FINDER (My Team only) ---------- */
-const POSITIONS = ["QB","RB","WR","TE","PK","DST"];
+const POSITIONS = ["QB","RB","WRTE","PK","DST"];
+/* There is no dedicated TE slot in this league -- WR and TE compete for the
+   exact same WRTE1/WRTE2/flex slots, so they are one position internally
+   (pos:"WRTE"), not two. "WRTE" has no slash so it stays safe as a CSS class
+   token (pos-${p.pos}) and an object key; this is the one place that turns
+   it back into the "WR/TE" text a person actually reads. */
+function posLabel(pos){ return pos==='WRTE' ? 'WR/TE' : pos; }
 function posCounts(team){
-  const counts = {QB:0,RB:0,WR:0,TE:0,PK:0,DST:0};
+  const counts = {QB:0,RB:0,WRTE:0,PK:0,DST:0};
   team.players.filter(p=>!p.deadCap).forEach(p=>{
     if(p.pos && counts[p.pos]!==undefined) counts[p.pos]++;
   });
@@ -3798,20 +3802,20 @@ function renderFinderView(){
   const rows = POSITIONS.map(pos=>{
     const n = counts[pos];
     const flag = n===0 ? ' &middot; needs attention' : (n===1 ? ' &middot; thin' : '');
-    return `<tr><td>${pos}</td><td class="${n<=1?'':'hero'}">${n}${flag}</td></tr>`;
+    return `<tr><td>${posLabel(pos)}</td><td class="${n<=1?'':'hero'}">${n}${flag}</td></tr>`;
   }).join('');
   document.getElementById('finderBreakdown').innerHTML =
     `<thead><tr><th>Position</th><th>Active players</th></tr></thead><tbody>${rows}</tbody>`;
 
   // weakest position(s): lowest count, ties broken by roster-relevance order
-  const priority = ["WR","RB","QB","TE","PK","DST"];
+  const priority = ["WRTE","RB","QB","PK","DST"];
   let weakest = priority[0];
   let weakestCount = Infinity;
   priority.forEach(pos=>{
     if(counts[pos] < weakestCount){ weakestCount = counts[pos]; weakest = pos; }
   });
   document.getElementById('finderNeedNote').textContent =
-    `Your thinnest position right now is ${weakest} (${weakestCount} active player${weakestCount===1?'':'s'}). Showing every ${weakest} on another roster.`;
+    `Your thinnest position right now is ${posLabel(weakest)} (${weakestCount} active player${weakestCount===1?'':'s'}). Showing every ${posLabel(weakest)} on another roster.`;
 
   // targets across the league at that position
   const targets = [];
@@ -3977,7 +3981,7 @@ function addCustomPlayer({name, pos, nfl, price, age}){
   if(!pos) return { ok:false, why:'A position is needed.' };
   if(DRAFT_POOL.some(p=>p.name.toLowerCase()===name.toLowerCase()))
     return { ok:false, why:`${name} is already in the pool.` };
-  const scale = POS_SCALE[pos] || POS_SCALE.WR || 1;
+  const scale = POS_SCALE[pos] || POS_SCALE.WRTE || 1;
   const mv = Math.max(1, Math.round(Math.max(1, price||1) * scale));
   const rec = { name, pos, nfl:(nfl||'FA').toUpperCase(), mv, custom:true };
   if(typeof age === 'number' && age > 0) rec.age = age;
@@ -4035,7 +4039,7 @@ function effPosCounts(teamIdx){
 function effTeamNeedsPos(teamIdx, pos){
   const counts = effPosCounts(teamIdx);
   if(pos in STARTER_REQ) return counts[pos] < STARTER_REQ[pos];
-  if(pos==='RB' || pos==='WR' || pos==='TE') return (counts.RB + counts.WR + counts.TE) < RBWR_FLEX_TOTAL;
+  if(pos==='RB' || pos==='WRTE') return (counts.RB + counts.WRTE) < RBWR_FLEX_TOTAL;
   return false;
 }
 function teamIdxOf(owner){ return state.teams.findIndex(t=>t.owner===owner); }
@@ -4107,7 +4111,7 @@ function qualityCountAtPos(teamIdx, pos){
   }).length;
 }
 function demandStateFor(teamIdx, pos){
-  if(!['QB','RB','WR','TE'].includes(pos)){
+  if(!['QB','RB','WRTE'].includes(pos)){
     // PK/DST: 1 starter + 1 earmarked bench cover (see BENCH_SLOTS below) is
     // the intended full complement, not "stacked" -- planBudget() deliberately
     // budgets for that 2nd one (bye-week cover). Only a genuine 3rd is excess.
@@ -4115,18 +4119,7 @@ function demandStateFor(teamIdx, pos){
     if(held >= 2) return 'stacked';
     return effTeamNeedsPos(teamIdx,pos) ? 'hungry' : 'moderate';
   }
-  /* WR and TE share the same 2 WR/TE starter slots (plus the flex) --
-     STARTER_REQ has no dedicated TE slot at all, only QB/PK/DST do. Reading
-     TE demand off TE-only supply called a team "hungry" at TE the moment it
-     held zero TEs, even sitting on two elite WRs already covering both
-     shared slots. Sum quality across the same substitutePositions() group
-     tierInfoFor() already uses for this exact reason (a WR and a TE are
-     genuine substitutes here), so a team well-stocked in one correctly
-     reads as covered in the other, not as two independent needs. */
-  const group = substitutePositions(pos);
-  const q = group.length > 1
-    ? group.reduce((sum,gp)=>sum + qualityCountAtPos(teamIdx, gp), 0)
-    : qualityCountAtPos(teamIdx, pos);
+  const q = qualityCountAtPos(teamIdx, pos);
   if(q>=2) return 'stacked';
   if(q===0) return 'hungry';
   return 'moderate';
@@ -4255,9 +4248,9 @@ function mockHeldFor(teamIdx){
    a PK/DST cover (see BENCH_SLOTS further down the file). */
 function mockFlexBudgetAllows(teamIdx, pos){
   const held = mockHeldFor(teamIdx);
-  const counts = {RB:0,WR:0,TE:0};
+  const counts = {RB:0,WRTE:0};
   held.forEach(p=>{ if(counts[p.pos]!==undefined) counts[p.pos]++; });
-  const used = counts.RB+counts.WR+counts.TE;
+  const used = counts.RB+counts.WRTE;
   const budget = RBWR_FLEX_TOTAL + BENCH_SLOTS.filter(s=>!s.earmark).length;
   return used < budget;
 }
@@ -4273,7 +4266,7 @@ function mockRivalCeilingFor(teamIdx, player){
   const held = mockHeldFor(teamIdx);
   if(player.pos==='PK' || player.pos==='DST' || player.pos==='QB'){
     if(held.filter(p=>p.pos===player.pos).length >= 2) return 0;   // 1 starter + 1 bench cover, same as the live tool's cap
-  } else if(player.pos==='RB' || player.pos==='WR' || player.pos==='TE'){
+  } else if(player.pos==='RB' || player.pos==='WRTE'){
     if(!mockFlexBudgetAllows(teamIdx, player.pos)) return 0;
   }
 
@@ -4307,14 +4300,14 @@ function mockChooseNominee(teamIdx, style){
   if(!pool.length) return null;
   if(style==='need'){
     const held = mockHeldFor(teamIdx);
-    const counts = {QB:0,RB:0,WR:0,TE:0,PK:0,DST:0};
+    const counts = {QB:0,RB:0,WRTE:0,PK:0,DST:0};
     held.forEach(p=>{ if(counts[p.pos]!==undefined) counts[p.pos]++; });
     const needs = [];
     if(counts.QB<1) needs.push('QB');
     if(counts.PK<1) needs.push('PK');
     if(counts.DST<1) needs.push('DST');
     if(counts.RB<3) needs.push('RB');
-    if(counts.WR<3) needs.push('WR');
+    if(counts.WRTE<5) needs.push('WRTE');
     const match = needs.length ? pool.find(p=>needs.includes(p.pos)) : null;
     return match || pool[0];
   }
@@ -4504,7 +4497,7 @@ function mockAdvanceNomination(){
   }
   const nominee = mockChooseNominee(idx, mockPersonalities[idx].nominationStyle);
   if(!nominee){ mockAnnounce('No players left that anyone can use -- mock draft complete.'); return; }
-  mockAnnounce(`${state.teams[idx].owner} nominates ${nominee.name} (${nominee.pos}) -- opening bid $1.`);
+  mockAnnounce(`${state.teams[idx].owner} nominates ${nominee.name} (${posLabel(nominee.pos)}) -- opening bid $1.`);
   putOnTheClock(nominee.name);
 }
 
@@ -4642,7 +4635,7 @@ function mockBuildRecap(p, teamIdx, price){
       ${p?faceHTML(p,40):''}
       <div style="min-width:180px;">
         <div style="font-weight:700;letter-spacing:.04em;color:${wonByMe?'var(--jade)':'var(--gold)'};">SOLD &middot; $${price}</div>
-        <div style="font-weight:700;font-size:15px;margin-top:2px;">${name} ${p?`<span class="pos-tag pos-${p.pos}">${p.pos}</span>`:''}</div>
+        <div style="font-weight:700;font-size:15px;margin-top:2px;">${name} ${p?`<span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>`:''}</div>
       </div>
       <p class="panel-sub" style="margin:0;flex:1;min-width:220px;">${flavor}</p>
       <span class="row-act" tabindex="0" role="button" id="mockRecapSkipBtn" title="Skip the pause and go straight to the next nomination">next now</span>
@@ -4690,7 +4683,7 @@ function renderMockAuction(){
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:12px 14px;">
       ${p?faceHTML(p,40):''}
       <div style="min-width:170px;">
-        <div style="font-weight:700;font-size:15px;">${p?p.name:mockAuction.playerName} ${p?`<span class="pos-tag pos-${p.pos}">${p.pos}</span>`:''}</div>
+        <div style="font-weight:700;font-size:15px;">${p?p.name:mockAuction.playerName} ${p?`<span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>`:''}</div>
         <div class="panel-sub" style="margin:2px 0 0;">${isMeLeading?'You lead':`${leader?leader.owner:'?'} leads`}</div>
       </div>
       <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:var(--jade);">$${mockAuction.price}</div>
@@ -4884,7 +4877,7 @@ function renderEndgame(){
   const lines = [];
   lines.push(`$${e.cap} left across ${e.slots} slot${e.slots===1?'':'s'}. Every slot needs a body, so the most you can put on any one player is <strong>$${e.maxOne}</strong> and only $${Math.max(0,e.spendable)} of your cap is really free.`);
   if(e.best){
-    lines.push(`Best you can still reach: <b data-plan-pick="${e.best.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.best.p.name}</b> <span class="pos-tag pos-${e.best.p.pos}">${e.best.p.pos}</span> at $${e.best.d}, which would leave $${e.cap-e.best.d} for ${e.slots-1} slot${e.slots-1===1?'':'s'}.`);
+    lines.push(`Best you can still reach: <b data-plan-pick="${e.best.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.best.p.name}</b> <span class="pos-tag pos-${e.best.p.pos}">${posLabel(e.best.p.pos)}</span> at $${e.best.d}, which would leave $${e.cap-e.best.d} for ${e.slots-1} slot${e.slots-1===1?'':'s'}.`);
   }
   if(e.bestPair && e.best && e.bestPair.value > e.best.p.mv*1.15){
     lines.push(`Two beats one here: <b data-plan-pick="${e.bestPair.a.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.bestPair.a.p.name}</b> at $${e.bestPair.a.d} plus <b data-plan-pick="${e.bestPair.b.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;">${e.bestPair.b.p.name}</b> at $${e.bestPair.b.d} costs $${e.bestPair.cost} and gets you more than the single best player would.`);
@@ -4926,15 +4919,15 @@ function renderBoardState(){
 
   const depRows = dep.filter(d=>!['PK','DST'].includes(d.pos)).map(d=>
     `<div class="budget-row" title="${d.quality} players in the top two tiers that fill a ${d.slot} slot, against ${d.needing} teams that still need one">
-      <span class="b-name">${d.pos}</span>
+      <span class="b-name">${posLabel(d.pos)}</span>
       <span class="b-nums"><strong style="color:${col(d.state)}">${d.quality}</strong> <span style="color:var(--chalk-3);font-size:11px;">left vs ${d.needing} needing</span></span>
     </div>`).join('');
 
   const thinnest = dep.find(d=>!['PK','DST'].includes(d.pos));
   const note = thinnest
     ? (thinnest.state==='gone'
-        ? `<span style="color:var(--coral)">Top-tier ${thinnest.pos}s are effectively gone. Anyone still shopping there is buying a worse player at the same price.</span>`
-        : `<span style="color:var(--chalk-2)">${thinnest.pos} is the thinnest position on the board right now, ${thinnest.quality} quality options for ${thinnest.needing} teams.</span>`)
+        ? `<span style="color:var(--coral)">Top-tier ${posLabel(thinnest.pos)}s are effectively gone. Anyone still shopping there is buying a worse player at the same price.</span>`
+        : `<span style="color:var(--chalk-2)">${posLabel(thinnest.pos)} is the thinnest position on the board right now, ${thinnest.quality} quality options for ${thinnest.needing} teams.</span>`)
     : '';
 
   const fpb = firepowerBoard().slice(0,5);
@@ -4991,8 +4984,8 @@ function renderSituationStrip(){
 
   const r = runState();
   let runChip;
-  if(r.active) runChip = `<span style="color:var(--coral)">&#128293; Run on ${r.active.pos}s</span>`;
-  else if(r.coming) runChip = `<span style="color:var(--gold)">&#9888; ${r.coming.pos}s thinning</span>`;
+  if(r.active) runChip = `<span style="color:var(--coral)">&#128293; Run on ${posLabel(r.active.pos)}s</span>`;
+  else if(r.coming) runChip = `<span style="color:var(--gold)">&#9888; ${posLabel(r.coming.pos)}s thinning</span>`;
   else runChip = `<span style="color:var(--chalk-3)">No run</span>`;
 
   const infl = inflationState();
@@ -5015,8 +5008,8 @@ function renderSituationStrip(){
   const gone = dep.find(d=>d.state==='gone');
   const thin = dep.find(d=>d.state==='thinnest');
   let boardChip;
-  if(gone) boardChip = `<span style="color:var(--coral)">&#128683; ${gone.pos}s gone</span>`;
-  else if(thin) boardChip = `<span style="color:var(--gold)">${thin.pos}s thin</span>`;
+  if(gone) boardChip = `<span style="color:var(--coral)">&#128683; ${posLabel(gone.pos)}s gone</span>`;
+  else if(thin) boardChip = `<span style="color:var(--gold)">${posLabel(thin.pos)}s thin</span>`;
   else boardChip = `<span style="color:var(--chalk-3)">Board balanced</span>`;
 
   el.innerHTML = [runChip, inflChip, moneyChip, boardChip].join('<span style="color:var(--line);">&middot;</span>');
@@ -5030,13 +5023,13 @@ function renderRunAlert(){
   const blocks = [];
   if(r.active){
     blocks.push(`<div class="panel" style="border-color:rgba(229,103,95,.45);background:linear-gradient(180deg,rgba(229,103,95,.10),var(--surface));margin-bottom:12px;">
-      <h3 style="color:var(--coral);margin-bottom:4px;">Run on ${r.active.pos}s</h3>
+      <h3 style="color:var(--coral);margin-bottom:4px;">Run on ${posLabel(r.active.pos)}s</h3>
       <p class="panel-sub" style="margin:0;">${r.active.label}</p>
     </div>`);
   }
   if(r.coming){
     blocks.push(`<div class="panel" style="border-color:rgba(229,181,103,.45);background:linear-gradient(180deg,rgba(229,181,103,.09),var(--surface));margin-bottom:12px;">
-      <h3 style="color:var(--gold);margin-bottom:4px;">${r.coming.pos}s are about to go</h3>
+      <h3 style="color:var(--gold);margin-bottom:4px;">${posLabel(r.coming.pos)}s are about to go</h3>
       <p class="panel-sub" style="margin:0;">${r.coming.label}</p>
     </div>`);
   }
@@ -5099,7 +5092,7 @@ function renderSolver(suffix){
       <span class="b-name" style="flex:0 0 96px;color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;">${x.slot.label}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;">
         <b data-plan-pick="${esc}" style="color:var(--chalk);cursor:pointer;font-weight:600;">${x.p.name}</b>
-        <span class="pos-tag pos-${x.p.pos}" style="margin-left:4px;">${x.p.pos}</span>
+        <span class="pos-tag pos-${x.p.pos}" style="margin-left:4px;">${posLabel(x.p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${x.p.nfl}${bye?' &middot; bye '+bye:''}</span>
         ${tag==='target'?'<span class="dead-tag" style="color:var(--jade);border-color:rgba(63,182,139,.45);">yours</span>':''}
       </span>
@@ -5269,12 +5262,12 @@ function renderPoolTierRail(){
   const wrap = document.getElementById('poolTierBody');
   if(!wrap) return;
   const taken = draftedNamesSet();
-  const order = ['QB','RB','WR','TE','PK','DST'];
+  const order = ['QB','RB','WRTE','PK','DST'];
   const pos = order.includes(poolTierSelectedPos) ? poolTierSelectedPos : order[0];
   poolTierSelectedPos = pos;
 
   const tabsHTML = `<div class="side-tabs" id="poolTierTabs">${order.map(o=>
-    `<button class="side-tab ${o===pos?'active':''}" data-pos="${o}">${o}</button>`
+    `<button class="side-tab ${o===pos?'active':''}" data-pos="${o}">${posLabel(o)}</button>`
   ).join('')}</div>`;
 
   // buildTiersFrom() now clusters on real price rather than the model's own
@@ -5329,7 +5322,7 @@ function renderPoolTierRail(){
           ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show ${hiddenCount} more, ${hiddenTierCount} more tier${hiddenTierCount===1?'':'s'}</span>`
           : (poolTierExpanded && tiers.length>1 ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show less</span>` : '');
 
-        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${pos}</span><span class="pt-pos-count">${remainingAtPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
+        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${posLabel(pos)}</span><span class="pt-pos-count">${remainingAtPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
       })();
 
   wrap.innerHTML = tabsHTML + body;
@@ -5371,7 +5364,7 @@ function bindAddPlayer(){
     btn.dataset.bound='1';
     btn.addEventListener('click', ()=>{
       const name = (document.getElementById('newPoolName')||{}).value || '';
-      const pos  = (document.getElementById('newPoolPos')||{}).value || 'WR';
+      const pos  = (document.getElementById('newPoolPos')||{}).value || 'WRTE';
       const nfl  = (document.getElementById('newPoolTeam')||{}).value || '';
       const price= parseInt((document.getElementById('newPoolPrice')||{}).value,10) || 1;
       const ageV = parseFloat((document.getElementById('newPoolAge')||{}).value);
@@ -5731,7 +5724,7 @@ function renderSearchMatches(keepHi){
     const rd = myRead(p.name);
     const tag = rd ? ` ${ratePillHTML(rd, true)}` : '';
     return `<div class="match-row ${i===searchHi?'on':''}" data-pick="${p.name.replace(/"/g,'&quot;')}">
-      <span style="display:flex;align-items:center;gap:9px;min-width:0;">${faceHTML(p,24)}<span style="min-width:0;"><b>${p.name}</b> <span class="pos-tag pos-${p.pos}">${p.pos}</span>
+      <span style="display:flex;align-items:center;gap:9px;min-width:0;">${faceHTML(p,24)}<span style="min-width:0;"><b>${p.name}</b> <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,13)} ${p.nfl}</span>${tag}</span></span>
       <span style="font-family:'JetBrains Mono',monospace;font-weight:700;">$${d}</span>
     </div>`;
@@ -5792,7 +5785,7 @@ function renderBidPanel(){
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
-      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${p.pos}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}</h4>
+      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}</h4>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
 
@@ -5990,7 +5983,7 @@ function updateBidDynamicParts(){
     } else { altBlock.innerHTML=''; }
   }
   document.getElementById('bidStaticNote').innerHTML =
-    `Scarcity-adjusted $${marketAdjusted} \u00b7 your ${p.pos} demand: ${demandLabels[myDemand]}` +
+    `Scarcity-adjusted $${marketAdjusted} \u00b7 your ${posLabel(p.pos)} demand: ${demandLabels[myDemand]}` +
     (exp ? ` \u00b7 <span style="color:${exp.cls==='ok'?'var(--jade)':(exp.cls==='bad'?'var(--coral)':'var(--chalk-2)')}">${exp.label}</span>` : '');
 
   const readout = document.getElementById('bidReadout');
@@ -6007,13 +6000,13 @@ function updateBidDynamicParts(){
     else {
       const cls = oc.pct>=0.01 ? 'ok' : (oc.pct<=-0.01 ? 'bad' : '');
       const alt = oc.alt && oc.alt.length
-        ? ` Passing, the slot goes to ${oc.alt.map(x=>`${x.name} (${x.pos})`).join(' or ')} instead.` : '';
+        ? ` Passing, the slot goes to ${oc.alt.map(x=>`${x.name} (${posLabel(x.pos)})`).join(' or ')} instead.` : '';
       if(oc.mustFill){
         ocBox.className = 'trade-verdict '+(oc.gain>=0?'ok':'bad');
         ocBox.style.marginTop = '12px';
         ocBox.innerHTML = oc.gain>=0
-          ? `<strong>You have to field a ${p.pos}.</strong> At $${currentBidValue+1} he is the best use of a slot you cannot leave empty.`
-          : `<strong>You have to field a ${p.pos}, but not this one.</strong>${alt}`;
+          ? `<strong>You have to field a ${posLabel(p.pos)}.</strong> At $${currentBidValue+1} he is the best use of a slot you cannot leave empty.`
+          : `<strong>You have to field a ${posLabel(p.pos)}, but not this one.</strong>${alt}`;
       } else {
         ocBox.className = 'trade-verdict '+cls;
         ocBox.style.marginTop = '12px';
@@ -6043,7 +6036,7 @@ function updateBidDynamicParts(){
   const alternatives = pricedOut ? nextBestAtPosition(p.pos, p.name) : [];
   document.getElementById('bidAltBlock').innerHTML = alternatives.length ? `
     <div class="trade-verdict" style="margin-top:12px;">
-      <strong>Priced out? Next best at ${p.pos}:</strong><br>
+      <strong>Priced out? Next best at ${posLabel(p.pos)}:</strong><br>
       ${alternatives.map(a=>`${a.name} (${a.nfl}) \u00b7 suggested $${suggestedDollar(a.mv,a.pos,a.name)}`).join('<br>')}
     </div>` : '';
 
@@ -6063,7 +6056,7 @@ function renderDraftHistory(){
     const diffLabel = diff===0 ? 'on the number' : (diff>0 ? `$${diff} over suggested` : `$${Math.abs(diff)} under suggested`);
     return `<div class="pick-row">
       <div class="pick-row-top">
-        <span class="pr-name">${pick.name} <span class="pos-tag pos-${pick.pos}">${pick.pos}</span></span>
+        <span class="pr-name">${pick.name} <span class="pos-tag pos-${pick.pos}">${posLabel(pick.pos)}</span></span>
         <span class="pr-price">$${pick.price}</span>
       </div>
       <div class="pick-row-diff">${diffLabel}</div>
@@ -6133,7 +6126,7 @@ function renderLineupView(){
     `<thead><tr><th>Player</th><th>Pos</th><th>Value</th><th>Status</th></tr></thead><tbody>${
       players.map((p,i)=>`<tr>
         <td>${p.name}</td>
-        <td><span class="pos-tag pos-${p.pos}">${p.pos}</span></td>
+        <td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td>
         <td>${p.mv||0}</td>
         <td><select data-status-idx="${i}" class="lineup-status-select">
           ${STATUS_OPTIONS.map(s=>`<option value="${s}" ${p.status===s?'selected':''}>${s}</option>`).join('')}
@@ -6172,9 +6165,9 @@ function computeAndRenderLineup(players){
   assign('QB', ['QB']);
   assign('RB', ['RB']);
   assign('RB', ['RB']);
-  assign('WR/TE', ['WR','TE']);
-  assign('WR/TE', ['WR','TE']);
-  assign('FLEX (RB/WR/TE)', ['RB','WR','TE']);
+  assign('WR/TE', ['WRTE']);
+  assign('WR/TE', ['WRTE']);
+  assign('FLEX (RB/WR/TE)', ['RB','WRTE']);
   assign('PK', ['PK']);
   assign('DST', ['DST']);
 
@@ -6184,14 +6177,14 @@ function computeAndRenderLineup(players){
         if(!s.player) return `<tr><td>${s.slot}</td><td colspan="3" class="empty-cell">No eligible healthy player</td></tr>`;
         const p = s.player;
         const warn = flagged(p) ? `<span class="dead-tag">${p.status}</span>` : '';
-        return `<tr><td>${s.slot}</td><td>${p.name} <span class="pos-tag pos-${p.pos}">${p.pos}</span> ${warn}</td><td class="hero">${p.mv||0}</td><td></td></tr>`;
+        return `<tr><td>${s.slot}</td><td>${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> ${warn}</td><td class="hero">${p.mv||0}</td><td></td></tr>`;
       }).join('')
     }`;
 
   const bench = players.filter(p=>!used.has(p.name));
   document.getElementById('lineupBenchTable').innerHTML =
     `<thead><tr><th>Player</th><th>Pos</th><th>Value</th><th>Status</th></tr></thead><tbody>${
-      bench.map(p=>`<tr><td>${p.name}</td><td><span class="pos-tag pos-${p.pos}">${p.pos}</span></td><td>${p.mv||0}</td><td>${p.status||'Healthy'}</td></tr>`).join('')
+      bench.map(p=>`<tr><td>${p.name}</td><td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td><td>${p.mv||0}</td><td>${p.status||'Healthy'}</td></tr>`).join('')
       || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
 }
@@ -6277,12 +6270,12 @@ function recommendedTerm(p){
   if(runway >= 6){
     const g = growthRequired(price, 5);
     const econ = termEconomics(price, 5);
-    return { years:5, why:`Age ${age}, roughly ${Math.floor(runway)} productive years ahead of the ${p.pos} decline curve. Five years takes him to $${g.to}, so you are only betting he becomes a $${g.to} player, which is a low bar. If he does not, dropping him costs about $${Math.max(1,Math.ceil(econ.vals[1]*0.1))} a year, which is nothing.` };
+    return { years:5, why:`Age ${age}, roughly ${Math.floor(runway)} productive years ahead of the ${posLabel(p.pos)} decline curve. Five years takes him to $${g.to}, so you are only betting he becomes a $${g.to} player, which is a low bar. If he does not, dropping him costs about $${Math.max(1,Math.ceil(econ.vals[1]*0.1))} a year, which is nothing.` };
   }
   if(runway >= 4) return { years:4, why:`Age ${age}, about ${Math.floor(runway)} strong years left. Four years rides the peak without paying the Year 5 premium on a decline season.` };
-  if(runway >= 3) return { years:3, why:`Age ${age}, roughly ${Math.floor(runway)} years before the ${p.pos} curve turns. Three years is the honest window.` };
-  if(runway >= 2) return { years:2, why:`Age ${age}, close to the ${p.pos} decline age. Two years max.` };
-  return { years:1, why:`Age ${age}, at or past the typical ${p.pos} decline point. One year only, the escalator would punish anything longer.` };
+  if(runway >= 3) return { years:3, why:`Age ${age}, roughly ${Math.floor(runway)} years before the ${posLabel(p.pos)} curve turns. Three years is the honest window.` };
+  if(runway >= 2) return { years:2, why:`Age ${age}, close to the ${posLabel(p.pos)} decline age. Two years max.` };
+  return { years:1, why:`Age ${age}, at or past the typical ${posLabel(p.pos)} decline point. One year only, the escalator would punish anything longer.` };
 }
 
 // what a term actually costs you in total, and what it costs to walk away
@@ -6451,7 +6444,7 @@ function renderPlayerCard(){
         ${faceHTML(p, 56)}
         <div style="min-width:0;">
           <div class="pcard-name">${p.name}</div>
-          <div class="pcard-meta"><span class="pos-tag pos-${p.pos}">${p.pos}</span> &middot; ${logoHTML(p.nfl,14)} ${p.nfl}${bye?' &middot; bye '+bye:''}${typeof p.age==='number'?' &middot; age '+p.age:''}${ti?' &middot; tier '+ti.tier:''}</div>
+          <div class="pcard-meta"><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> &middot; ${logoHTML(p.nfl,14)} ${p.nfl}${bye?' &middot; bye '+bye:''}${typeof p.age==='number'?' &middot; age '+p.age:''}${ti?' &middot; tier '+ti.tier:''}</div>
           <span class="pcard-verdict-chip ${verdict.light}"><span class="dot"></span>${verdict.text.split(' — ')[0]}</span>
         </div>
       </div>
@@ -6536,7 +6529,7 @@ function renderPlayerCard(){
     <div class="pcard-tab-body ${pcardTab==='outlook'?'active':''}" data-pcard-tab-body="outlook">
       ${insight('Production', prod.ppg!==undefined?prod.ppg+' ppg (2025)':null, prod.label)}
       ${insight('Positional runway', null, run.label)}
-      ${sos!==null?insight('Schedule', `${sos} of 32`, `Where 1 is the easiest 2026 schedule for a ${p.pos}.`):''}
+      ${sos!==null?insight('Schedule', `${sos} of 32`, `Where 1 is the easiest 2026 schedule for a ${posLabel(p.pos)}.`):''}
     </div>
 
     <div class="pcard-sec pcard-links">
@@ -6883,8 +6876,8 @@ function walkAwayPrice(player){
    they stay within SPREAD of that leader and the step down from the
    previous player is not a cliff. QB uses a wider spread because only
    one starts, so gaps between QB1 and QB4 matter less than RB1 vs RB4. */
-const TIER_SPREAD = { QB:0.30, TE:0.20, RB:0.18, WR:0.18, PK:0.35, DST:0.35 };
-const TIER_CLIFF  = { QB:0.22, TE:0.16, RB:0.12, WR:0.12, PK:0.30, DST:0.30 };
+const TIER_SPREAD = { QB:0.30, RB:0.18, WRTE:0.18, PK:0.35, DST:0.35 };
+const TIER_CLIFF  = { QB:0.22, RB:0.12, WRTE:0.12, PK:0.30, DST:0.30 };
 
 /* Clusters on real market PRICE (suggestedDollar), not the internal mv
    score. Those two usually track together but genuinely disagree for a real
@@ -7010,7 +7003,7 @@ function renderNominateView(){
     ? `<thead><tr><th>Play</th><th>Player</th><th>Rate</th><th>Why</th></tr></thead><tbody>${
         shown.map(x=>`<tr style="cursor:pointer" data-nom="${x.p.name.replace(/"/g,'&quot;')}">
           <td><span style="color:${badge[x.play]};font-weight:700">${x.play}</span></td>
-          <td>${x.p.name} <span class="pos-tag pos-${x.p.pos}">${x.p.pos}</span></td>
+          <td>${x.p.name} <span class="pos-tag pos-${x.p.pos}">${posLabel(x.p.pos)}</span></td>
           <td class="hero">$${x.d}</td>
           <td style="text-align:left;font-family:'Inter',sans-serif;color:var(--chalk-3);font-size:12px;line-height:1.5;">${x.why}</td>
         </tr>`).join('')
@@ -7040,10 +7033,12 @@ function renderNominateView(){
    1 flex (RB/WR/TE), 1 PK, 1 DST. So a TE and a WR are direct substitutes,
    they compete for identical slots. RB is different: two of its slots are
    RB-only, so a run on backs cannot be solved by buying receivers.       */
+/* Used to merge WR and TE into one substitute group before they became a
+   single position (pos:"WRTE"); now every position is already its own whole
+   group, so this is a stable no-op kept for the ~10 call sites that expect
+   an array back. */
 function substitutePositions(pos){
-  if(pos === 'TE' || pos === 'WR') return ['WR','TE'];  // share the WR/TE and flex slots
-  if(pos === 'RB') return ['RB'];                        // 2 slots only RBs can fill
-  return [pos];                                          // QB, PK, DST have dedicated slots
+  return [pos];
 }
 
 function acceptableAlternatives(p, myIdx){
@@ -7123,28 +7118,25 @@ function supplyRunway(p, myIdx){
   const contenders = rivals.length + 1;                     // rivals plus you
   const cover = comparable.length / Math.max(1, contenders); // substitutes per contender
 
-  const slotName = substitutePositions(p.pos).join('/');
+  const slotName = posLabel(p.pos);
   const tierLabel = myTier >= 0 ? ` at his level (tier ${myTier+1} and the tier below)` : '';
-  const slotNote = (p.pos === 'TE')
-    ? ' (no dedicated TE slot in this league, so receivers fill the same spot)'
-    : '';
 
   let urgency, label;
   if(comparable.length === 0){
     urgency = 'critical';
-    label = `Nothing comparable left at ${slotName}${slotNote}. Pass and you are starting a replacement-level player in that slot.`;
+    label = `Nothing comparable left at ${slotName}. Pass and you are starting a replacement-level player in that slot.`;
   } else if(cover < 0.75){
     urgency = 'critical';
-    label = `Only ${comparable.length} ${slotName} option${comparable.length===1?'':'s'} left${tierLabel} for ${contenders} teams that need one${slotNote}. The odds say you do not get another shot at this level. Foot down.`;
+    label = `Only ${comparable.length} ${slotName} option${comparable.length===1?'':'s'} left${tierLabel} for ${contenders} teams that need one. The odds say you do not get another shot at this level. Foot down.`;
   } else if(cover < 1.4){
     urgency = 'high';
-    label = `${comparable.length} ${slotName} options left${tierLabel} against ${contenders} teams needing one${slotNote}. Tight. Losing this probably costs you a full tier.`;
+    label = `${comparable.length} ${slotName} options left${tierLabel} against ${contenders} teams needing one. Tight. Losing this probably costs you a full tier.`;
   } else if(cover < 3){
     urgency = 'medium';
-    label = `${comparable.length} ${slotName} options left${tierLabel} for ${contenders} interested teams${slotNote}. You would likely get another chance, but not many.`;
+    label = `${comparable.length} ${slotName} options left${tierLabel} for ${contenders} interested teams. You would likely get another chance, but not many.`;
   } else {
     urgency = 'low';
-    label = `${comparable.length} ${slotName} options still on the board${tierLabel} for ${contenders} interested teams${slotNote}. Passing costs you very little, someone similar comes back around.`;
+    label = `${comparable.length} ${slotName} options still on the board${tierLabel} for ${contenders} interested teams. Passing costs you very little, someone similar comes back around.`;
   }
 
   return { alts, rivals, fallback, dropPct, urgency, label, winnable, comparable, cover,
@@ -7298,7 +7290,7 @@ function inflatedValue(p){
   const posRate = inf.posRates[p.pos];
   const use = (posRate !== undefined) ? posRate : (inf.rate ?? 1);
   const basis = (posRate !== undefined)
-    ? `${p.pos} prices are running at ${Math.round(posRate*100)}% of value`
+    ? `${posLabel(p.pos)} prices are running at ${Math.round(posRate*100)}% of value`
     : `the room is running at ${Math.round((inf.rate??1)*100)}% of value`;
   // clamp: the arithmetic gets silly on small samples
   const mult = Math.max(0.6, Math.min(1.6, use));
@@ -7352,19 +7344,16 @@ function replacementLevel(pos){
      Sampling only $1 players gave a QB replacement of 21.5, higher than most
      starters, because two cheap quarterbacks happened to score well. */
   /* Replacement has to be measured against whoever would actually stand in
-     that slot, and in this league a tight end competes for the same slot as a
-     receiver. Judging a TE against other TEs flatters him: it says Bowers is
-     miles clear of TE12, when the real question is whether he beats the cheap
-     WR you would otherwise start there. So positions sharing a slot share a
-     replacement level, drawn from the combined pool. */
-  const share = substitutePositions(pos);
-  const combined = share.length > 1
-    ? share.flatMap(x=>ppgCurveFor(x)).sort((a,b)=>b-a)
-    : ppgCurveFor(pos);
-  const depth = ({ QB:12, RB:30, WR:48, TE:48, PK:12, DST:12 })[pos] ?? 24;
+     that slot. This used to matter here specifically for TE, judged against
+     other TEs it flattered him: it said Bowers was miles clear of TE12, when
+     the real question is whether he beats the cheap WR you would otherwise
+     start there. Now that WR and TE are one position (pos:"WRTE") sharing one
+     replacement curve automatically, that merge no longer needs doing here. */
+  const combined = ppgCurveFor(pos);
+  const depth = ({ QB:12, RB:30, WRTE:48, PK:12, DST:12 })[pos] ?? 24;
   const level = combined.length
     ? combined[Math.min(combined.length-1, depth)]
-    : ({QB:12, RB:5, WR:5, TE:3, PK:6, DST:6})[pos] ?? 4;
+    : ({QB:12, RB:5, WRTE:4, PK:6, DST:6})[pos] ?? 4;
   REPLACEMENT_PPG[pos] = level;
   return level;
 }
@@ -7930,7 +7919,7 @@ function endgame(){
   const plan = planBudget();
   const openKinds = plan
     ? [...plan.openSlots, ...(plan.openBenchSlots||[])].map(s=>s.eligible)
-    : [['QB','RB','WR','TE','PK','DST']];
+    : [['QB','RB','WRTE','PK','DST']];
   const eligible = new Set();
   openKinds.forEach(list=>list.forEach(x=>eligible.add(x)));
   const usable = pool.filter(o=>eligible.has(o.p.pos));
@@ -8012,7 +8001,7 @@ function firepower(teamIdx){
      back, a flex, a kicker and a defence. */
   // Tuned against a read of the actual league: DJ Moore at a $7 market is a
   // real starter, a $4 backup back is not. The line sits between them.
-  const STARTER_FLOOR = { QB:6, RB:8, WR:7, TE:6, PK:1, DST:1 };
+  const STARTER_FLOOR = { QB:6, RB:8, WRTE:7, PK:1, DST:1 };
   const startable = held.filter(h=>h.mkt !== null && h.mkt >= (STARTER_FLOOR[h.pos] ?? 10))
                         .sort((a,b)=>(b.mkt||0)-(a.mkt||0));
   const used = new Set();
@@ -8078,9 +8067,8 @@ function firepowerBoard(){
 
 function tierDepletion(){
   const out = [];
-  ['RB','WR','TE','QB','PK','DST'].forEach(pos=>{
-    const elig = substitutePositions(pos);
-    const pool = availablePool().filter(p=>elig.includes(p.pos));
+  ['RB','WRTE','QB','PK','DST'].forEach(pos=>{
+    const pool = availablePool().filter(p=>p.pos===pos);
     if(!pool.length) return;
     const tiers = buildTiersFrom(pool, pos);
     const top = (tiers[0]||[]).length;
@@ -8089,7 +8077,7 @@ function tierDepletion(){
     const needing = state.teams.filter((t,i)=>
       effOpenSlots(i) > 0 && demandStateFor(i,pos) !== 'stacked').length;
     const cover = quality / Math.max(1, needing);
-    out.push({ pos, slot:elig.join('/'), top, two, quality, needing, cover });
+    out.push({ pos, slot:posLabel(pos), top, two, quality, needing, cover });
   });
 
   /* Banding on absolute cover reads "thin" for everything on the first
@@ -8193,7 +8181,7 @@ function runState(){
   });
   if(best){
     out.active = { pos:best.pos, count:best.count, heat:best.heat,
-      label:`${best.count} of the last ${recent.length} nominations have been ${best.pos}s, and they are clearing at ${Math.round(best.heat*100)}% of value. This is a run. Prices here stay inflated until it burns out, so unless you are getting one of the last good ones, wait it out.` };
+      label:`${best.count} of the last ${recent.length} nominations have been ${posLabel(best.pos)}s, and they are clearing at ${Math.round(best.heat*100)}% of value. This is a run. Prices here stay inflated until it burns out, so unless you are getting one of the last good ones, wait it out.` };
   }
 
   // A run is coming where supply is thinning but the room has not noticed:
@@ -8201,7 +8189,7 @@ function runState(){
   // and nobody has taken one recently.
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   let worst=null;
-  ['RB','WR','TE','QB'].forEach(pos=>{
+  ['RB','WRTE','QB'].forEach(pos=>{
     const taken = recentBy[pos]||0;
     if(taken>=2) return;                       // already going, not "coming"
     const top = availablePool().filter(p=>p.pos===pos)
@@ -8215,7 +8203,7 @@ function runState(){
   });
   if(worst && worst.score>=1.1){
     out.coming = { pos:worst.pos,
-      label:`${worst.left} comparable ${worst.pos} option${worst.left===1?'':'s'} left against ${worst.need} teams that still need one, and only ${recentBy[worst.pos]||0} have gone in the last ${recent.length} nominations. The room has not noticed yet. If you want one, move before it does.` };
+      label:`${worst.left} comparable ${posLabel(worst.pos)} option${worst.left===1?'':'s'} left against ${worst.need} teams that still need one, and only ${recentBy[worst.pos]||0} have gone in the last ${recent.length} nominations. The room has not noticed yet. If you want one, move before it does.` };
   }
   return out;
 }
@@ -8399,10 +8387,9 @@ function achievableRoster(opts){
      so a genuine outlier can still win, just not mistaken for the first. */
   const BENCH_ROOM = { QB:1, PK:1, DST:1, RB:3 };
   const benchDecay = pos => {
-    if(substitutePositions(pos).length > 1) return 1; // WR/TE: one shared pool, no redundancy penalty
+    if(!(pos in BENCH_ROOM)) return 1; // WRTE: no redundancy penalty, see comment above
     const already = counts[pos]||0;
-    const room = BENCH_ROOM[pos] ?? 3;
-    const over = Math.max(0, already - room + 1);
+    const over = Math.max(0, already - BENCH_ROOM[pos] + 1);
     return over <= 0 ? 1 : Math.pow(0.4, over);
   };
   keepBench.forEach((slot,i)=>{
@@ -8503,11 +8490,11 @@ function bidVerdict(p, bid, myIdx){
   const runs = runState();
   if(runs.active && runs.active.pos === p.pos){
     score -= 12;
-    reasons.push({sign:-1, text:`There is a run on ${p.pos}s right now, ${runs.active.count} of the last ${runs.window} nominations, clearing at ${Math.round(runs.active.heat*100)}% of value. Paying into the middle of a run is how people overpay.`});
+    reasons.push({sign:-1, text:`There is a run on ${posLabel(p.pos)}s right now, ${runs.active.count} of the last ${runs.window} nominations, clearing at ${Math.round(runs.active.heat*100)}% of value. Paying into the middle of a run is how people overpay.`});
   }
   if(runs.coming && runs.coming.pos === p.pos){
     score += 14;
-    reasons.push({sign:1, text:`${p.pos}s are thinning out and the room has not reacted yet. Moving before it does is worth more than the couple of dollars you would save waiting.`});
+    reasons.push({sign:1, text:`${posLabel(p.pos)}s are thinning out and the room has not reacted yet. Moving before it does is worth more than the couple of dollars you would save waiting.`});
   }
 
   // 0c. Whose money is trapped. Teams that must spend will chase; teams down to
@@ -8542,9 +8529,9 @@ function bidVerdict(p, bid, myIdx){
   }
 
   // 3. Roster fit, read off quality already on hand rather than slot count.
-  if(demand === 'hungry'){ score += 22; reasons.push({sign:1, text:`You have no real quality at ${p.pos} yet. This is a hole you have to fill sooner or later.`}); }
-  else if(demand === 'moderate'){ score += 6; reasons.push({sign:0, text:`You have one solid ${p.pos} already. Useful, not urgent.`}); }
-  else { score -= 16; reasons.push({sign:-1, text:`You are already stacked at ${p.pos}. Anyone you add here rides the bench.`}); }
+  if(demand === 'hungry'){ score += 22; reasons.push({sign:1, text:`You have no real quality at ${posLabel(p.pos)} yet. This is a hole you have to fill sooner or later.`}); }
+  else if(demand === 'moderate'){ score += 6; reasons.push({sign:0, text:`You have one solid ${posLabel(p.pos)} already. Useful, not urgent.`}); }
+  else { score -= 16; reasons.push({sign:-1, text:`You are already stacked at ${posLabel(p.pos)}. Anyone you add here rides the bench.`}); }
 
   // 4. Tier substitutes. The single most common way to overpay is bidding up
   //    a name when an interchangeable player is still sitting there.
@@ -8696,7 +8683,7 @@ function bidVerdict(p, bid, myIdx){
   if(bi){
     if(bi.stacked >= 2){
       score -= 8;
-      reasons.push({sign:-1, text:`You already have ${bi.stacked} ${p.pos}s on a week ${bi.week} bye. Adding another means paying $5 to patch that week in season.`});
+      reasons.push({sign:-1, text:`You already have ${bi.stacked} ${posLabel(p.pos)}s on a week ${bi.week} bye. Adding another means paying $5 to patch that week in season.`});
     } else if(bi.coversHoles > 0){
       score += 6;
       reasons.push({sign:1, text:`His week ${bi.week} bye does not clash with the weeks you are already short.`});
@@ -8749,10 +8736,10 @@ function bidVerdict(p, bid, myIdx){
     // compulsory slot: the only question is whether a better option exists
     if(oc.gain >= 0){
       score += 8;
-      reasons.push({sign:1, text:`You have to field a ${p.pos}, and at $${bid} he is the best use of the slot.`});
+      reasons.push({sign:1, text:`You have to field a ${posLabel(p.pos)}, and at $${bid} he is the best use of the slot.`});
     } else if(oc.alt.length){
       score -= 10;
-      reasons.push({sign:-1, text:`You have to field a ${p.pos}, but ${oc.alt[0].name} is the better option for that slot.`});
+      reasons.push({sign:-1, text:`You have to field a ${posLabel(p.pos)}, but ${oc.alt[0].name} is the better option for that slot.`});
     }
   } else if(oc){
     if(oc.pct >= 0.04){
@@ -8977,9 +8964,9 @@ function ecrValueRead(p){
   const tail   = (upTag||buTag) ? `.${upTag}${buTag}.` : '.';
 
   if(gap >= cut)  return { kind:'undervalued', gap, e,
-    label:`Experts rank him ${e.posRank} for 2026, ${gap} places above where his price sits among ${p.pos}s${tail}` };
+    label:`Experts rank him ${e.posRank} for 2026, ${gap} places above where his price sits among ${posLabel(p.pos)}s${tail}` };
   if(gap <= -cut) return { kind:'overvalued', gap, e,
-    label:`Experts rank him ${e.posRank} for 2026, ${Math.abs(gap)} places below where his price sits among ${p.pos}s${tail}` };
+    label:`Experts rank him ${e.posRank} for 2026, ${Math.abs(gap)} places below where his price sits among ${posLabel(p.pos)}s${tail}` };
   return { kind:'aligned', gap, e,
     label:`Experts rank him ${e.posRank} for 2026, in line with his price${tail}` };
 }
@@ -9004,10 +8991,16 @@ function prodFor(name){
   return p ? { ppg:p[0], volpg:p[1], tdpg:p[2], games:p[3] } : null;
 }
 
-// replacement level per position, from the actual 2025 distribution
-const PROD_BASELINE = { QB:14, RB:7, WR:6, TE:4 };
-// share of a player's points that typically comes from touchdowns, 2025 medians
-const TD_SHARE_NORM = { QB:0.53, RB:0.29, WR:0.27, TE:0.35 };
+// replacement level per position, from the actual 2025 distribution. WRTE is
+// a weighted blend of the old WR (6) and TE (4) baselines -- real receiver
+// and tight end per-game scoring paces genuinely differ, but there's no
+// longer a real-position field to key off once they share one roster slot,
+// so this leans on the pool's actual WR:TE mix (174:74) rather than picking
+// one position's number and quietly mis-grading the other's players.
+const PROD_BASELINE = { QB:14, RB:7, WRTE:5 };
+// share of a player's points that typically comes from touchdowns, 2025
+// medians, same WR:TE-weighted blend as PROD_BASELINE above.
+const TD_SHARE_NORM = { QB:0.53, RB:0.29, WRTE:0.29 };
 
 
 /* The raw production-versus-price gap is skewed: a cheap player almost always
@@ -9078,7 +9071,7 @@ function productionRead(p){
   } else if(tdLuck <= -0.14 && volVsBase >= 1.05){
     // the Jefferson case: the work was there, the scores were not
     kind='bounceback';
-    label = `Volume was there in 2025, ${pr.volpg} a game before scores, but only ${pr.tdpg.toFixed(2)} touchdowns a game, so scores made up ${Math.round(tdShare*100)}% of his points against ${Math.round(norm*100)}% typical for a ${p.pos}. Touchdown rates move around far more than yardage does, so his ${pr.ppg} understates him.`;
+    label = `Volume was there in 2025, ${pr.volpg} a game before scores, but only ${pr.tdpg.toFixed(2)} touchdowns a game, so scores made up ${Math.round(tdShare*100)}% of his points against ${Math.round(norm*100)}% typical for a ${posLabel(p.pos)}. Touchdown rates move around far more than yardage does, so his ${pr.ppg} understates him.`;
   } else if(tdLuck >= 0.16 && volVsBase < 1.0){
     // the Adams case: the scores carried thin work
     kind='tdcarried';
@@ -9086,11 +9079,11 @@ function productionRead(p){
   } else if(rankGap >= Math.max(6, Math.round(rankN*0.15))){
     kind='producer';
     label = oldForPos
-      ? `Produced ${pr.ppg} a game in 2025, ${rankGap} places better among ${p.pos}s than his price ranks him. The market marks him down for age, which is right on a long deal and wrong on a one-year one.`
-      : `Produced ${pr.ppg} a game in 2025, ${rankGap} places better among ${p.pos}s than his price ranks him.`;
+      ? `Produced ${pr.ppg} a game in 2025, ${rankGap} places better among ${posLabel(p.pos)}s than his price ranks him. The market marks him down for age, which is right on a long deal and wrong on a one-year one.`
+      : `Produced ${pr.ppg} a game in 2025, ${rankGap} places better among ${posLabel(p.pos)}s than his price ranks him.`;
   } else if(rankGap <= -Math.max(6, Math.round(rankN*0.15))){
     kind='trap';
-    label = `Priced ${Math.abs(rankGap)} places higher among ${p.pos}s than he produced in 2025, at ${pr.ppg} a game. Paying for projection or reputation rather than results.`;
+    label = `Priced ${Math.abs(rankGap)} places higher among ${posLabel(p.pos)}s than he produced in 2025, at ${pr.ppg} a game. Paying for projection or reputation rather than results.`;
   } else {
     kind='fair';
     label = `Produced ${pr.ppg} a game over ${pr.games} games in 2025, roughly in line with his price.`;
@@ -9210,7 +9203,11 @@ function handcuffFor(name){ return RB_HANDCUFF[name] || null; }
 function sosRank(p){
   const t = SOS_2026[p.nfl];
   if(t){
-    const r = (p.pos === 'QB') ? null : t[p.pos];
+    // SOS_2026 is keyed by real-world position (RB/WR/TE/DST), which p.pos
+    // no longer carries now that WR and TE share one roster label -- there's
+    // no way to know which one a given WRTE player really is, so fall through
+    // to the per-player star-rating path below rather than guess.
+    const r = (p.pos === 'QB' || p.pos === 'WRTE') ? null : t[p.pos];
     if(typeof r === 'number') return r;
   }
   /* The board carries a 1-5 star rating per player, covering positions the
@@ -9464,8 +9461,8 @@ function sentimentFor(p){
   // SCHEDULE: worth a nudge, not a decision.
   const sr = sosRank(p);
   if(sr !== null){
-    if(sr <= 6){ score += 5; parts.push({sign:1, k:'Schedule', t:`One of the six easiest 2026 schedules for a ${p.pos} (ranked ${sr} of 32).`}); }
-    else if(sr >= 27){ score -= 5; parts.push({sign:-1, k:'Schedule', t:`One of the six hardest 2026 schedules for a ${p.pos} (ranked ${sr} of 32).`}); }
+    if(sr <= 6){ score += 5; parts.push({sign:1, k:'Schedule', t:`One of the six easiest 2026 schedules for a ${posLabel(p.pos)} (ranked ${sr} of 32).`}); }
+    else if(sr >= 27){ score -= 5; parts.push({sign:-1, k:'Schedule', t:`One of the six hardest 2026 schedules for a ${posLabel(p.pos)} (ranked ${sr} of 32).`}); }
   }
 
   // HEALTH: an injury being monitored is a fact, and it cuts across everything
@@ -9482,7 +9479,7 @@ function sentimentFor(p){
   const age = (typeof p.age==='number') ? p.age : null;
   if(age !== null){
     if(term.years >= 5){ score += 6; parts.push({sign:1, k:'Trajectory', t:`Age ${age}, still climbing. A long contract here is an asset.`}); }
-    else if(term.years <= 1){ score -= 6; parts.push({sign:-1, k:'Trajectory', t:`Age ${age}, at or past the ${p.pos} decline point. One year only.`}); }
+    else if(term.years <= 1){ score -= 6; parts.push({sign:-1, k:'Trajectory', t:`Age ${age}, at or past the ${posLabel(p.pos)} decline point. One year only.`}); }
   }
 
   let call, cls;
@@ -9545,8 +9542,7 @@ function applyPoolFilters(rows){
     const q = f.q.toLowerCase();
     list = list.filter(r => r.p.name.toLowerCase().includes(q) || r.p.nfl.toLowerCase().includes(q));
   }
-  if(f.slot === 'WRTE') list = list.filter(r => r.p.pos==='WR' || r.p.pos==='TE');
-  else if(f.slot === 'FLEX') list = list.filter(r => ['RB','WR','TE'].includes(r.p.pos));
+  if(f.slot === 'FLEX') list = list.filter(r => ['RB','WRTE'].includes(r.p.pos));
   else if(f.slot) list = list.filter(r => r.p.pos === f.slot);
 
   switch(f.view){
@@ -9760,7 +9756,7 @@ function poolFilterBar(prefix){
         <input type="text" id="${prefix}Q" placeholder="Player or NFL team" value="${POOL_FILTERS.q}" style="width:100%;"></div>
       <div><label>Slot</label>
         <select id="${prefix}Slot">
-          ${[['','All'],['WRTE','WR + TE'],['FLEX','RB/WR/TE'],['RB','RB'],['WR','WR'],['TE','TE'],['QB','QB'],['PK','PK'],['DST','DST']]
+          ${[['','All'],['RB','RB'],['WRTE','WR/TE'],['FLEX','RB/WR/TE'],['QB','QB'],['PK','PK'],['DST','DST']]
             .map(([v,l])=>`<option value="${v}" ${POOL_FILTERS.slot===v?'selected':''}>${l}</option>`).join('')}
         </select></div>
       <div><label>Show</label>
@@ -9897,7 +9893,7 @@ function poolTableHTML(list, opts){
     return `<tr class="pool-row" data-open-card="${esc}" style="cursor:pointer;--rail:${RAIL[p.pos]||'transparent'};">
       <td style="text-align:left;">
         ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}
-        <span class="pos-tag pos-${p.pos}" style="margin-left:4px;">${p.pos}</span>
+        <span class="pos-tag pos-${p.pos}" style="margin-left:4px;">${posLabel(p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${logoHTML(p.nfl,14)} ${p.nfl}</span>
         ${flags}
       </td>
@@ -9909,7 +9905,7 @@ function poolTableHTML(list, opts){
         const v = vor(p);
         if(v <= 0){
           const short = vorRaw(p);
-          return `<span style="color:var(--chalk-3);" title="Projects ${projectedPpg(p).toFixed(1)} a game against a replacement of ${replacementLevel(p.pos).toFixed(1)} for a ${p.pos}, so he adds nothing to a starting slot this season${short>-1.5?', though only just':''}. That does not make him worthless: bench cover and cheap long contracts are bought for other reasons. Open the card.">&mdash;</span>`;
+          return `<span style="color:var(--chalk-3);" title="Projects ${projectedPpg(p).toFixed(1)} a game against a replacement of ${replacementLevel(p.pos).toFixed(1)} for a ${posLabel(p.pos)}, so he adds nothing to a starting slot this season${short>-1.5?', though only just':''}. That does not make him worthless: bench cover and cheap long contracts are bought for other reasons. Open the card.">&mdash;</span>`;
         }
         const eff = v / Math.max(1, r.sugg);
         const col = eff >= 0.30 ? 'var(--jade)' : (eff >= 0.15 ? 'var(--chalk-2)' : 'var(--chalk-3)');
@@ -10078,14 +10074,14 @@ function byeImpact(p){
    auction, whether the $34 in front of you fits the shape of your night. */
 
 const SLOTS = [
-  { key:'QB',    label:'QB',            eligible:['QB'],            weight:0.11 },
-  { key:'RB1',   label:'RB',            eligible:['RB'],            weight:0.20 },
-  { key:'RB2',   label:'RB',            eligible:['RB'],            weight:0.13 },
-  { key:'WRTE1', label:'WR / TE',       eligible:['WR','TE'],       weight:0.20 },
-  { key:'WRTE2', label:'WR / TE',       eligible:['WR','TE'],       weight:0.13 },
-  { key:'FLEX',  label:'Flex RB/WR/TE', eligible:['RB','WR','TE'],  weight:0.10 },
-  { key:'PK',    label:'PK',            eligible:['PK'],            weight:0.02 },
-  { key:'DST',   label:'DST',           eligible:['DST'],           weight:0.02 },
+  { key:'QB',    label:'QB',            eligible:['QB'],          weight:0.11 },
+  { key:'RB1',   label:'RB',            eligible:['RB'],          weight:0.20 },
+  { key:'RB2',   label:'RB',            eligible:['RB'],          weight:0.13 },
+  { key:'WRTE1', label:'WR / TE',       eligible:['WRTE'],        weight:0.20 },
+  { key:'WRTE2', label:'WR / TE',       eligible:['WRTE'],        weight:0.13 },
+  { key:'FLEX',  label:'Flex RB/WR/TE', eligible:['RB','WRTE'],   weight:0.10 },
+  { key:'PK',    label:'PK',            eligible:['PK'],          weight:0.02 },
+  { key:'DST',   label:'DST',           eligible:['DST'],         weight:0.02 },
 ];
 
 /* 18 roster spots: the 8 starters above, and these 10 bench spots. Two are
@@ -10096,7 +10092,7 @@ const BENCH_SLOTS = [
   { key:'BN1', label:'PK cover',  eligible:['PK'],  earmark:true },
   { key:'BN2', label:'DST cover', eligible:['DST'], earmark:true },
   ...Array.from({length:8}, (_,i)=>({ key:'BN'+(i+3), label:'Bench '+(i+1),
-      eligible:['QB','RB','WR','TE'], earmark:false }))
+      eligible:['QB','RB','WRTE'], earmark:false }))
 ];
 const BENCH_RESERVE_PER_SLOT = 1;
 
@@ -10114,7 +10110,7 @@ function planBudget(){
   ];
   // Only genuinely startable players claim a starting slot. A deep bench dart
   // sitting in your RB2 hole would hide a need you still have to buy.
-  const STARTER_FLOOR = { QB:300, RB:400, WR:400, TE:400, PK:1, DST:1 };
+  const STARTER_FLOOR = { QB:300, RB:400, WRTE:400, PK:1, DST:1 };
   // You get the final say on who starts. Value order is only the fallback:
   // two good QBs where only one can start is exactly the case where the
   // higher-rated player is not automatically the one you want in the lineup.
@@ -10291,7 +10287,7 @@ function pickerHTML(slot, budget){
     const bye = byeWeek(o.x);
     return `<div class="pk-row">
       <span class="pk-rank ${rank>=0?'on':''}" data-tgt-slot="${slot.key}" data-tgt-name="${o.x.name.replace(/"/g,'&quot;')}">${rank>=0?rank+1:''}</span>
-      <span class="pk-nm" data-plan-pick="${o.x.name.replace(/"/g,'&quot;')}">${o.x.name} <span class="pos-tag pos-${o.x.pos}">${o.x.pos}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${o.x.nfl}</span>${bye?` <span style="color:var(--chalk-3);font-size:11px;">bye ${bye}</span>`:''}</span>
+      <span class="pk-nm" data-plan-pick="${o.x.name.replace(/"/g,'&quot;')}">${o.x.name} <span class="pos-tag pos-${o.x.pos}">${posLabel(o.x.pos)}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${o.x.nfl}</span>${bye?` <span style="color:var(--chalk-3);font-size:11px;">bye ${bye}</span>`:''}</span>
       ${eTag}
       <span class="pk-pr ${o.d>budget?'over':''}">$${o.d}</span>
     </div>`;
@@ -10332,7 +10328,7 @@ function renderTargetBoard(){
       return `<div class="budget-row" title="${o.p.name} projects ${projectedPpg(o.p).toFixed(1)} a game against a replacement of ${replacementLevel(o.p.pos).toFixed(1)}, so ${o.v.toFixed(1)} above what a dollar body gives you in that slot.">
         <span class="b-name" style="flex:1;min-width:0;">
           <b data-plan-pick="${o.p.name.replace(/"/g,'&quot;')}" style="color:var(--chalk);cursor:pointer;font-weight:600;">${o.p.name}</b>
-          <span class="pos-tag pos-${o.p.pos}" style="margin-left:4px;">${o.p.pos}</span>
+          <span class="pos-tag pos-${o.p.pos}" style="margin-left:4px;">${posLabel(o.p.pos)}</span>
           <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${o.p.nfl}${bye?' &middot; bye '+bye:''}</span>${readTag}
         </span>
         <span class="b-nums"><strong>$${o.d}</strong><span style="color:${col};font-size:11px;margin-left:8px;">${h.cheapSlot?'':o.eff.toFixed(2)+'/$'}</span></span>
@@ -10427,7 +10423,7 @@ function renderPlanView(){
       return `<div class="prow locked">
         <div class="prow-label">${s.label}</div>
         <div class="prow-amt plain">$${got.price}</div>
-        <div class="prow-pick"><b style="cursor:default">${got.name}</b> ${got.pos}${bye?` &middot; bye ${bye}`:''}<span class="row-act" tabindex="0" role="button" data-role-bench="${got.name.replace(/"/g,'&quot;')}" title="Move to the bench">&darr; bench</span></div>
+        <div class="prow-pick"><b style="cursor:default">${got.name}</b> ${posLabel(got.pos)}${bye?` &middot; bye ${bye}`:''}<span class="row-act" tabindex="0" role="button" data-role-bench="${got.name.replace(/"/g,'&quot;')}" title="Move to the bench">&darr; bench</span></div>
       </div>`;
     }
     const budget = plan.alloc[s.key] || 1;
@@ -10491,7 +10487,7 @@ function renderPlanView(){
       return `<div class="prow locked">
         <div class="prow-label">${b.label}</div>
         <div class="prow-amt plain">$${got.price}</div>
-        <div class="prow-pick"><b style="cursor:default">${got.name}</b> ${got.pos}${bye?` &middot; bye ${bye}`:''}<span class="row-act to-start" tabindex="0" role="button" data-role-start="${got.name.replace(/"/g,'&quot;')}" title="Move into the starting lineup">&uarr; start</span></div>
+        <div class="prow-pick"><b style="cursor:default">${got.name}</b> ${posLabel(got.pos)}${bye?` &middot; bye ${bye}`:''}<span class="row-act to-start" tabindex="0" role="button" data-role-start="${got.name.replace(/"/g,'&quot;')}" title="Move into the starting lineup">&uarr; start</span></div>
       </div>`;
     }
     // open bench spot: suggest something that actually fits its purpose
@@ -10554,7 +10550,7 @@ function renderPlanView(){
       benchPick = `<div class="tgt-wrap">${benchPick}</div>`;
     } else {
       benchPick = sug
-        ? `${pickLink(sug.name)} <span class="pos-tag pos-${sug.pos}">${sug.pos}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${sug.nfl||''}</span> <span style="color:${sug.clash?'var(--coral)':'var(--chalk-3)'}">$${sug.d}${sug.bye?` &middot; bye ${sug.bye}${sug.clash?' (same bye as your starter)':''}`:''}</span>`
+        ? `${pickLink(sug.name)} <span class="pos-tag pos-${sug.pos}">${posLabel(sug.pos)}</span> <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;">${sug.nfl||''}</span> <span style="color:${sug.clash?'var(--coral)':'var(--chalk-3)'}">$${sug.d}${sug.bye?` &middot; bye ${sug.bye}${sug.clash?' (same bye as your starter)':''}`:''}</span>`
         : '<span style="color:var(--chalk-3)">open</span>';
     }
     const benchBudget = plan.alloc[b.key] || 1;
