@@ -8347,7 +8347,7 @@ function achievableRoster(opts){
     : inflatedValue(p).value);
 
   /* A hard ceiling on real tight ends, on top of the merged WR/TE value math
-     above: at most 1 starting, at most 2 more on the bench. The merge is
+     above: at most 1 starting, at most 1 more on the bench. The merge is
      still right about VALUE -- there's no dedicated TE slot, so a good TE
      and a good WR really do compete for the same spot on equal footing --
      but nobody actually wants to run out and DRAFT that logic to its
@@ -8466,12 +8466,13 @@ function achievableRoster(opts){
   /* The other half of the TE ceiling from above: at most 2 more on the
      bench. Starts counted from whichever held/bought true TEs did NOT make
      the starting lineup -- those are already sitting on the real bench --
-     then increments as bench slots below actually add one, capping out at 2
-     either way. */
+     then increments as bench slots below actually add one, capping out at
+     BENCH_TE_CAP either way. */
+  const BENCH_TE_CAP = 1;
   const startingTENames = new Set(picks.filter(x=>x.slot.starter && x.p && TRUE_TE.has(x.p.name)).map(x=>x.p.name));
   let benchTECount = [...held, ...bought]
     .filter(x=>TRUE_TE.has(x.name) && !startingTENames.has(x.name)).length;
-  const teRoomLeft = () => benchTECount < 2;
+  const teRoomLeft = () => benchTECount < BENCH_TE_CAP;
 
   /* Decided FIRST, against the full remaining bench budget, not in slot
      order. Deciding them in slot order priced them out every time: by the
