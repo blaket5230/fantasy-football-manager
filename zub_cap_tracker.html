@@ -6902,7 +6902,30 @@ function buildTiersFrom(players, tuningPos){
     else { out.push(cur); cur=[entry]; }
   });
   if(cur.length) out.push(cur);
-  return out.map(tier => tier.map(e=>e.p));
+
+  // A real price cliff can legitimately isolate one or two players, but a
+  // tier that small reads as a lonely name rather than a group -- and the
+  // whole point of tiering is "these guys are genuinely interchangeable
+  // right now." Fold anything under the floor into its cheaper neighbor,
+  // repeatedly if that neighbor is also thin, so a standout's own price
+  // stays the tier's ceiling instead of getting dragged up to match him.
+  // A short tier with no cheaper neighbor left (it's the last one) folds
+  // backward into the pricier tier before it instead.
+  const MIN_TIER = 4;
+  const merged = [];
+  out.forEach(tier=>{
+    if(merged.length && merged[merged.length-1].length < MIN_TIER){
+      merged[merged.length-1] = merged[merged.length-1].concat(tier);
+    } else {
+      merged.push(tier.slice());
+    }
+  });
+  if(merged.length > 1 && merged[merged.length-1].length < MIN_TIER){
+    const last = merged.pop();
+    merged[merged.length-1] = merged[merged.length-1].concat(last);
+  }
+
+  return merged.map(tier => tier.map(e=>e.p));
 }
 
 // Which tier is a given player in, among everyone still available?
