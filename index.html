@@ -993,22 +993,26 @@
      mechanism with no sticky involved: the draft board adds a full row per
      pick and grows all night, while bidding and the pool stay roughly
      constant, so left alone the three columns drift apart and leave a
-     ragged, unmatched bottom edge above the roster grid. --draft-col-max-h
-     (set by fitDraftColumnsToViewport(), sized to whatever's left of the
-     viewport below the grid) is a fixed HEIGHT, not a max-height -- a max
-     only clips a column once it's already taller than the cap, it doesn't
-     stretch a short one (bidding with nobody on the clock, say) to match
-     its siblings, which is the actual "same size" ask. A fixed height plus
-     overflow-y:auto gets both: short content just leaves blank space at the
-     bottom of its box, long content scrolls past it internally. min-height:0
-     is not decorative here -- a grid item's default min-height is "auto",
+     ragged, unmatched bottom edge above the roster grid. A flat 640px, not
+     something computed off the viewport -- that was tried first and it
+     meant the cards resized themselves on load depending on window height,
+     which read as the layout shifting under you rather than a fixed page.
+     A constant is also just simpler: same three card sizes every time, no
+     JS measuring the grid's on-screen position needed. It's a HEIGHT, not
+     a max-height -- a max only clips a column once it's already taller
+     than the cap, it doesn't stretch a short one (bidding with nobody on
+     the clock, say) to match its siblings, which is the actual "same size"
+     ask. A fixed height plus overflow-y:auto gets both: short content just
+     leaves blank space at the bottom of its box, long content scrolls past
+     it internally. min-height:0 is not decorative here -- a grid item's
+     default min-height is "auto",
      which floors it at its own UNCLAMPED content height regardless of any
      height set on it, so without this override the draft board would still
      force the row (and the page) taller every time a pick is logged even
      though it visually clips and scrolls correctly on its own. */
   .draft-layout{display:grid;grid-template-columns:340px 1fr 380px;gap:18px;align-items:start;}
   .draft-history-col,.draft-sidebar,.draft-main{
-    min-width:0;min-height:0;height:var(--draft-col-max-h, 640px);overflow-y:auto;
+    min-width:0;min-height:0;height:640px;overflow-y:auto;
     scrollbar-width:thin;scrollbar-color:var(--line) transparent;
   }
   .draft-history-col::-webkit-scrollbar,.draft-sidebar::-webkit-scrollbar,.draft-main::-webkit-scrollbar{width:9px;}
@@ -4814,26 +4818,14 @@ function renderDraftView(){
   fitDraftColumnsToViewport();
 }
 
-/* The three top columns (board, bidding, pool) cap their own height to
-   whatever's left of the viewport below them and scroll internally instead
-   of growing forever -- the draft board in particular adds a full row per
-   pick, so left unbounded it would grow taller than the other two all
-   night and leave a ragged, unmatched bottom edge above the roster grid.
-   A fixed `100vh - Xpx` guess would drift the moment the chrome above the
-   grid changes height by even a few pixels, so this measures the grid's
-   actual on-screen top instead and sizes every column to fill exactly
-   what's left. Unlike the old five-column layout, none of these columns
-   are position:sticky (see the .draft-layout comment in the CSS for why
-   that combination doesn't work inside a grid) -- they're plain static
-   boxes that happen to share a height, so they scroll away normally with
-   the page instead of trailing the scroll and overlapping what's below. */
-function fitDraftColumnsToViewport(){
-  const layout = document.querySelector('.draft-layout');
-  if(!layout) return;
-  const top = layout.getBoundingClientRect().top;
-  const avail = Math.max(240, Math.floor(window.innerHeight - top - 16));
-  layout.style.setProperty('--draft-col-max-h', avail + 'px');
-}
+/* No-op: the three top columns (board, bidding, pool) used to compute their
+   shared height off the viewport, but that meant the cards resized on load
+   depending on window height -- felt like the layout shifting under you
+   rather than a fixed page. They're a flat 640px in CSS now (see the
+   .draft-layout comment), so there's nothing left to measure. Left as a
+   no-op rather than removed, since several render paths still call it
+   unconditionally. */
+function fitDraftColumnsToViewport(){}
 if(typeof window !== 'undefined' && window.addEventListener){
   window.addEventListener('resize', ()=>{
     if(typeof fitDraftColumnsToViewport === 'function') fitDraftColumnsToViewport();
