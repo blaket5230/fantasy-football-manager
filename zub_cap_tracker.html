@@ -1009,40 +1009,30 @@
      to fit beside everything else, the page scrolls normally here -- no
      forced-fit sticky/height-cap/overflow-hidden combination to keep in
      sync the way the five-column layout needed. */
-  .draft-layout{display:grid;grid-template-columns:380px 1fr 380px;gap:18px;align-items:start;}
-  .draft-rail-left,.draft-sidebar{position:sticky;top:16px;min-width:0;}
-  .draft-rail-left .panel,.draft-sidebar .panel{margin-bottom:0;min-width:0;}
+  .draft-layout{display:grid;grid-template-columns:1fr 380px;gap:18px;align-items:start;}
+  .draft-sidebar{position:sticky;top:16px;min-width:0;}
+  .draft-sidebar .panel{margin-bottom:0;min-width:0;}
   .draft-main{min-width:0;}
-  .draft-history-col{grid-column:1 / -1;min-width:0;}
+  .draft-history-col,.draft-rosters-col{grid-column:1 / -1;min-width:0;}
 
-  /* Player pool drops first (least urgent while nothing's on the clock),
-     landing full-width between bidding and the board; below that even a
-     340px team column is too cramped alongside it, so it drops too. */
-  @media (max-width:1170px){
-    .draft-layout{grid-template-columns:340px 1fr;}
-    .draft-sidebar{grid-column:1 / -1;position:static;}
-  }
-  /* A roster list (18 slots, mostly "-") was built for a narrow rail and
-     stays exactly that narrow even once its box goes full-width below --
-     nothing about promoting the GRID ITEM to span the row reflows what's
-     INSIDE it, so it just sits as a tall, narrow column in the middle of a
-     wide empty box. Once the rail is full-width there is genuinely room for
-     two, so let starters and bench run two-up; the group labels, team
-     select and summary line stay full-width section breaks via the grid,
-     same trick a full CSS Grid uses for spanning headers between
-     auto-flowed cells. Reverts to one column again on a phone-width screen,
-     where two would just break names mid-word. */
-  @media (max-width:820px){
+  /* Only two columns now (bidding, player pool), so there's real headroom --
+     down to phone width before the pool needs to drop to full-width below
+     bidding instead of beside it. */
+  @media (max-width:760px){
     .draft-layout{grid-template-columns:1fr;}
-    .draft-rail-left{position:static;}
-    .draft-rail-left #teamRosterBody{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;}
-    .draft-rail-left #teamRosterBody>select,
-    .draft-rail-left #teamRosterBody>.or-team-head,
-    .draft-rail-left #teamRosterBody>.or-slot-group-label{grid-column:1 / -1;}
+    .draft-sidebar{position:static;}
   }
-  @media (max-width:600px){
-    .draft-rail-left #teamRosterBody{grid-template-columns:1fr;}
-  }
+
+  /* Every team's roster in one grid instead of a dropdown -- cards wrap to
+     fit whatever width is available, one column on a phone, four or five
+     across on a real monitor. Money folds into each card's own header
+     rather than living as a separate tab: cap space colored by the same
+     spending-pressure read the bid panel already trusts, plus the actual
+     $-per-man detail underneath. */
+  .all-rosters-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+  .ar-card{background:var(--raised);border:1px solid var(--line);border-radius:var(--r-panel);padding:10px 12px 12px;min-width:0;}
+  .ar-card.ar-mine{border-color:rgba(229,181,103,.5);}
+  .ar-pressure{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--chalk-3);margin:-2px 0 6px;}
 
   /* ---------- OTHER ROSTERS RAIL ---------- */
   .or-team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:2px;color:var(--chalk);}
@@ -1790,42 +1780,6 @@
   <!-- DRAFT DAY -->
   <div class="view" id="view-draft">
     <div class="draft-layout">
-      <div class="draft-rail-left">
-        <!-- Your team AND everyone else's, in one place: whichever roster
-             you pick from the dropdown (yours by default), what the room's
-             money looks like, and the best team your own money could still
-             build. One at a time behind tabs rather than three separate
-             boxes. -->
-        <div class="panel side-panel">
-          <div class="side-tabs" id="teamTabs">
-            <button class="side-tab active" data-side="rosters">Rosters</button>
-            <button class="side-tab" data-side="money">Money</button>
-            <button class="side-tab" data-side="ideal">Ideal team</button>
-          </div>
-
-          <div class="side-body" data-pane="rosters">
-            <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
-            <div id="teamRosterBody"></div>
-          </div>
-
-          <div class="side-body" data-pane="money" hidden>
-            <p class="panel-sub">Every team's cap space, plus whose money is under real pressure to move.</p>
-            <h3 style="font-size:12px;">Cap space</h3>
-            <div id="draftBudgets"></div>
-            <div id="draftOtherMoneyBody" style="margin-top:16px;"></div>
-          </div>
-
-          <div class="side-body" data-pane="ideal" hidden>
-            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
-              <h3 style="margin-bottom:0;font-size:13.5px;">Ideal team from here</h3>
-              <span class="backlink" id="solverToggle" style="margin:0;font-size:11px;">show</span>
-            </div>
-            <p class="panel-sub" style="margin-top:4px;">The strongest team your money could still buy, given who has gone and what the room is paying. Best case, not forecast. Tap the star to mark a player as yours, again to avoid him.</p>
-            <div id="solverBody"></div>
-          </div>
-        </div>
-      </div>
-
       <div class="draft-main">
         <div id="mockDraftIdle" style="margin-bottom:10px;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <span class="th-help" title="Practice against 11 AI-controlled rivals -- nothing here touches your real draft board.">Rehearse before the real thing?</span>
@@ -1939,6 +1893,7 @@
             <button class="side-tab active" data-side="pool">Pool by tier</button>
             <button class="side-tab" data-side="quality">Cost of waiting</button>
             <button class="side-tab" data-side="market">Market</button>
+            <button class="side-tab" data-side="ideal">Ideal team</button>
           </div>
 
           <div class="side-body" data-pane="pool">
@@ -1955,14 +1910,33 @@
             <p class="panel-sub">Whether the room is overpaying or underpaying right now.</p>
             <div id="inflationBody"></div>
           </div>
+
+          <div class="side-body" data-pane="ideal" hidden>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
+              <h3 style="margin-bottom:0;font-size:13.5px;">Ideal team from here</h3>
+              <span class="backlink" id="solverToggle" style="margin:0;font-size:11px;">show</span>
+            </div>
+            <p class="panel-sub" style="margin-top:4px;">The strongest team your money could still buy, given who has gone and what the room is paying. Best case, not forecast. Tap the star to mark a player as yours, again to avoid him.</p>
+            <div id="solverBody"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Every team's roster and money in one grid, always visible, no
+           dropdown or click required to see who has what. -->
+      <div class="draft-rosters-col">
+        <div class="panel">
+          <h3>All rosters</h3>
+          <p class="panel-sub">Live, including tonight's picks. Cap space is colored by spending pressure, same read the bid panel already uses.</p>
+          <div id="allRostersBody"></div>
         </div>
       </div>
 
       <!-- Draft board used to be a sticky side column so it stayed visible
-           without a click -- now that the three cards above are wide enough
-           to actually breathe, it's a full-width row underneath instead,
-           which reads better as a running sheet of picks than a squeezed
-           sidebar ever did. -->
+           without a click -- now that the layout is wide enough to actually
+           breathe, it's a full-width row underneath instead, which reads
+           better as a running sheet of picks than a squeezed sidebar ever
+           did. -->
       <div class="draft-history-col">
         <div class="panel">
           <h3>Draft board</h3>
@@ -4715,7 +4689,7 @@ function bindMockDraftControls(){
    team, Player pool/analytics, Other teams). Each box gets its own tab group
    rather than one global one, so switching a tab in one box can't touch the
    other two -- everything below is scoped to a containerId. */
-let sidePanes = { teamTabs:'rosters', poolTabs:'pool' };
+let sidePanes = { poolTabs:'pool' };
 function bindSideTabs(containerId){
   const wrap = document.getElementById(containerId);
   if(!wrap || wrap.dataset.bound) return;
@@ -4728,7 +4702,7 @@ function showSidePane(containerId, key){
   const root = document.getElementById(containerId);
   if(!root) return;
   const scope = root.parentElement;
-  if(containerId === 'teamTabs' && key === 'ideal') setTimeout(()=>{ try{ renderSolver(); }catch(e){} }, 0);
+  if(containerId === 'poolTabs' && key === 'ideal') setTimeout(()=>{ try{ renderSolver(); }catch(e){} }, 0);
   // Pool by tier's own QB/RB/WR/... tabs reuse .side-tab for the same look
   // and live nested inside this same scope (inside the "pool" side-body), so
   // this can only touch buttons that are direct children of THIS group's own
@@ -4759,7 +4733,7 @@ function markSideAlerts(){
     const inf = inflationState();
     set('poolTabs', 'quality', !!(r.active || r.coming));
     set('poolTabs', 'market', inf.picks >= 5 && Math.abs((inf.rate||1)-1) > 0.08);
-    set('teamTabs', 'ideal', !!(e && !e.done && e.tight));
+    set('poolTabs', 'ideal', !!(e && !e.done && e.tight));
 
     /* Badge the sub-tabs too, so a run starting or your board emptying is
        visible without leaving the bid panel to go looking for it. */
@@ -4794,7 +4768,6 @@ function bindDraftSubs(){
 }
 
 function renderDraftView(){
-  bindSideTabs('teamTabs');
   bindSideTabs('poolTabs');
   bindDraftSubs();
   bindMockDraftControls();
@@ -4806,14 +4779,8 @@ function renderDraftView(){
      already runs after every one of those actions, so this is the one place
      that covers all of them without needing to patch each call site. */
   renderStatusStrip();
-  const rows = state.teams.map((t,i)=>{
-    const slots = effOpenSlots(i);
-    const isMe = t.owner===MY_TEAM_OWNER;
-    return `<div class="budget-row"><span class="b-name">${isMe?'&#9733; ':''}${t.owner}</span><span class="b-nums"><strong>$${effCapLeft(i,state.currentYear)}</strong> &middot; ${slots} open</span></div>`;
-  }).join('');
-  document.getElementById('draftBudgets').innerHTML = rows;
 
-  renderTeamRosterTab();
+  renderAllRostersGrid();
   renderPoolTierRail();
   renderEndgame();
   markSideAlerts();
@@ -5033,7 +5000,7 @@ function renderSolver(suffix){
      lookup for a hidden tab. The Squad Plan instance (suffix 'Plan') has no
      such concept of "on screen", it's just part of that view, so it always
      computes and relies on the cache for cheapness. */
-  if(suffix === '' && typeof sidePanes !== 'undefined' && sidePanes.teamTabs !== 'ideal'){ return; }
+  if(suffix === '' && typeof sidePanes !== 'undefined' && sidePanes.poolTabs !== 'ideal'){ return; }
   const tg = document.getElementById('solverToggle'+suffix);
   if(tg && !tg.dataset.bound){
     tg.dataset.bound='1';
@@ -5132,66 +5099,58 @@ function renderInflation(){
   `;
 }
 
-/* Every team, live, with the same starter/bench read the tool trusts for
-   its own solver -- best VOR into the most valuable slot he's eligible for.
-   That's what makes it "intelligent" rather than just draft order: a pick 1
-   flier reads as a starter only until something better takes his slot, then
-   he quietly becomes bench with no special-casing needed. One team at a
-   time behind a dropdown, defaulting to yours, rather than 12 cards stacked
-   on top of each other -- which is what actually leaves room to show the
-   full 18 spots instead of just starters. */
-let teamRosterSelectedIdx = null;
-function renderTeamRosterTab(){
-  const wrap = document.getElementById('teamRosterBody');
+/* Every team, all at once, in a wrapping grid of cards instead of a
+   dropdown -- the whole point of this layout is seeing all 12 without a
+   click. Same starter/bench read the solver trusts (best VOR into the most
+   valuable slot he's eligible for), and money folds right into each card's
+   own header instead of living as a separate tab: cap space colored by the
+   same spending-pressure read the bid panel already uses, plus the actual
+   $-per-man detail underneath. */
+function renderAllRostersGrid(){
+  const wrap = document.getElementById('allRostersBody');
   if(!wrap) return;
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
-  if(teamRosterSelectedIdx===null || teamRosterSelectedIdx<0 || teamRosterSelectedIdx>=state.teams.length){
-    teamRosterSelectedIdx = myIdx>=0 ? myIdx : 0;
-  }
-  const i = teamRosterSelectedIdx;
-  const t = state.teams[i];
-  if(!t){ wrap.innerHTML = '<p class="panel-sub">Team not found.</p>'; return; }
-  const deadN = t.players.filter(p=>p.deadCap).length;
-
-  const options = state.teams.map((tm,idx)=>
-    `<option value="${idx}" ${idx===i?'selected':''}>${idx===myIdx?'★ ':''}${tm.owner}</option>`
-  ).join('');
-
-  const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
-    .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
-  const { starters, bench } = assignLineup(held);
-  const { slots: benchSlots, overflow } = assignBench(bench);
-
-  // A rail this narrow has no room for SLOTS' full "Flex RB/WR/TE" label --
-  // shorten just this one, in this one spot, rather than touch the shared
-  // label everywhere else in the tool reads it at full width.
+  const fm = forcedMoney();
+  const pressureColor = { 'must spend':'var(--coral)', scraping:'var(--chalk-3)', flexible:'var(--chalk-2)', done:'var(--jade)' };
   const railLabel = slot => slot.key==='FLEX' ? 'FLEX' : slot.label;
-  const starterRows = SLOTS.map(slot=>{
-    const pl = starters[slot.key];
-    return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
-  }).join('');
-  const benchRows = BENCH_SLOTS.map(slot=>{
-    const pl = benchSlots[slot.key];
-    return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
-  }).join('');
-  const overflowRows = overflow.map(pl=>
-    `<div class="or-slot"><span class="or-slot-label">Extra</span><span class="or-slot-name">${pl.name}</span></div>`
-  ).join('');
 
-  wrap.innerHTML = `
-    <select id="teamRosterSelect" style="width:100%;">${options}</select>
-    <div class="or-team-head" style="margin-top:10px;"><span>${t.owner}</span><span class="or-team-cap">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
-    <div class="or-slot-group-label">Starters</div>
-    ${starterRows}
-    <div class="or-slot-group-label">Bench</div>
-    ${benchRows}${overflowRows}
-    <p class="panel-sub" style="margin-top:8px;">${held.length}/18 roster spots filled${deadN?`, plus ${deadN} dead-cap ${deadN===1?'entry':'entries'} that cost money but no roster spot`:''}.</p>
-  `;
-  const sel = document.getElementById('teamRosterSelect');
-  if(sel) sel.addEventListener('change', ()=>{
-    teamRosterSelectedIdx = Number(sel.value);
-    renderTeamRosterTab();
-  });
+  const cards = state.teams.map((t,i)=>{
+    const deadN = t.players.filter(p=>p.deadCap).length;
+    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
+      .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
+    const { starters, bench } = assignLineup(held);
+    const { slots: benchSlots, overflow } = assignBench(bench);
+
+    const starterRows = SLOTS.map(slot=>{
+      const pl = starters[slot.key];
+      return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
+    }).join('');
+    const benchRows = BENCH_SLOTS.map(slot=>{
+      const pl = benchSlots[slot.key];
+      return `<div class="or-slot"><span class="or-slot-label">${railLabel(slot)}</span>${pl?`<span class="or-slot-name">${pl.name}</span>`:'<span class="or-slot-empty">—</span>'}</div>`;
+    }).join('');
+    const overflowRows = overflow.map(pl=>
+      `<div class="or-slot"><span class="or-slot-label">Extra</span><span class="or-slot-name">${pl.name}</span></div>`
+    ).join('');
+
+    const myFm = fm.rows.find(r=>r.idx===i);
+    const capColor = myFm ? (pressureColor[myFm.pressure]||'var(--chalk)') : 'var(--chalk)';
+    const pressureLine = myFm && myFm.pressure!=='done'
+      ? `<div class="ar-pressure">$${(myFm.perMan||0).toFixed(1)} a man &middot; ${myFm.pressure}</div>`
+      : '';
+
+    return `<div class="ar-card${i===myIdx?' ar-mine':''}">
+      <div class="or-team-head"><span>${i===myIdx?'&#9733; ':''}${t.owner}</span><span class="or-team-cap" style="color:${capColor}">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
+      ${pressureLine}
+      <div class="or-slot-group-label">Starters</div>
+      ${starterRows}
+      <div class="or-slot-group-label">Bench</div>
+      ${benchRows}${overflowRows}
+      <p class="panel-sub" style="margin:6px 0 0;font-size:10.5px;">${held.length}/18 filled${deadN?`, ${deadN} dead cap`:''}</p>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="all-rosters-grid">${cards}</div>`;
 }
 
 /* Available pool, grouped by position, then by tier within it -- the same
