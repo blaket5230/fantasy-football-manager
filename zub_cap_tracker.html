@@ -1816,7 +1816,7 @@
         <div class="panel side-panel">
           <div class="side-tabs" id="poolTabs">
             <button class="side-tab active" data-side="pool">Pool by tier</button>
-            <button class="side-tab" data-side="quality">Quality left</button>
+            <button class="side-tab" data-side="quality">Cost of waiting</button>
             <button class="side-tab" data-side="market">Market</button>
           </div>
 
@@ -1826,7 +1826,7 @@
           </div>
 
           <div class="side-body" data-pane="quality" hidden>
-            <p class="panel-sub">Who's actually thinning out, position by position, so you're not finding out for the first time mid-bid.</p>
+            <p class="panel-sub">For every position you still need real quality at: what you lose by passing right now and coming back once this tier is gone.</p>
             <div id="draftScarcityBody"></div>
           </div>
 
@@ -2007,8 +2007,8 @@
       <div id="planBodyTab"></div>
     </div>
     <div class="panel">
-      <h3>Positional scarcity</h3>
-      <p class="panel-sub">Who's actually thinning out, position by position, so you're not finding out for the first time mid-bid. Same read the sidebar gives you once the draft is live.</p>
+      <h3>Cost of waiting</h3>
+      <p class="panel-sub">For every position you still need real quality at: what you lose by passing right now and coming back once this tier is gone. Same read the sidebar gives you once the draft is live.</p>
       <div id="boardStateBodyPlan"></div>
     </div>
     <div class="panel">
@@ -4907,47 +4907,24 @@ function renderBoardState(){
   const moneyEl = document.getElementById('draftOtherMoneyBody');
   const planEl = document.getElementById('boardStateBodyPlan');
   if(!scarcityEl && !moneyEl && !planEl) return;
-  const dep = tierDepletion();
   const fm = forcedMoney();
 
-  const col = st => st==='gone' ? 'var(--coral)'
-    : st==='thinnest' ? 'var(--coral)'
-    : st==='tight' ? 'var(--gold)'
-    : st==='deepest' ? 'var(--jade)' : 'var(--chalk-3)';
-
-  // Counts alone ("6 left vs 3 needing") answer "how worried should I be"
-  // but not "should I act on THIS nomination" -- that needs the actual
-  // names, or it's just a second trip to Pool by Tier to find out who they
-  // are. Naming the top few up front is what makes this tab a decision
-  // rather than a stat.
-  const depRows = dep.filter(d=>!['PK','DST'].includes(d.pos)).map(d=>{
-    const shown = d.qualityPlayers.slice(0,4).map(p=>p.name);
-    const rest = d.quality - shown.length;
-    const names = shown.length
-      ? `<p class="panel-sub" style="margin:2px 0 8px;font-size:11px;">${shown.join(', ')}${rest>0?`, +${rest} more`:''}</p>`
-      : '';
-    return `<div class="budget-row" title="${d.quality} players in the top two tiers that fill a ${d.slot} slot, against ${d.needing} teams that still need one">
+  const demandLabels = { hungry:'hungry, no real quality yet', moderate:'moderate, one solid piece already' };
+  const cow = costOfWaitingFor(teamIdxOf(MY_TEAM_OWNER));
+  const depRows = cow.map(d=>{
+    const c = d.need==='hungry' ? 'var(--coral)' : 'var(--gold)';
+    const cliff = d.nextBest
+      ? `Miss all ${d.tier1Size} and next up is ${d.nextBest.name} at $${d.nextBest.price}${d.vorDrop>0.05?`, about ${d.vorDrop.toFixed(1)} fewer pts/gm`:''}${d.priceDrop!==0?` (${d.priceDrop>0?`$${d.priceDrop} cheaper`:`$${Math.abs(d.priceDrop)} more`})`:''}.`
+      : `Last real tier at the position, nothing behind it worth naming.`;
+    return `<div class="budget-row" title="You're ${d.need} at ${d.slot||posLabel(d.pos)}. ${d.tier1Size} players left in the top tier, best is ${d.best.name} at $${d.best.price}.">
       <span class="b-name">${posLabel(d.pos)}</span>
-      <span class="b-nums"><strong style="color:${col(d.state)}">${d.quality}</strong> <span style="color:var(--chalk-3);font-size:11px;">left vs ${d.needing} needing</span></span>
-    </div>${names}`;
+      <span class="b-nums"><strong style="color:${c}">${d.tier1Size}</strong> <span style="color:var(--chalk-3);font-size:11px;">like ${d.best.name} ($${d.best.price})</span></span>
+    </div>
+    <p class="panel-sub" style="margin:2px 0 8px;font-size:11px;">${demandLabels[d.need]||d.need}. ${cliff}</p>`;
   }).join('');
-
-  // Nobody competes for a $1 slot, so PK/DST never get the same urgency
-  // read -- but "how many decent ones are even left" is still a real
-  // question once the room starts filling those slots late, and leaving
-  // it out entirely was most of why this tab felt bare early in a draft.
-  const kickerDstRows = dep.filter(d=>['PK','DST'].includes(d.pos)).map(d=>
-    `<div class="budget-row" title="${d.quality} players in the top two ${d.slot} tiers still on the board">
-      <span class="b-name">${posLabel(d.pos)}</span>
-      <span class="b-nums"><strong style="color:var(--chalk-2)">${d.quality}</strong> <span style="color:var(--chalk-3);font-size:11px;">left</span></span>
-    </div>`).join('');
-
-  const thinnest = dep.find(d=>!['PK','DST'].includes(d.pos));
-  const note = thinnest
-    ? (thinnest.state==='gone'
-        ? `<span style="color:var(--coral)">Top-tier ${posLabel(thinnest.pos)}s are effectively gone. Anyone still shopping there is buying a worse player at the same price.</span>`
-        : `<span style="color:var(--chalk-2)">${posLabel(thinnest.pos)} is the thinnest position on the board right now, ${thinnest.quality} quality options for ${thinnest.needing} teams.</span>`)
-    : '';
+  const note = cow.length
+    ? ''
+    : '<span style="color:var(--chalk-3)">You already have real quality everywhere. Nothing on the board is urgent for you right now.</span>';
 
   const fpb = firepowerBoard().slice(0,5);
   const surplusRows = fpb.map(r=>{
@@ -4974,10 +4951,9 @@ function renderBoardState(){
       : '<span style="color:var(--chalk-3)">Nobody is under pressure yet, so prices should track value.</span>');
 
   const scarcityHTML = `
-    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Quality left</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Cost of waiting</div>
     ${depRows}
-    <p class="panel-sub" style="margin:8px 0 0;">${note}</p>
-    ${kickerDstRows ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin:14px 0 4px;">Kicker &amp; D/ST left</div>${kickerDstRows}` : ''}`;
+    ${note ? `<p class="panel-sub" style="margin:8px 0 0;">${note}</p>` : ''}`;
 
   const moneyHTML = `
     ${surplusRows ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">Money per real hole</div>${surplusRows}
@@ -8177,6 +8153,46 @@ function tierDepletion(){
     else                        o.state = 'deepest';
   });
   out.sort((a,b)=>a.cover-b.cover);
+  return out;
+}
+
+/* "N left vs N needing" sits near 1:1 for almost every position early in a
+   12-team room no matter what, so on its own it rarely says anything you
+   can act on, and it describes the whole room rather than you specifically.
+   What's actually actionable: for a position YOU still need real quality
+   at, what do you lose by passing right now and coming back after this
+   tier is gone -- the gap between the worst player you could still get
+   today and the best one waiting behind him. That's the real price of
+   waiting, in points and dollars, not just a scary-looking ratio. */
+function costOfWaitingFor(teamIdx){
+  const out = [];
+  ['RB','WRTE','QB','PK','DST'].forEach(pos=>{
+    const need = demandStateFor(teamIdx, pos);
+    if(need === 'stacked') return;
+    const pool = availablePool().filter(p=>p.pos===pos);
+    if(!pool.length) return;
+    const priceOf = p => suggestedDollar(p.mv,p.pos,p.name);
+    const tiers = buildTiersFrom(pool, pos);
+    const tier1 = tiers[0].slice().sort((a,b)=>priceOf(b)-priceOf(a));
+    const best = tier1[0];
+    const worstInTier1 = tier1[tier1.length-1];
+    const tier2 = (tiers[1]||[]).slice().sort((a,b)=>priceOf(b)-priceOf(a));
+    const nextBest = tier2[0] || null;
+    out.push({
+      pos, need, tier1Size: tier1.length,
+      best: { name: best.name, price: priceOf(best) },
+      nextBest: nextBest ? { name: nextBest.name, price: priceOf(nextBest) } : null,
+      vorDrop: nextBest ? Math.max(0, vor(worstInTier1) - vor(nextBest)) : null,
+      priceDrop: nextBest ? (priceOf(worstInTier1) - priceOf(nextBest)) : null,
+    });
+  });
+  // Real value on the table beats a position that's merely "needed" but has
+  // nowhere real to fall (a thin second tier means passing costs nothing).
+  out.sort((a,b)=>{
+    const av = a.vorDrop ?? -1, bv = b.vorDrop ?? -1;
+    if(Math.abs(av-bv) > 0.01) return bv-av;
+    return (a.need==='hungry'?0:1) - (b.need==='hungry'?0:1);
+  });
   return out;
 }
 
