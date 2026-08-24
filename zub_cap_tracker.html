@@ -1041,13 +1041,34 @@
      (least urgent while nothing's on the clock), then the left one, before
      falling back to the original three-column layout at the same breakpoint
      it already used. */
+  /* A roster list (18 slots, mostly "-") was built for a 320-340px rail and
+     stays exactly that narrow even once its box goes full-width below --
+     nothing about promoting the GRID ITEM to span the row reflows what's
+     INSIDE it, so it just sits as a tall, narrow column in the middle of a
+     wide empty box. Once the rail is full-width there is genuinely room for
+     two, so let starters and bench run two-up; the group labels, team
+     select and summary line stay full-width section breaks via the grid,
+     same trick a full CSS Grid uses for spanning headers between
+     auto-flowed cells. Reverts to one column again on a phone-width screen,
+     where two would just break names mid-word. */
   @media (max-width:1900px){
     .draft-layout{grid-template-columns:340px 380px 1fr 340px;}
     .draft-rail-right{grid-column:1 / -1;position:static;max-height:none;order:99;}
+    .draft-rail-right #otherRostersBody{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;}
+    .draft-rail-right #otherRostersBody>select,
+    .draft-rail-right #otherRostersBody>.or-team-head,
+    .draft-rail-right #otherRostersBody>.or-slot-group-label{grid-column:1 / -1;}
   }
   @media (max-width:1600px){
     .draft-layout{grid-template-columns:380px 1fr 340px;}
     .draft-rail-left{grid-column:1 / -1;position:static;max-height:none;order:99;}
+    .draft-rail-left #myRosterPanel{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;}
+    .draft-rail-left #myRosterPanel>.or-slot-group-label,
+    .draft-rail-left #myRosterPanel>p.panel-sub{grid-column:1 / -1;}
+  }
+  @media (max-width:600px){
+    .draft-rail-right #otherRostersBody,
+    .draft-rail-left #myRosterPanel{grid-template-columns:1fr;}
   }
   @media (max-width:1400px){
     .draft-layout{grid-template-columns:340px 1fr;}
