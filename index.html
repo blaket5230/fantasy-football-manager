@@ -1983,13 +1983,25 @@
       </div>
 
       <div class="draft-rail-right">
-        <!-- Everyone ELSE at the table: one team at a time, roster and money
-             together -- used to be a Rosters tab and a separate Money tab,
-             which meant leaving a team's roster just to check whether they
-             were flush or scraping for cash. -->
+        <!-- Everyone ELSE at the table: their rosters, and what their cap
+             space and spending pressure says about what they do next. -->
         <div class="panel side-panel">
-          <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
-          <div id="otherRostersBody"></div>
+          <div class="side-tabs" id="otherTabs">
+            <button class="side-tab active" data-side="rosters">Rosters</button>
+            <button class="side-tab" data-side="money">Money</button>
+          </div>
+
+          <div class="side-body" data-pane="rosters">
+            <p class="panel-sub">Live, including tonight's picks. Starters are a best guess at who's actually playing right now, not the draft order -- an early pick slides to bench the moment something better fills his slot.</p>
+            <div id="otherRostersBody"></div>
+          </div>
+
+          <div class="side-body" data-pane="money" hidden>
+            <p class="panel-sub">Every team's cap space, plus whose money is under real pressure to move.</p>
+            <h3 style="font-size:12px;">Cap space</h3>
+            <div id="draftBudgets"></div>
+            <div id="draftOtherMoneyBody" style="margin-top:16px;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -4717,7 +4729,7 @@ function bindMockDraftControls(){
    team, Player pool/analytics, Other teams). Each box gets its own tab group
    rather than one global one, so switching a tab in one box can't touch the
    other two -- everything below is scoped to a containerId. */
-let sidePanes = { myTeamTabs:'roster', poolTabs:'pool' };
+let sidePanes = { myTeamTabs:'roster', poolTabs:'pool', otherTabs:'rosters' };
 function bindSideTabs(containerId){
   const wrap = document.getElementById(containerId);
   if(!wrap || wrap.dataset.bound) return;
@@ -4798,6 +4810,7 @@ function bindDraftSubs(){
 function renderDraftView(){
   bindSideTabs('myTeamTabs');
   bindSideTabs('poolTabs');
+  bindSideTabs('otherTabs');
   bindDraftSubs();
   bindMockDraftControls();
   /* The top status strip (cap space, active players, open slots, dead money)
@@ -4808,6 +4821,12 @@ function renderDraftView(){
      already runs after every one of those actions, so this is the one place
      that covers all of them without needing to patch each call site. */
   renderStatusStrip();
+  const rows = state.teams.map((t,i)=>{
+    const slots = effOpenSlots(i);
+    const isMe = t.owner===MY_TEAM_OWNER;
+    return `<div class="budget-row"><span class="b-name">${isMe?'&#9733; ':''}${t.owner}</span><span class="b-nums"><strong>$${effCapLeft(i,state.currentYear)}</strong> &middot; ${slots} open</span></div>`;
+  }).join('');
+  document.getElementById('draftBudgets').innerHTML = rows;
 
   renderMyRoster();
   renderOtherRosters();
@@ -5198,18 +5217,6 @@ function renderOtherRosters(){
     `<option value="${idx}" ${idx===i?'selected':''}>${state.teams[idx].owner}</option>`
   ).join('');
 
-  // Quick scan of everyone at the table (cap left, slots open, whether their
-  // money is under pressure to move) before drilling into any one team below
-  // -- this used to be its own Money tab; folding it in here means picking
-  // who to check and actually checking them is the same click, not two.
-  const fm = forcedMoney();
-  const pressureColor = { 'must spend':'var(--coral)', scraping:'var(--chalk-3)', flexible:'var(--chalk-2)', done:'var(--jade)' };
-  const glanceRows = fm.rows.map(r=>
-    `<div class="budget-row" title="${r.pressure==='done'?'Roster full.':`$${(r.perMan||0).toFixed(1)} a man, ${r.pressure}.`}">
-      <span class="b-name">${r.mine?'&#9733; ':''}${r.owner}${r.idx===i?' &larr;':''}</span>
-      <span class="b-nums"><strong style="color:${pressureColor[r.pressure]||'var(--chalk-2)'}">$${r.cap}</strong> <span style="color:var(--chalk-3);font-size:11px;">&middot; ${r.slots} open</span></span>
-    </div>`).join('');
-
   const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos}))
     .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos})));
   const { starters, bench } = assignLineup(held);
@@ -5231,35 +5238,9 @@ function renderOtherRosters(){
     `<div class="or-slot"><span class="or-slot-label">Extra</span><span class="or-slot-name">${pl.name}</span></div>`
   ).join('');
 
-  // What this specific team's money says about what they do next: the same
-  // per-man pressure read as the glance strip above, plus firepower (what's
-  // actually left in their budget once the cheap mandatory slots are covered).
-  const myFm = fm.rows.find(r=>r.idx===i);
-  const fp = firepower(i);
-  // The rail is too narrow for a real sentence on the same line as the
-  // number without squeezing the label down to one letter -- number in the
-  // row, the description underneath, same pattern Cost of waiting uses.
-  const moneyLine = myFm && myFm.pressure!=='done'
-    ? `<div class="budget-row">
-        <span class="b-name">Pressure</span>
-        <span class="b-nums"><strong style="color:${pressureColor[myFm.pressure]||'var(--chalk-2)'}">$${(myFm.perMan||0).toFixed(1)}</strong> <span style="color:var(--chalk-3);font-size:11px;">a man</span></span>
-      </div>
-      <p class="panel-sub" style="margin:2px 0 8px;font-size:11px;">${myFm.pressure}, up to $${myFm.maxBid} on one player.</p>`
-    : '';
-  const firepowerLine = fp && fp.realHoles > 0
-    ? `<div class="budget-row">
-        <span class="b-name">Real holes</span>
-        <span class="b-nums"><strong>${fp.realHoles}</strong> <span style="color:var(--chalk-3);font-size:11px;">left</span></span>
-      </div>
-      <p class="panel-sub" style="margin:2px 0 8px;font-size:11px;">~$${fp.perStarter.toFixed(0)} each, up to $${fp.maxOnOne} on one.${fp.needs.length?` Still needs: ${fp.needs.join(', ')}.`:''}</p>`
-    : '';
-
   wrap.innerHTML = `
-    <div class="or-slot-group-label">All teams</div>
-    ${glanceRows}
-    <select id="otherRosterSelect" style="width:100%;margin-top:10px;">${options}</select>
+    <select id="otherRosterSelect" style="width:100%;">${options}</select>
     <div class="or-team-head" style="margin-top:10px;"><span>${t.owner}</span><span class="or-team-cap">$${effCapLeft(i,state.currentYear)} &middot; ${effOpenSlots(i)} open</span></div>
-    ${moneyLine}${firepowerLine}
     <div class="or-slot-group-label">Starters</div>
     ${starterRows}
     <div class="or-slot-group-label">Bench</div>
