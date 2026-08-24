@@ -8381,7 +8381,12 @@ function achievableRoster(opts){
 
   const taken=new Set([...heldNames,...used]);
   const counts={}; [...held,...bought].forEach(x=>{counts[x.pos]=(counts[x.pos]||0)+1;});
-  const POS_MAX={QB:2,PK:2,DST:2,RB:7,WR:8,TE:4};
+  // TE matches QB's cap on purpose: only one ever starts, so a bench TE
+  // carries none of the bye/injury-replacement value that makes bench RB/WR
+  // worth owning. A pure value-per-dollar solve would happily stack three or
+  // four of them since TE is often the cheapest position with positive VOR
+  // left on the board -- this stops it from mistaking "cheap" for "useful."
+  const POS_MAX={QB:2,PK:2,DST:2,RB:7,WR:8,TE:2};
   keepBench.forEach((slot,i)=>{
     const left=keepBench.length-i-1;
     const spendable=cap-spend-left;
