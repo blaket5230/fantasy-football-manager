@@ -869,6 +869,10 @@
   @media (max-width:720px){ .mode{flex:1 1 100%;} }
   .pool-row:hover td{background:rgba(123,143,247,.07);}
   .pool-row:hover b{color:var(--peri);}
+  /* "Show drafted" opt-in only -- a taken player stays on the board, struck
+     through and faded, rather than reflowing the list out from under you. */
+  .pool-row-gone{opacity:.5;}
+  .pool-row-gone b{text-decoration:line-through;}
   .pos-tag, .dead-tag{
     display:inline-block;font-family:'JetBrains Mono',monospace;font-weight:500;
     border-radius:4px;white-space:nowrap;vertical-align:middle;
@@ -5077,7 +5081,11 @@ function renderDraftPool(){
   bindPoolFilters('draft', renderDraftPool);
   const list = applyPoolFilters(poolRowsFor());
   const cnt = document.getElementById('draftPoolCount');
-  if(cnt) cnt.textContent = `${list.length} shown of ${availablePool().length} available`;
+  if(cnt){
+    const goneShown = POOL_FILTERS.showDrafted ? list.filter(r=>r.gone).length : 0;
+    cnt.textContent = `${list.length} shown of ${availablePool().length} available`
+      + (goneShown ? ` (${goneShown} of those already drafted)` : '');
+  }
   document.getElementById('draftPoolTable').innerHTML = poolTableHTML(list.slice(0,120), {action:true});
   document.querySelectorAll('#draftPoolTable tr[data-pool-pick]').forEach(tr=>{
     tr.addEventListener('click', ()=> putOnTheClock(tr.dataset.poolPick));
@@ -9332,7 +9340,21 @@ function sentimentFor(p){
    same component with different chrome, so what you study beforehand is
    literally what you bid against.                                          */
 
-const POOL_FILTERS = { q:'', slot:'', view:'all', sort:'value' };
+const POOL_FILTERS = { q:'', slot:'', view:'all', sort:'value', showDrafted:false };
+
+/* Who already has a name, and how -- a keeper he came in with tonight, or a
+   live pick logged this session. Same two sources renderAllRostersGrid
+   already reads for the same reason (see its own keeper/price comment). Only
+   worth calling for a name draftedNamesSet() has already confirmed is taken;
+   returns null for anyone still open. */
+function draftedOwnerOf(name){
+  for(const t of state.teams){
+    if(t.players.some(p=>!p.deadCap && p.name===name)) return t.owner;
+  }
+  const pick = (state.draftPicks||[]).find(p=>p.name===name);
+  if(pick) return (state.teams[pick.teamIdx]||{}).owner || null;
+  return null;
+}
 
 /* Building a row means sentiment, tiers, supply and stash for every one of 463
    players, which is over three seconds. The answer only changes when the board
@@ -9341,7 +9363,7 @@ const POOL_FILTERS = { q:'', slot:'', view:'all', sort:'value' };
 let _rowCache = null, _rowKey = '';
 function poolRowsFor(){
   const key = (state.draftPicks||[]).length + '#' + DRAFT_POOL.length + '#'
-            + Object.keys(state.myReads||{}).length + '#' + state.currentYear;
+            + Object.keys(state.myReads||{}).length + '#' + state.currentYear + '#' + POOL_FILTERS.showDrafted;
   if(_rowCache && _rowKey === key) return _rowCache;
   const built = buildPoolRows();
   _rowCache = built; _rowKey = key;
@@ -9349,7 +9371,14 @@ function poolRowsFor(){
 }
 function buildPoolRows(){
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
-  return availablePool().map(p=>{
+  // Same reasoning as the tier rail: a taken player doesn't just disappear
+  // when you're trying to read the board as a running log of the draft, so
+  // "show drafted" builds off the full pool instead of availablePool() and
+  // tags each row gone/not rather than filtering here.
+  const taken = draftedNamesSet();
+  const base = POOL_FILTERS.showDrafted ? DRAFT_POOL : availablePool();
+  return base.map(p=>{
+    const gone  = taken.has(p.name);
     const sugg  = suggestedDollar(p.mv, p.pos, p.name);
     const term  = recommendedTerm(p);
     const econ  = termEconomics(sugg, term.years);
@@ -9364,7 +9393,8 @@ function buildPoolRows(){
     const ecr   = ecrValueRead(p);
     const cons  = consensusRead(p);
     const sent  = sentimentFor(p);
-    return { p, sugg, term, econ, ceil, exp, ti, run, need, hold, stash, prod, ecr, cons, sent,
+    return { p, sugg, term, econ, ceil, exp, ti, run, need, hold, stash, prod, ecr, cons, sent, gone,
+             owner: gone ? draftedOwnerOf(p.name) : null,
              age: (typeof p.age==='number') ? p.age : null };
   });
 }
@@ -9617,17 +9647,24 @@ function poolFilterBar(prefix){
           ${[['value','Best this season'],['hold','Value per dollar'],['sent','Sentiment'],['price','Most expensive'],['cheap','Cheapest'],['dyn','Dynasty value'],['age','Youngest']]
             .map(([v,l])=>`<option value="${v}" ${POOL_FILTERS.sort===v?'selected':''}>${l}</option>`).join('')}
         </select></div>
+      <div style="align-self:flex-end;padding-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="${prefix}ShowDrafted" ${POOL_FILTERS.showDrafted?'checked':''} style="width:auto;">
+          Show drafted
+        </label>
+      </div>
     </div>`;
 }
 
 function bindPoolFilters(prefix, rerender){
-  const map = { Q:'q', Slot:'slot', View:'view', Sort:'sort' };
+  const map = { Q:'q', Slot:'slot', View:'view', Sort:'sort', ShowDrafted:'showDrafted' };
   Object.entries(map).forEach(([sfx,key])=>{
     const el = document.getElementById(prefix+sfx);
     if(!el || el.dataset.bound) return;
     el.dataset.bound = '1';
+    const isCheckbox = el.type === 'checkbox';
     el.addEventListener(sfx==='Q' ? 'input' : 'change', ()=>{
-      POOL_FILTERS[key] = el.value;
+      POOL_FILTERS[key] = isCheckbox ? el.checked : el.value;
       rerender();
       if(sfx==='Q'){ const again = document.getElementById(prefix+'Q'); if(again){ again.focus(); again.setSelectionRange(again.value.length, again.value.length); } }
     });
@@ -9724,12 +9761,17 @@ function poolTableHTML(list, opts){
     const ul = { critical:'Foot down', high:'Tight', medium:'Some room', low:'Deep' }[r.run.urgency] || '';
 
     const RAIL={QB:'#E5B567',RB:'#3FB68B',WRTE:'#7B8FF7',PK:'#8FA3B8',DST:'#AA82E6'};
-    return `<tr class="pool-row" data-open-card="${esc}" style="cursor:pointer;--rail:${RAIL[p.pos]||'transparent'};">
+    // Only present when the "show drafted" toggle pulled him in at all --
+    // struck through and faded rather than dropped, same treatment the tier
+    // rail already gives a taken player, plus who actually has him since this
+    // row has the room for it.
+    const goneBadge = r.gone ? `<span class="dead-tag" style="margin-left:4px;" title="Already drafted">TAKEN${r.owner?` &middot; ${r.owner}`:''}</span>` : '';
+    return `<tr class="pool-row${r.gone?' pool-row-gone':''}" data-open-card="${esc}" style="cursor:pointer;--rail:${RAIL[p.pos]||'transparent'};">
       <td style="text-align:left;">
         ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}
         <span class="pos-tag pos-${p.pos}" style="margin-left:4px;">${posLabel(p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${logoHTML(p.nfl,14)} ${p.nfl}</span>
-        ${flags}
+        ${flags}${goneBadge}
       </td>
       <td>${rateCell}</td>
       <td>${sTxt}</td>
@@ -9767,8 +9809,10 @@ function renderPoolView(){
   }
   const list = applyPoolFilters(poolRowsFor());
   const rated = Object.keys(state.myReads||{}).length;
+  const goneShown = POOL_FILTERS.showDrafted ? list.filter(r=>r.gone).length : 0;
   document.getElementById('poolCount').textContent =
     `${list.length} player${list.length===1?'':'s'} shown of ${availablePool().length} still available`
+    + (goneShown ? ` (${goneShown} of those already drafted)` : '')
     + (rated ? ` \u00b7 you have marked ${rated}, saved automatically` : '');
   const tbl = document.getElementById('poolTable');
   tbl.innerHTML = poolTableHTML(list.slice(0,150), {});
