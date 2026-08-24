@@ -8494,6 +8494,43 @@ function achievableRoster(opts){
   const openBenchSlotObjs = keepBench.filter(s=>!s.earmark);
   const reserveBudget = () => Math.max(1, cap - spend - (keepBench.length - reservedBySlot.size - 1));
 
+  /* RB and true-WR floors -- the mirror image of the QB/TE ceilings, and
+     reserved FIRST, ahead of handcuff/stash, because a viable roster shape
+     is a harder requirement than either optimization. QB and TE needed a
+     ceiling because the WR/TE merge made them look equally valuable per
+     dollar when a roster doesn't need many of either. RB and WR need a
+     floor for the reverse reason: a genuinely useless $1 RB is common,
+     real NFL backfields don't hand replacement-level backs usable volume,
+     while a genuinely useful $1 WR is common too -- so pure value ranking
+     correctly avoids bad RBs on their own merits, and can quietly leave
+     the roster too thin at the position with the league's worst injury
+     volatility without ever being wrong about any single pick. */
+  const RB_FLOOR = 4, WR_FLOOR = 4;
+  const isTrueWR = p => p.pos==='WRTE' && !TRUE_TE.has(p.name);
+  const rosterAfterStarters = [...held, ...bought];
+  const rbCount = rosterAfterStarters.filter(p=>p.pos==='RB').length;
+  const wrCount = rosterAfterStarters.filter(p=>isTrueWR(p)).length;
+
+  function reserveFloor(need, matches){
+    while(need > 0){
+      const slot = openBenchSlotObjs.find(s=>!reservedBySlot.has(s));
+      if(!slot) break; // out of bench room -- get as close as the roster allows
+      const pick = availablePool()
+        .filter(p => slot.eligible.includes(p.pos) && !taken.has(p.name)
+                   && playerTag(p.name)!=='avoid'
+                   && priceOf(p) <= reserveBudget()
+                   && matches(p))
+        .map(p=>({p, d:priceOf(p), v:vor(p)}))
+        .sort((a,b)=>(b.v/b.d)-(a.v/a.d))[0];
+      if(!pick) break; // nothing left that fits the slot/budget -- stop, don't force a bad one
+      taken.add(pick.p.name); counts[pick.p.pos]=(counts[pick.p.pos]||0)+1; spend+=pick.d;
+      reservedBySlot.set(slot, {p:pick.p, d:pick.d});
+      need--;
+    }
+  }
+  reserveFloor(Math.max(0, RB_FLOOR - rbCount), p=>p.pos==='RB');
+  reserveFloor(Math.max(0, WR_FLOOR - wrCount), isTrueWR);
+
   if(openBenchSlotObjs.length){
     const hcSlot = openBenchSlotObjs[openBenchSlotObjs.length-1];
     const handcuffPick = availablePool()
