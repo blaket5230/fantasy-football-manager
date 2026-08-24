@@ -539,7 +539,9 @@
   .pcard-insight .pi-more:hover{text-decoration:underline;}
 
   /* ---- draft sidebar tabs ---- */
-  .side-panel{position:sticky;top:16px;}
+  /* Used to be position:sticky, but its one remaining user (Pool by Tier's
+     card) sits in a CSS Grid where sticky doesn't behave the way it does in
+     a plain flow layout -- see the longer note by .draft-layout below. */
   .side-tabs{display:flex;gap:2px;margin:-4px -6px 14px;flex-wrap:wrap;}
   .side-tab{
     flex:1 1 auto;background:none;border:none;border-bottom:2px solid transparent;
@@ -553,7 +555,6 @@
     display:inline-block;width:5px;height:5px;border-radius:50%;
     background:var(--coral);margin-left:4px;vertical-align:middle;
   }
-  @media (max-width:980px){ .side-panel{position:static;} }
 
 
 
@@ -972,42 +973,23 @@
   .trade-verdict strong{color:var(--chalk);}
 
   /* ---------- DRAFT LAYOUT ---------- */
-  /* Three columns wide: reference panels, the actual bid/nominate/plan/pool
-     work, and the draft board -- always visible, not a tab you leave the bid
-     panel to check. Two intermediate breakpoints before the full single-
-     column mobile stack: first the history column drops below (still full
-     width, still on screen without much scrolling), then at the existing
-     mobile breakpoint everything stacks the way it always has. */
-  /* Every column is capped to the viewport and scrolls internally rather
-     than the page scrolling -- the goal on Draft Day is the whole workspace
-     fitting on screen at once, so no column is allowed to push the document
-     taller than one view. A column that still doesn't fit gets its own
-     scrollbar (a contained "popout"), which is a very different, much less
-     disruptive thing than losing the bid panel off the bottom of the browser
-     mid-auction. */
-  /* min-height:0 on every column below is not decorative -- a grid item's
-     default min-height is "auto", which floors it at its own UNCLAMPED
-     content height regardless of max-height, so the grid row (and therefore
-     the page) still grows to fit the tallest column's real content even
-     though that column visually clips and scrolls correctly on its own.
-     Overriding the floor to 0 is what lets max-height+overflow actually stop
-     the row -- and the page -- from growing past the viewport. */
-  /* position:sticky and the max-height/overflow-y that clips a column to the
-     viewport live on DIFFERENT elements on purpose. Sticky + overflow on the
-     SAME element visually clips fine but still inflates
-     document.scrollHeight (a real, documented sticky/overflow interaction
-     quirk) -- so the outer column stays sticky, and the actual height cap +
-     scrollbar sit on the .panel it wraps. .draft-main was never sticky, so
-     it doesn't have this problem and keeps the cap directly. */
   /* Three columns up top -- the draft board, bidding in the middle, the
      player pool on the right -- with every team's roster as its own
-     full-width row underneath. The board goes back to being a persistent
-     side column instead of a full-width row now that there's genuinely
-     room for it beside bidding; the roster grid is the one that needs the
-     full width, since it is trying to show 12 teams at once instead of one
-     running sheet. */
+     full-width row underneath.
+
+     None of the three top columns are position:sticky. That was tried and
+     it does not actually work inside a CSS Grid the way it does in a plain
+     flex/block layout: a sticky grid item's "stuck" range is bound to its
+     own generated box, but with align-items:start and no explicit height,
+     that box is sized by the item's OWN content, not by the grid row --
+     so as the page scrolled toward the full-width roster grid below, the
+     board and pool columns kept trailing the scroll well past where their
+     own content ended and visibly overlapped the roster cards underneath.
+     Confirmed by an actual screenshot mid-scroll, not just reasoning about
+     it. Plain static columns that scroll away normally, same as every
+     other view in the app, is what's actually correct here. */
   .draft-layout{display:grid;grid-template-columns:340px 1fr 380px;gap:18px;align-items:start;}
-  .draft-history-col,.draft-sidebar{position:sticky;top:16px;min-width:0;}
+  .draft-history-col,.draft-sidebar{min-width:0;}
   .draft-history-col .panel,.draft-sidebar .panel{margin-bottom:0;min-width:0;}
   .draft-main{min-width:0;}
   .draft-rosters-col{grid-column:1 / -1;min-width:0;}
@@ -1017,11 +999,10 @@
      a 340px board column is too cramped alongside bidding, so it drops too. */
   @media (max-width:1150px){
     .draft-layout{grid-template-columns:340px 1fr;}
-    .draft-sidebar{grid-column:1 / -1;position:static;}
+    .draft-sidebar{grid-column:1 / -1;}
   }
   @media (max-width:820px){
     .draft-layout{grid-template-columns:1fr;}
-    .draft-history-col{position:static;}
   }
 
   /* Every team's roster in one grid instead of a dropdown, six across so 12
