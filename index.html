@@ -8410,14 +8410,24 @@ function achievableRoster(opts){
      0 TEs and 8 WRs is exactly as legal as one of 4 TEs and 4 WRs, so within
      that combined pool this applies no penalty at all -- just take whichever
      WR/TE-eligible player is genuinely best, in whatever mix that produces.
-     QB, PK, and DST are different: each has exactly one real starting slot
+     PK and DST decay the same way: each has exactly one real starting slot
      and nothing else competes for it, so a second copy really is redundant
-     the moment you already have one, and decays hard. RB gets its own room
-     for the same reason WR/TE gets none -- it doesn't share a slot with
-     anything else, so "how many RBs is normal" is a real, distinct question.
-     Each copy past ROOM is worth 40% of the last, compounding -- not zero,
-     so a genuine outlier can still win, just not mistaken for the first. */
-  const BENCH_ROOM = { QB:1, PK:1, DST:1, RB:3 };
+     the moment you already have one. RB gets its own room for the same
+     reason WR/TE gets none -- it doesn't share a slot with anything else,
+     so "how many RBs is normal" is a real, distinct question. Each copy
+     past ROOM is worth 40% of the last, compounding -- not zero, so a
+     genuine outlier can still win, just not mistaken for the first.
+
+     QB is a hard cap instead of a decay, same reasoning and same fix as the
+     TE ceiling below: this is a single-QB league, so a backup's own
+     projected line is close to zero and a decay can still lose to a
+     genuinely-productive $1 body once the cheap WRTE options thin out late
+     in the bench -- explicitly not wanted here, since a real backup for bye
+     and injury cover is plenty and a third or fourth is dead roster space,
+     not upside. */
+  const QB_CAP = 2;
+  const qbRoomLeft = () => (counts.QB||0) < QB_CAP;
+  const BENCH_ROOM = { PK:1, DST:1, RB:3 };
   const benchDecay = pos => {
     if(!(pos in BENCH_ROOM)) return 1; // WRTE: no redundancy penalty, see comment above
     const already = counts[pos]||0;
@@ -8508,7 +8518,8 @@ function achievableRoster(opts){
       .find(p => !taken.has(p.name) && stSlot.eligible.includes(p.pos)
                && playerTag(p.name)!=='avoid'
                && priceOf(p) <= reserveBudget()
-               && (!TRUE_TE.has(p.name) || teRoomLeft()));
+               && (!TRUE_TE.has(p.name) || teRoomLeft())
+               && (p.pos!=='QB' || qbRoomLeft()));
     if(stashPick){
       const d = priceOf(stashPick);
       taken.add(stashPick.name); counts[stashPick.pos]=(counts[stashPick.pos]||0)+1; spend+=d;
@@ -8530,7 +8541,8 @@ function achievableRoster(opts){
       .filter(x=>slot.eligible.includes(x.pos) && !taken.has(x.name)
               && playerTag(x.name)!=='avoid'
               && priceOf(x) <= Math.max(1,spendable)
-              && (!TRUE_TE.has(x.name) || teRoomLeft()))
+              && (!TRUE_TE.has(x.name) || teRoomLeft())
+              && (x.pos!=='QB' || qbRoomLeft()))
       .map(x=>({x,d:priceOf(x),v:vor(x)*benchDecay(x.pos),t:playerTag(x.name)}));
     if(!cands.length){ picks.push({slot,p:null,d:0}); return; }
     const w=o=>o.t==='target'?1.25:1;
