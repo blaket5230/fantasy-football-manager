@@ -4652,12 +4652,17 @@ function renderPoolTierRail(){
   const wrap = document.getElementById('poolTierBody');
   if(!wrap) return;
   const taken = draftedNamesSet();
-  const order = ['QB','RB','WRTE','PK','DST'];
-  const pos = order.includes(poolTierSelectedPos) ? poolTierSelectedPos : order[0];
+  // OVERALL leads -- it's the one view with no natural position to default
+  // to, so it earns first position rather than getting buried after five
+  // real ones. poolTierSelectedPos still defaults to 'RB' below, so this
+  // doesn't change what shows on first load, only where the tab sits.
+  const order = ['OVERALL','QB','RB','WRTE','PK','DST'];
+  const pos = order.includes(poolTierSelectedPos) ? poolTierSelectedPos : 'RB';
   poolTierSelectedPos = pos;
+  const railLabel = o => o==='OVERALL' ? 'Overall' : posLabel(o);
 
   const tabsHTML = `<div class="side-tabs" id="poolTierTabs">${order.map(o=>
-    `<button class="side-tab ${o===pos?'active':''}" data-pos="${o}">${posLabel(o)}</button>`
+    `<button class="side-tab ${o===pos?'active':''}" data-pos="${o}">${railLabel(o)}</button>`
   ).join('')}</div>`;
 
   // buildTiersFrom() now clusters on real price rather than the model's own
@@ -4669,7 +4674,12 @@ function renderPoolTierRail(){
   // just what's left, so a player who gets taken doesn't reshuffle the tier
   // boundaries out from under everyone else -- he stays in his tier, just
   // struck through and faded, so the rail also reads as a running draft log.
-  const allAtPos = DRAFT_POOL.filter(p=>p.pos===pos);
+  //
+  // OVERALL mixes every position into that same price-cluster pass. It has
+  // no TIER_SPREAD/TIER_CLIFF entry of its own, so buildTiersFrom() falls
+  // back to the RB/WRTE constants (0.18/0.12) -- a reasonable default for a
+  // blended board rather than a dedicated tuning nobody asked for.
+  const allAtPos = pos==='OVERALL' ? DRAFT_POOL.slice() : DRAFT_POOL.filter(p=>p.pos===pos);
   const remainingAtPos = allAtPos.filter(p=>!taken.has(p.name));
   const body = !allAtPos.length
     ? `<p class="panel-sub">No ${pos}s in the pool.</p>`
@@ -4701,10 +4711,14 @@ function renderPoolTierRail(){
         const tierBlocks = visible.map((t,i)=>{
           const names = t.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
           const capped = i===partialAt ? names.slice(0, partialShow) : names;
+          // Position is implicit within a single-position tab, but Overall
+          // mixes all five together, so each row needs its own badge --
+          // otherwise a tier block is just an unlabeled wall of names.
           const rows = capped.map(p=>{
             const gone = taken.has(p.name);
             const nomAttr = gone ? '' : ` data-pt-nom="${p.name.replace(/"/g,'&quot;')}"`;
-            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${gone?p.name:`Put ${p.name} on the clock`}"${nomAttr}><span class="pt-player-name">${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
+            const posBadge = pos==='OVERALL' ? `<span class="pos-tag pos-${p.pos}" style="margin-right:5px;">${posLabel(p.pos)}</span>` : '';
+            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${gone?p.name:`Put ${p.name} on the clock`}"${nomAttr}><span class="pt-player-name">${posBadge}${p.name}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label">Tier ${i+1} &middot; ${t.length}</div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
@@ -4713,7 +4727,10 @@ function renderPoolTierRail(){
           ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show ${hiddenCount} more, ${hiddenTierCount} more tier${hiddenTierCount===1?'':'s'}</span>`
           : (poolTierExpanded && tiers.length>1 ? `<span class="row-act" tabindex="0" role="button" id="poolTierToggle">show less</span>` : '');
 
-        return `<div class="pt-pos-head"><span class="pos-tag pos-${pos}">${posLabel(pos)}</span><span class="pt-pos-count">${remainingAtPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
+        const posHead = pos==='OVERALL'
+          ? `<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--chalk);">Overall</span>`
+          : `<span class="pos-tag pos-${pos}">${posLabel(pos)}</span>`;
+        return `<div class="pt-pos-head">${posHead}<span class="pt-pos-count">${remainingAtPos.length} left</span></div>${tierBlocks}${toggle?`<div style="margin-top:8px;">${toggle}</div>`:''}`;
       })();
 
   wrap.innerHTML = tabsHTML + body;
