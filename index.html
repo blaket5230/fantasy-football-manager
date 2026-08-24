@@ -1866,7 +1866,7 @@
           <button class="sub-tab active" data-sub="bid">Bid</button>
           <button class="sub-tab" data-sub="nominate">Nominate</button>
           <button class="sub-tab" data-sub="plan">My plan</button>
-          <button class="sub-tab" data-sub="pool">Pool</button>
+          <button class="sub-tab" data-sub="pool">Tiers</button>
         </nav>
 
         <div id="situationStrip" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em;color:var(--chalk-2);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:7px 12px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:4px 14px;"></div>
@@ -1932,11 +1932,9 @@
 
         <div class="sub-body" data-sub="pool" hidden>
         <div class="panel">
-          <h3>Available pool</h3>
-          <p class="panel-sub">Same board as the Player Pool tab, filters and all. Click any row to put that player on the clock above.</p>
-          <div id="draftFilterBar"></div>
-          <p class="panel-sub" id="draftPoolCount" style="margin:0 0 10px;"></p>
-          <div class="table-scroll"><table class="result-table" id="draftPoolTable"></table></div>
+          <h3>Pool by tier</h3>
+          <p class="panel-sub">Who's actually left, grouped by natural price gaps -- same tier read the live bid panel uses on a specific player, so the numbers here match his.</p>
+          <div id="poolTierBody"></div>
         </div>
 
         </div>
@@ -1948,15 +1946,17 @@
              whether the room is overpaying or underpaying right now. -->
         <div class="panel side-panel">
           <div class="side-tabs" id="poolTabs">
-            <button class="side-tab active" data-side="pool">Pool by tier</button>
+            <button class="side-tab active" data-side="pool">Pool list</button>
             <button class="side-tab" data-side="quality">Cost of waiting</button>
             <button class="side-tab" data-side="market">Market</button>
             <button class="side-tab" data-side="ideal">Ideal team</button>
           </div>
 
           <div class="side-body" data-pane="pool">
-            <p class="panel-sub">Who's actually left, grouped by natural price gaps -- same tier read the live bid panel uses on a specific player, so the numbers here match his.</p>
-            <div id="poolTierBody"></div>
+            <p class="panel-sub">Same list as Prep's Player Pool tab, filters and all. Click any row to open his card.</p>
+            <div id="draftFilterBar"></div>
+            <p class="panel-sub" id="draftPoolCount" style="margin:0 0 10px;"></p>
+            <div class="table-scroll"><table class="result-table" id="draftPoolTable"></table></div>
           </div>
 
           <div class="side-body" data-pane="quality" hidden>
@@ -4169,10 +4169,15 @@ function showSidePane(containerId, key){
   if(!root) return;
   const scope = root.parentElement;
   if(containerId === 'poolTabs' && key === 'ideal') setTimeout(()=>{ try{ renderSolver(); }catch(e){} }, 0);
-  // Pool by tier's own QB/RB/WR/... tabs reuse .side-tab for the same look
-  // and live nested inside this same scope (inside the "pool" side-body), so
-  // this can only touch buttons that are direct children of THIS group's own
-  // tab bar, never any tab bar nested one level deeper inside a pane.
+  /* The flat pool list is the one expensive-to-build view here (buildPoolRows()
+     is cached, but stamping ~120 rows of HTML is not free), so it's built lazily
+     on the same "only render your own tab when it's actually showing" pattern
+     the sub-tabs above use, rather than as part of every renderDraftView(). */
+  if(containerId === 'poolTabs' && key === 'pool') setTimeout(()=>{ try{ renderDraftPool(); }catch(e){} }, 0);
+  // A tab bar reusing .side-tab can live nested one level deeper inside a
+  // pane (e.g. the tier rail's own QB/RB/WR/... tabs, now inside the Tiers
+  // sub-tab rather than here), so this can only touch buttons that are
+  // direct children of THIS group's own tab bar.
   root.querySelectorAll(':scope > .side-tab').forEach(b=>
     b.classList.toggle('active', b.dataset.side === key));
   scope.querySelectorAll(':scope > .side-body').forEach(el=>{
@@ -4217,7 +4222,6 @@ function markSideAlerts(){
 let draftSub = 'bid';
 function showDraftSub(key){
   draftSub = key;
-  if(key === 'pool') setTimeout(()=>{ try{ renderDraftPool(); }catch(e){} }, 0);
   document.querySelectorAll('.sub-tab').forEach(b=>
     b.classList.toggle('active', b.dataset.sub === key));
   document.querySelectorAll('.sub-body').forEach(el=>{
@@ -5047,8 +5051,9 @@ function renderDraftPool(){
     rbf.addEventListener('change', ()=>{ if(rbf.files[0]) importDraftBoardJSON(rbf.files[0]); rbf.value=''; });
   }
   /* Skip the table build when its tab is not showing. It is the most expensive
-     thing on the page and you are usually looking at the bid panel. */
-  if(typeof draftSub !== 'undefined' && draftSub !== 'pool'){ renderUndo(); return; }
+     thing on the page and you are usually looking at the bid panel. Lives in
+     the sidebar's Pool list tab now, not the middle card's own sub-tabs. */
+  if(sidePanes.poolTabs !== 'pool'){ renderUndo(); return; }
   renderUndo();
   const bar = document.getElementById('draftFilterBar');
   if(bar && bar.dataset.built !== '1'){ bar.innerHTML = poolFilterBar('draft'); bar.dataset.built='1'; }
@@ -5067,7 +5072,7 @@ function renderDraftPool(){
    not something anyone does while a player is being nominated. It now offers
    matches as you type and you pick one. */
 document.getElementById('draftSearchBox').addEventListener('input', ()=>{
-  if(draftSub === 'pool') renderDraftPool();
+  if(sidePanes.poolTabs === 'pool') renderDraftPool();
   renderSearchMatches();
 });
 document.getElementById('draftSearchBox').addEventListener('keydown', e=>{
