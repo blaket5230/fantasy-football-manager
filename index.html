@@ -7415,24 +7415,53 @@ function ppgCurveFor(pos){
   _ppgCurve[pos] = vals;
   return vals;
 }
+/* Ranks every player who shares an internal pos (p.pos -- since the WR/TE
+   merge, that means the combined "WRTE" group) against each other by real
+   overall consensus rank, once per group and cached. This is NOT the same
+   question as the data's own posRank field ("TE1", "WR1"), which answers
+   "where does he rank among true tight ends / true receivers" -- a real
+   position question, unrelated to what curve p.pos now maps to. The two
+   used to be the same thing, back when TE and WR were separate internal
+   positions with their own separate curves; the merge changed what p.pos
+   means without updating this to match, so "TE1" was silently getting
+   read as rank 0 of the COMBINED curve -- the single most valuable
+   WR/TE-eligible player in football -- when a real TE1 actually sits
+   somewhere around 8th once the WRs ranked above him are counted. That
+   compounds hard the deeper into TE you go: a real TE7 (Sam LaPorta, 80th
+   overall) was landing on rank 6 of the combined curve (11.2 ppg) when his
+   real combined WR/TE standing is 36th (7.2 ppg) -- more than a 50%
+   overstatement, and the mechanical reason TEs kept looking
+   like elite WRs on the value math no matter how many caps got layered on
+   top. Overall rank (spanning every position, already in the data) lets
+   this be derived directly: filter to players sharing this curve, sort by
+   real overall rank, read off where this player actually lands. */
+const _groupRankCache = {};
+function groupRankFor(p){
+  if(!_groupRankCache[p.pos]){
+    const peers = DRAFT_POOL.filter(x=>x.pos===p.pos);
+    const byPrice = peers.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
+    const priceRank = {}; byPrice.forEach((x,i)=>{ priceRank[x.name]=i; });
+    const withOverall = peers.map(x=>{
+      const e = ecrFor(x.name);
+      return { name:x.name, overallRank: (e && typeof e.rank==='number') ? e.rank : null };
+    });
+    // Real overall rank first, best-to-worst; anyone with no consensus
+    // rank at all (rare -- team defenses mostly) falls in behind, ordered
+    // by price, which is still a forward-looking read.
+    const ranked = withOverall.filter(x=>x.overallRank!==null).sort((a,b)=>a.overallRank-b.overallRank);
+    const unranked = withOverall.filter(x=>x.overallRank===null).sort((a,b)=>priceRank[a.name]-priceRank[b.name]);
+    const order = {};
+    [...ranked, ...unranked].forEach((x,i)=>{ order[x.name]=i; });
+    _groupRankCache[p.pos] = order;
+  }
+  return _groupRankCache[p.pos][p.name];
+}
+
 function projectedPpg(p){
   const curve = ppgCurveFor(p.pos);
   if(!curve.length) return replacementLevel(p.pos);
-
-  // where does the 2026 board place him among players at his position?
-  const e = ecrFor(p.name);
-  let rank = null;
-  if(e && e.posRank){
-    const m = String(e.posRank).match(/(\d+)/);
-    if(m) rank = parseInt(m[1],10) - 1;
-  }
-  if(rank === null){
-    // no consensus rank: use where his PRICE puts him, which is still forward
-    const peers = DRAFT_POOL.filter(x=>x.pos===p.pos)
-      .sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
-    rank = Math.max(0, peers.findIndex(x=>x.name===p.name));
-  }
-  const i = Math.min(curve.length-1, Math.max(0, rank));
+  const rank = groupRankFor(p);
+  const i = Math.min(curve.length-1, Math.max(0, rank ?? curve.length-1));
   return curve[i];
 }
 
@@ -7968,14 +7997,20 @@ function marketValueOf(name, pos){
   const cbs = CBS_AUCTION[name];
   if(typeof cbs === 'number') return cbs;
   const e = ecrFor(name);
-  if(e && e.posRank){
-    const m = String(e.posRank).match(/(\d+)/);
-    if(m){
-      const rank = parseInt(m[1],10);
-      const peers = DRAFT_POOL.filter(x=>x.pos===pos)
-        .map(x=>suggestedDollar(x.mv,x.pos,x.name)).sort((a,b)=>b-a);
-      if(peers.length) return peers[Math.min(peers.length-1, rank-1)] || 1;
-    }
+  if(e && typeof e.rank === 'number'){
+    // Same fix as groupRankFor() above, for a player who isn't in
+    // DRAFT_POOL to look his own standing up directly: posRank ("TE7")
+    // answers a real-position question, not "where does he rank among
+    // pos peers" (which since the WR/TE merge means the combined group).
+    // Count how many same-pos peers have a better real overall rank --
+    // that count IS his correct group-relative rank.
+    const peers = DRAFT_POOL.filter(x=>x.pos===pos);
+    const betterCount = peers.filter(x=>{
+      const pe = ecrFor(x.name);
+      return pe && typeof pe.rank === 'number' && pe.rank < e.rank;
+    }).length;
+    const byPrice = peers.map(x=>suggestedDollar(x.mv,x.pos,x.name)).sort((a,b)=>b-a);
+    if(byPrice.length) return byPrice[Math.min(byPrice.length-1, betterCount)] || 1;
   }
   return null;
 }
