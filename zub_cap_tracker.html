@@ -1171,7 +1171,7 @@
   .pt-player-line1{display:flex;align-items:center;gap:6px;min-width:0;}
   .pt-player-line2{display:flex;align-items:center;gap:5px;min-width:0;}
   .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:12px;text-align:right;}
-  .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:600;}
+  .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:13px;font-weight:700;color:var(--chalk);}
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;margin-left:auto;}
   /* Where he sits in his own team's real position pecking order (see
      teamRoleFor) -- FantasyPros' actual depth chart for the vast majority of
@@ -4840,7 +4840,7 @@ function renderPoolTierRail(){
             // own team (see teamRoleFor's own comment -- dashed border is
             // the tell for the handful it falls back to an estimate for).
             return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}" style="--team-c:${tc1};">
-              <div class="pt-player-line1">${faceHTML(p,20)}<span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
+              <div class="pt-player-line1">${faceHTML(p,24)}<span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
               <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>
             </div>`;
           }).join('');
