@@ -4397,9 +4397,7 @@ function renderEndgame(){
     b.addEventListener('click', ()=>putOnTheClock(b.dataset.planPick)));
   el.querySelectorAll('[data-tag-cycle]').forEach(b=>
     b.addEventListener('click', e=>{ e.stopPropagation(); cycleTag(b.dataset.tagCycle);
-      // re-render both instances -- the click could have happened in either
-      // one, and a star/avoid tag set in one should be reflected in both.
-      renderSolver(); renderSolver('Plan'); }));
+      refreshTagViews(); }));
 }
 
 function renderBoardState(){
@@ -5398,7 +5396,7 @@ function renderBidPanel(){
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
-      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}</h4>
+      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}${tagChipsHTML(p.name)}</h4>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
 
@@ -6194,8 +6192,7 @@ function renderPlayerCard(){
   host.querySelectorAll('[data-tag-toggle]').forEach(d=>
     d.addEventListener('click', ()=>{
       togglePlayerTagKey(p.name, d.dataset.tagToggle);
-      renderPlayerCard();
-      renderPoolView();
+      refreshTagViews();
     }));
   const tmt = document.getElementById('tagMgrToggle');
   if(tmt) tmt.addEventListener('click', ()=>{ tagManagerOpen = !tagManagerOpen; renderPlayerCard(); });
@@ -6468,6 +6465,25 @@ function togglePlayerTagKey(name, key){
   const next = cur.includes(key) ? cur.filter(k=>k!==key) : [...cur, key];
   if(next.length) state.playerTags[name] = next; else delete state.playerTags[name];
   saveState();
+}
+/* A tag can show in six different places (the player card that just set it,
+   Prep's pool table, Draft Day's pool list, the tier board, the bid panel if
+   he's the one on the clock, the Ideal Team solver's two instances), and
+   every one of them is a plain innerHTML rebuild, not something reactive to
+   state. Missing any of them here means the tag exists in state but the
+   room can't see it -- which during a live draft is worse than not having
+   the feature. Each render fn already no-ops safely if its own element
+   isn't mounted or its tab isn't the one showing, so calling all of them
+   unconditionally is cheap and correct regardless of which page tagged
+   him. */
+function refreshTagViews(){
+  renderPlayerCard();
+  renderPoolView();
+  renderDraftPool();
+  renderPoolTierRail();
+  renderBidPanel();
+  renderSolver();
+  renderSolver('Plan');
 }
 
 /* ---------- TAG REGISTRY ----------
