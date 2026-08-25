@@ -919,11 +919,17 @@
     background:linear-gradient(90deg,var(--gold-deep),var(--gold),transparent);
   }
   /* ---- macro modes ---- */
+  /* Was stretched edge to edge (flex:1 1 200px growing to fill the whole
+     row); Blake liked the button style and size as they already render,
+     just wanted the group centered at the top instead of spanning full
+     width, so grow is dropped and the row centers the (now natural-width)
+     trio instead of justifying them apart. */
   .modes{
     display:flex;gap:8px;margin:0 0 6px;flex-wrap:wrap;
+    justify-content:center;
   }
   .mode{
-    flex:1 1 200px;text-align:left;background:var(--surface);
+    flex:0 0 240px;text-align:left;background:var(--surface);
     border:1px solid var(--line);border-radius:var(--r-panel);
     padding:12px 16px;cursor:pointer;transition:all var(--mid) var(--ease);
     display:flex;flex-direction:column;gap:2px;
