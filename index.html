@@ -1370,11 +1370,16 @@
   .bkn-value{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:800;color:var(--chalk);margin-top:1px;}
   .bkn-box.walk .bkn-value{color:var(--gold);}
 
-  .bid-insights{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft);}
-  .bi-col-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px;}
+  .bid-insights{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);}
+  .bi-col-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:7px;}
   .bi-col-label.pro{color:var(--jade);}
   .bi-col-label.con{color:var(--coral);}
-  .bi-item{display:flex;gap:6px;align-items:flex-start;font-size:12px;line-height:1.4;padding:3px 0;color:var(--chalk-2);}
+  .bi-item{
+    display:flex;gap:7px;align-items:flex-start;font-size:13px;line-height:1.45;color:var(--chalk-2);
+    padding:7px 9px;margin-bottom:6px;border-radius:8px;
+  }
+  .bi-item.pro{background:rgba(63,182,139,.08);border:1px solid rgba(63,182,139,.2);}
+  .bi-item.con{background:rgba(229,103,95,.08);border:1px solid rgba(229,103,95,.2);}
   .bi-mark{flex-shrink:0;font-weight:800;width:10px;}
   .bi-item.pro .bi-mark{color:var(--jade);}
   .bi-item.con .bi-mark{color:var(--coral);}
@@ -5677,28 +5682,41 @@ function renderBidPanel(){
     PASS: { bg:'var(--coral)', fg:'#fff', label:'PASS' },
   };
 
+  const role = teamRoleFor(p);
+  const roleBadge = role ? `<span class="pt-role-badge${role.real?'':' pt-role-est'}" style="font-size:12px;padding:2px 8px;" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
+  const bye = byeWeek(p);
+
   panel.innerHTML = `
-    <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
-      <div data-bid-open-card style="display:flex;align-items:center;gap:11px;flex:1;min-width:0;cursor:pointer;" title="Open ${p.name.replace(/"/g,'&quot;')}'s full card -- outlook, depth chart, cheat-sheet tags, everything on him">
-        ${faceHTML(p, 34)}
-        <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}${tagChipsHTML(p.name)}</h4>
+    <div style="display:flex;align-items:flex-start;gap:14px;margin:4px 0 2px;">
+      <div data-bid-open-card style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;cursor:pointer;" title="Open ${p.name.replace(/"/g,'&quot;')}'s full card -- outlook, depth chart, cheat-sheet tags, everything on him">
+        ${faceHTML(p, 52)}
+        <div style="min-width:0;">
+          <h4 style="margin:0;font-size:19px;line-height:1.25;">${p.name}</h4>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
+            <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>
+            ${roleBadge}
+            <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}${bye?` &middot; bye ${bye}`:''}</span>
+            ${ratePillHTML(myRead(p.name))}${tagChipsHTML(p.name)}
+          </div>
+        </div>
       </div>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
-    ${seiBid ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:2px 0 10px;">
+    ${seiBid ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:10px 0 0;">
       DO NOT DRAFT &middot; OUT FOR THE SEASON &middot; ${seiBid.headline} <span style="font-weight:400;">-- Rule VIII.C bars a multi-year signing on IR, so he's worth the $1 floor, full stop (as of ${seiBid.date}).</span>
     </div>` : ''}
-    ${verdict ? `<div style="background:${VERDICT_STYLE[verdict.call].bg};color:${VERDICT_STYLE[verdict.call].fg};border-radius:8px;padding:10px 12px;margin:2px 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-      <span style="font-weight:800;font-size:15px;letter-spacing:.03em;">${VERDICT_STYLE[verdict.call].label}</span>
-      <span style="font-weight:400;font-size:12.5px;">${verdict.text}</span>
-    </div>` : ''}
-
-    <div class="bid-key-numbers">
+    ${verdict ? `<div style="background:${VERDICT_STYLE[verdict.call].bg};color:${VERDICT_STYLE[verdict.call].fg};border-radius:10px;padding:12px 16px;margin:10px 0 0;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
+        <span style="font-weight:800;font-size:16px;letter-spacing:.03em;">${VERDICT_STYLE[verdict.call].label}</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:800;font-size:30px;line-height:1;">${maxVal?('$'+maxVal):'&mdash;'}</span>
+      </div>
+      <div style="font-weight:400;font-size:12.5px;margin-top:5px;">${verdict.text}</div>
+    </div>` : `<div class="bid-key-numbers" style="margin-top:10px;">
       <div class="bkn-box walk" style="flex:1;">
         <div class="bkn-label">Max bid${maxNote?` <span class="th-help" title="${maxNote.replace(/"/g,'&quot;')}">why</span>`:''} <span style="font-weight:400;color:var(--chalk-3);">&middot; market $${market}</span></div>
         <div class="bkn-value">${maxVal?('$'+maxVal):'&mdash;'}</div>
       </div>
-    </div>
+    </div>`}
 
     <div class="bid-insights">
       ${insightCol(pros, 'pro', 'Pros', 'Nothing notable')}
