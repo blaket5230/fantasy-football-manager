@@ -1159,15 +1159,21 @@
      that which belonged to which stopped being obvious at a glance. A card
      boundary answers that the way a table's row lines used to, without
      going back to two sparse columns to get it. */
+  /* Two lines rather than one -- rank/name get the card's full width on
+     their own line instead of splitting it with price/tags/nominate and
+     losing that fight (that's what was truncating names before). Line two
+     holds everything else, with room to actually read it. */
   .pt-player-row{
-    display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--chalk-2);min-width:0;
+    display:flex;flex-direction:column;gap:3px;font-size:10.5px;color:var(--chalk-2);min-width:0;
     background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;
-    padding:4px 7px;
+    padding:5px 7px;
   }
+  .pt-player-line1{display:flex;align-items:baseline;gap:6px;min-width:0;}
+  .pt-player-line2{display:flex;align-items:center;gap:5px;min-width:0;}
   .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:14px;text-align:right;}
-  .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
-  .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;}
-  .tag-dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle;flex-shrink:0;}
+  .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:600;}
+  .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;margin-left:auto;}
+  .tag-dots{display:inline-flex;gap:3px;vertical-align:middle;flex-shrink:0;}
   .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
@@ -4809,15 +4815,15 @@ function renderPoolTierRail(){
             const esc = p.name.replace(/"/g,'&quot;');
             const nomBtn = gone ? '' : `<span class="pt-nom-btn" data-pt-nom="${esc}" title="Put ${p.name} on the clock">+</span>`;
             const posBadge = pos==='OVERALL' ? `<span class="pos-tag pos-${p.pos}" style="margin-right:5px;">${posLabel(p.pos)}</span>` : '';
-            // Tag dots live OUTSIDE .pt-player-name, not appended inside it --
-            // that span truncates with an ellipsis once a name overflows its
-            // column, and since the dots came after the name in the same
-            // clipped span, a long name (or just enough tags stacked on a
-            // short one) silently ate them first, before the name itself
-            // ever visibly truncated. As a sibling with its own flex-shrink:0
-            // they can't be clipped by the name's overflow no matter how
-            // many tags he's carrying.
-            return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}"><span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span>${tagDotsHTML(p.name)}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>`;
+            // Two lines instead of cramming rank/name/tags/price onto one --
+            // the name gets its own full-width line instead of fighting
+            // everything else for room and losing (that's what was truncating
+            // it before), and tags/price/nominate get their own line below
+            // where they've each got space to actually be read.
+            return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}">
+              <div class="pt-player-line1"><span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
+              <div class="pt-player-line2">${tagDotsHTML(p.name)}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>
+            </div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label"><span>Tier ${i+1}</span><span class="pt-tier-count">${t.length}</span><span class="pt-tier-range">${priceRange}</span></div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
