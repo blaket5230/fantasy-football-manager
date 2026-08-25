@@ -6488,6 +6488,7 @@ function renderPlayerCard(){
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        ${!draftedNamesSet().has(p.name) ? `<span class="row-act" tabindex="0" role="button" id="cardNominate" title="Put ${p.name.replace(/"/g,'&quot;')} on the clock">+ nominate</span>` : ''}
         <span class="row-act ${nb.prev?'':'off'}" tabindex="0" role="button" tabindex="0" role="button" id="cardPrev" title="Previous player in this list">&larr;</span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--chalk-3);white-space:nowrap;">${nb.of?nb.at+' of '+nb.of:''}</span>
         <span class="row-act ${nb.next?'':'off'}" tabindex="0" role="button" tabindex="0" role="button" id="cardNext" title="Next player in this list">&rarr;</span>
@@ -6610,9 +6611,9 @@ function renderPlayerCard(){
       <a href="https://www.espn.com/search/_/q/${q}" target="_blank" rel="noopener">ESPN</a>
     </div>
 
-    <div class="field-row" style="margin-top:20px;">
+    ${!draftedNamesSet().has(p.name) ? `<div class="field-row" style="margin-top:20px;">
       <button class="primary" id="cardClock">Put on the clock</button>
-    </div>
+    </div>` : ''}
   </div></div>`;
 
   const close = ()=>closePlayerCard();
@@ -6622,6 +6623,8 @@ function renderPlayerCard(){
   if(cb) cb.addEventListener('click', close);
   const ck = document.getElementById('cardClock');
   if(ck) ck.addEventListener('click', ()=>{ close(); putOnTheClock(p.name); });
+  const cn = document.getElementById('cardNominate');
+  if(cn) cn.addEventListener('click', ()=>{ close(); putOnTheClock(p.name); });
   const pv = document.getElementById('cardPrev');
   if(pv) pv.addEventListener('click', ()=>stepCard(-1));
   const nx = document.getElementById('cardNext');
@@ -7163,10 +7166,26 @@ function walkAwayPrice(player){
   if(last < floor) last = floor;
   const mult = ratingMultiplier(player.name);
   if(mult !== 1) last = Math.max(1, Math.round(last * mult));
+  /* Same reasoning as a Target tag (see the ceiling/floor comment above):
+     an observed, real signal -- his own position actually running hot or
+     cold tonight -- is allowed to push the number past the algorithm's own
+     unprompted ceiling/floor, same as a deliberate human read can. Applied
+     directly to the walk price rather than to the alternative-shopping
+     pool inside opportunityCost: routing it through there instead so it
+     shows up "naturally" sounded cleaner, but it fed the SAME inflated
+     price into both the with-him and without-him lineup solves and the
+     budget-constrained interaction between them moved this the wrong way
+     on a live test (Gibbs's walk DROPPED as the RB market got hotter).
+     Applying it directly here is a plain, monotonic multiply -- hotter
+     position, strictly higher ceiling, every time, and it is auditable in
+     the note below instead of buried in a lineup solve. */
+  const inf = inflatedValue(player);
+  if(inf.mult !== 1) last = Math.max(1, Math.round(last * inf.mult));
+  const infNote = Math.abs(inf.mult - 1) >= 0.08 ? ` ${inf.basis}, so this reflects that.` : '';
   const out = { walk: last, market,
-    note: last >= market
+    note: (last >= market
       ? `Worth going to $${last}, which is $${last-market} past his $${market} market price, because of what the alternative actually leaves you.`
-      : `Stop at $${last}, below his $${market} market price: past that the same money builds a better eight elsewhere.` };
+      : `Stop at $${last}, below his $${market} market price: past that the same money builds a better eight elsewhere.`) + infNote };
   _walkCache[player.name] = out;
   return out;
 }
