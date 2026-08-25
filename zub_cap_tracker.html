@@ -99,11 +99,10 @@
   .wrap:has(#view-draft.active) .status-strip{margin-bottom:10px;}
   .wrap:has(#view-draft.active) .strip-cell{padding:6px 14px;}
   .wrap:has(#view-draft.active) .strip-val{font-size:15px;}
-  .wrap:has(#view-draft.active) .modes{margin-bottom:0;gap:6px;}
-  .wrap:has(#view-draft.active) .mode{padding:6px 12px;flex-direction:row;align-items:center;gap:8px;flex:0 0 auto;}
-  .wrap:has(#view-draft.active) .mode-sub{display:none;}
-  .wrap:has(#view-draft.active) .mode-name{font-size:13px;}
-  .wrap:has(#view-draft.active) .mode-ic{width:15px;height:15px;}
+  /* .modes/.mode/.mode-sub/.mode-name/.mode-ic used to get shrunk here for
+     draft view specifically; that compact style is just .mode's normal
+     style now that the nav lives inline in the header everywhere, so there
+     is nothing left to override for this view alone. */
   /* nav.tabs still exists and is still driven by JS (putOnTheClock() clicks
      it programmatically to switch views) -- display:none only hides the box,
      .click() still works on a hidden element, so this is safe. It would only
@@ -136,9 +135,19 @@
   .table-scroll > table{min-width:100%;width:max-content;}
 
   /* ---------- MASTHEAD ---------- */
+  /* Title block, mode nav, year picker as three columns -- the two outer
+     ones held to equal width (1fr each) so the mode nav in the middle sits
+     on the page's true center line regardless of how wide the title or the
+     year picker happen to be, rather than just wherever flex leftover-space
+     distribution puts it. */
   header{
-    display:flex;justify-content:space-between;align-items:flex-end;
-    gap:20px;flex-wrap:wrap;padding-bottom:20px;
+    display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;
+    gap:20px;padding-bottom:20px;
+  }
+  header .yearpick{justify-self:end;}
+  @media (max-width:820px){
+    header{grid-template-columns:1fr;justify-items:center;text-align:center;}
+    header .yearpick{justify-self:center;}
   }
   .brand-eyebrow{
     font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;
@@ -919,20 +928,19 @@
     background:linear-gradient(90deg,var(--gold-deep),var(--gold),transparent);
   }
   /* ---- macro modes ---- */
-  /* Was stretched edge to edge (flex:1 1 200px growing to fill the whole
-     row); Blake liked the button style and size as they already render,
-     just wanted the group centered at the top instead of spanning full
-     width, so grow is dropped and the row centers the (now natural-width)
-     trio instead of justifying them apart. */
+  /* Lives inline in the header now, between the title and the year picker,
+     so it needs to sit at that row's height rather than stack as its own
+     two-line block -- icon and name in one row, no subtitle. This used to
+     be the draft-view-only compact override; promoted to the only version
+     since the nav is compact everywhere it appears now. */
   .modes{
-    display:flex;gap:8px;margin:0 0 6px;flex-wrap:wrap;
-    justify-content:center;
+    display:flex;gap:6px;flex-wrap:wrap;justify-content:center;
   }
   .mode{
-    flex:0 0 240px;text-align:left;background:var(--surface);
+    text-align:left;background:var(--surface);
     border:1px solid var(--line);border-radius:var(--r-panel);
-    padding:12px 16px;cursor:pointer;transition:all var(--mid) var(--ease);
-    display:flex;flex-direction:column;gap:2px;
+    padding:6px 12px;cursor:pointer;transition:all var(--mid) var(--ease);
+    display:flex;flex-direction:row;align-items:center;gap:8px;flex:0 0 auto;
   }
   /* Same lift-on-hover, settle-on-press language as .team-card and
      button.primary -- the three macro modes are the single biggest click
@@ -945,14 +953,13 @@
     background:linear-gradient(180deg,rgba(229,181,103,.10),var(--surface));
   }
   .mode-name{
-    font-family:'Archivo',sans-serif;font-weight:700;font-size:16px;
+    font-family:'Archivo',sans-serif;font-weight:700;font-size:13px;
     letter-spacing:-.02em;color:var(--chalk-2);
   }
   .mode.active .mode-name{color:var(--gold);}
-  .mode-sub{
-    font-size:12px;color:var(--chalk-3);line-height:1.35;
-  }
-  @media (max-width:720px){ .mode{flex:1 1 100%;} }
+  .mode-sub{display:none;}
+  .mode-ic{width:15px;height:15px;}
+  @media (max-width:720px){ .mode{flex:1 1 auto;} }
   .pool-row:hover td{background:rgba(123,143,247,.07);}
   .pool-row:hover b{color:var(--peri);}
   /* "Show drafted" opt-in only -- a taken player stays on the board, struck
@@ -1835,6 +1842,38 @@
       </div>
       <h1>ZUB Cap Ledger</h1>
     </div>
+
+    <!-- Nine equal tabs told you nothing about what any of them were for or
+         when you would want them. These are three different jobs done at
+         three different times, so the navigation now says so: the mode
+         picks the job, the tabs beneath pick the tool. Sits inline in the
+         header, between the title and the year picker, as the middle
+         column of a three-column grid -- see header's own CSS comment for
+         why that's what actually keeps it centered on the page. -->
+    <nav class="modes" id="modeNav">
+      <button class="mode active" data-mode="league">
+        <span class="mode-top">
+          <svg viewBox="0 0 20 20" class="mode-ic"><circle cx="10" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 17c0-3.4 2.9-5.4 6.5-5.4s6.5 2 6.5 5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span class="mode-name">League</span>
+        </span>
+        <span class="mode-sub">Rosters, contracts, trades</span>
+      </button>
+      <button class="mode" data-mode="prep">
+        <span class="mode-top">
+          <svg viewBox="0 0 20 20" class="mode-ic"><rect x="4" y="3" width="12" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 8h5M7.5 11.5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span class="mode-name">Prep</span>
+        </span>
+        <span class="mode-sub">Rate players, build your plan</span>
+      </button>
+      <button class="mode" data-mode="draft">
+        <span class="mode-top">
+          <svg viewBox="0 0 20 20" class="mode-ic"><path d="M3 17h7M12 2.6l5 5M14.4 5L8.6 10.8M9.2 5.6l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span class="mode-name">Draft Day</span>
+        </span>
+        <span class="mode-sub">Live bidding</span>
+      </button>
+    </nav>
+
     <div class="yearpick">
       Viewing year
       <select id="yearSelect"></select>
@@ -1842,36 +1881,6 @@
       <span class="backlink" id="reseedBtn" style="margin:0 0 0 14px;font-size:11px;" title="Discard the locally saved rosters and reload the corrected data. Your draft board and plan settings are kept.">reload rosters</span>
     </div>
   </header>
-
-  <!-- Nine equal tabs told you nothing about what any of them were for or when
-       you would want them. These are three different jobs done at three
-       different times, so the navigation now says so: the mode picks the job,
-       the tabs beneath pick the tool. Sits above the status strip now, in the
-       title area, since it's the first choice you make on the page, not a
-       tool alongside the cap numbers. -->
-  <nav class="modes" id="modeNav">
-    <button class="mode active" data-mode="league">
-      <span class="mode-top">
-        <svg viewBox="0 0 20 20" class="mode-ic"><circle cx="10" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 17c0-3.4 2.9-5.4 6.5-5.4s6.5 2 6.5 5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <span class="mode-name">League</span>
-      </span>
-      <span class="mode-sub">Rosters, contracts, trades</span>
-    </button>
-    <button class="mode" data-mode="prep">
-      <span class="mode-top">
-        <svg viewBox="0 0 20 20" class="mode-ic"><rect x="4" y="3" width="12" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 8h5M7.5 11.5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <span class="mode-name">Prep</span>
-      </span>
-      <span class="mode-sub">Rate players, build your plan</span>
-    </button>
-    <button class="mode" data-mode="draft">
-      <span class="mode-top">
-        <svg viewBox="0 0 20 20" class="mode-ic"><path d="M3 17h7M12 2.6l5 5M14.4 5L8.6 10.8M9.2 5.6l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-        <span class="mode-name">Draft Day</span>
-      </span>
-      <span class="mode-sub">Live bidding</span>
-    </button>
-  </nav>
 
   <div class="status-strip" id="statusStrip"></div>
 
