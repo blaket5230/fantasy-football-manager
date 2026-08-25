@@ -7161,6 +7161,29 @@ function walkAwayPrice(player){
   if(_walkKey !== key){ _walkCache = {}; _walkKey = key; }
   if(_walkCache[player.name] !== undefined) return _walkCache[player.name];
 
+  // PK/DST are a one-slot-plus-a-bye-backup complement, not a value
+  // question -- the loop below asks "does winning him at $X measurably
+  // improve my best-8 lineup," and for these two positions the honest
+  // answer is close to no at ANY price, since replacementLevel() already
+  // sets the bar near the position's own ceiling (see ppgCurveFor's own
+  // comment: kickers and defenses are famously undifferentiated). Running
+  // the loop anyway made every kicker/DST but the single best-VOR one at
+  // the position come back PASS, which is not "don't draft him," it's "he
+  // isn't a difference-maker" -- true of nearly the whole position and not
+  // a reason to walk away from a $1-3 mandatory roster spot. Same
+  // "cheap mandatory slot, just take a good one" call budgetTargets()
+  // already makes for these two positions, applied here too.
+  if(player.pos === 'PK' || player.pos === 'DST'){
+    const market = suggestedDollar(player.mv, player.pos, player.name);
+    const demand = demandStateFor(myIdx, player.pos);
+    const out = demand === 'stacked'
+      ? { walk: 0, market, note: `Already have your starter and bye-week cover at ${posLabel(player.pos)}.` }
+      : { walk: Math.max(1, Math.min(legal, 3)), market,
+          note: `Cheap, mandatory slot -- worth a couple dollars over the $${market} floor to lock in a good one rather than get stuck with the scraps late, not a real value decision.` };
+    _walkCache[player.name] = out;
+    return out;
+  }
+
   let last = null;
   for(let b = 1; b <= legal; b++){
     const o = opportunityCost(player, b);
