@@ -1153,23 +1153,6 @@
   @media (max-width:900px){ .all-rosters-grid{grid-template-columns:repeat(2,1fr);} }
   @media (max-width:520px){ .all-rosters-grid{grid-template-columns:1fr;} }
 
-  /* ---------- TEAM MONEY TABLE (draft sidebar) ----------
-     Sits above the tabbed sidebar panel and never scrolls out of view with
-     it, so .draft-sidebar>.panel's flex:1 0 auto (meant for the tabbed panel
-     growing to fill the column) is overridden here -- this one sizes to its
-     content and the tabbed panel below it takes the rest. */
-  .team-budget-panel{flex:0 0 auto!important;margin-bottom:12px!important;}
-  .tbud-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:10.5px;}
-  .tbud-table th{text-align:right;color:var(--chalk-3);font-weight:600;font-size:9px;letter-spacing:.05em;text-transform:uppercase;padding:2px 4px 4px;border-bottom:1px solid var(--line);}
-  .tbud-table th:first-child{text-align:left;}
-  .tbud-table td{padding:2.5px 4px;text-align:right;border-bottom:1px solid var(--line-soft);white-space:nowrap;color:var(--chalk-2);}
-  .tbud-table tr:last-child td{border-bottom:none;}
-  .tbud-table td:first-child{text-align:left;overflow:hidden;text-overflow:ellipsis;max-width:100px;}
-  .tbud-table tr.tbud-mine td{color:var(--gold);font-weight:700;}
-  .tbud-table tr.tbud-mine{background:rgba(229,181,103,.08);}
-  .tbud-table td.tbud-max{color:var(--chalk);font-weight:700;}
-  .tbud-table td.tbud-out{color:var(--chalk-3);opacity:.55;}
-
   /* ---------- ROSTERS BOARD (snake-draft grid) ---------- */
   .rb-table{border-collapse:collapse;width:100%;min-width:1500px;}
   .rb-table th,.rb-table td{border:1px solid var(--line-soft);padding:4px 6px;vertical-align:middle;}
@@ -2125,15 +2108,6 @@
       </div>
 
       <div class="draft-sidebar">
-        <!-- Every team's spending power, always visible regardless of which
-             sidebar tab is open below -- the number you actually need before
-             deciding whether to push a bid one more dollar is "can the field
-             even go there," not buried behind a tab click mid-bid. -->
-        <div class="panel team-budget-panel" id="teamBudgetPanel">
-          <h3 style="margin-bottom:6px;font-size:13px;">Team money</h3>
-          <div id="teamBudgetBody"></div>
-        </div>
-
         <!-- The player pool and what it says about the draft as a whole:
              who's actually left, how thin each position is running, and
              whether the room is overpaying or underpaying right now. -->
@@ -4465,7 +4439,6 @@ function renderDraftView(){
      that covers all of them without needing to patch each call site. */
   renderStatusStrip();
 
-  renderTeamBudgetTable();
   renderAllRostersGrid();
   renderPoolTierRail();
   renderEndgame();
@@ -4792,48 +4765,6 @@ function renderInflation(){
    own header instead of living as a separate tab: cap space colored by the
    same spending-pressure read the bid panel already uses, plus the actual
    $-per-man detail underneath. */
-// Every team's spending power in one glance, pinned above the tabbed
-// sidebar so it never has to be clicked into mid-bid. Max is the number
-// that actually decides whether the field can outbid you (cap left minus
-// $1 held back per other open slot); Left and Rem. are the two things that
-// number is built from, shown alongside so a thin roster with lots of cap
-// left doesn't read the same as a full one.
-function renderTeamBudgetTable(){
-  const wrap = document.getElementById('teamBudgetBody');
-  if(!wrap) return;
-  const myIdx = teamIdxOf(MY_TEAM_OWNER);
-  // Same spending-pressure read the All rosters cards already color their
-  // cap number by -- reused rather than invented fresh, so "what color does
-  // this number mean" only has one answer anywhere in the app.
-  const pressureColor = { 'must spend':'var(--coral)', scraping:'var(--chalk-3)', flexible:'var(--chalk-2)', done:'var(--jade)' };
-  const fm = forcedMoney();
-  const rows = state.teams.map((t,i)=>{
-    const rem = effOpenSlots(i);
-    const left = effCapLeft(i, state.currentYear);
-    const max = effMaxLegalBid(i);
-    const out = rem<=0;
-    const myFm = fm.rows.find(r=>r.idx===i);
-    // Never overrides my own row's gold -- that row's whole point is
-    // reading as "you" at a glance, not "here is your spending pressure".
-    const leftColor = (out || i===myIdx) ? '' : (myFm ? pressureColor[myFm.pressure] : '');
-    return `<tr class="${i===myIdx?'tbud-mine':''}">
-      <td title="${(t.owner+(t.team?' · '+t.team:'')).replace(/"/g,'&quot;')}">${i===myIdx?'&#9733; ':''}${t.owner}</td>
-      <td class="${out?'tbud-out':'tbud-max'}">$${max}</td>
-      <td class="${out?'tbud-out':''}" style="${leftColor?`color:${leftColor};`:''}">$${left}</td>
-      <td class="${out?'tbud-out':''}">${rem}</td>
-    </tr>`;
-  }).join('');
-  wrap.innerHTML = `<table class="tbud-table">
-    <thead><tr>
-      <th>Team</th>
-      <th title="Most this team can legally put on one player right now">Max</th>
-      <th title="Total cap space left this year">Left</th>
-      <th title="Open roster slots remaining">Rem.</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
-}
-
 /* A player is either a keeper -- already on the roster when tonight
    started -- or a live pick logged during this session. Carrying that
    through as `keeper` (and the $ actually on the books for him, from the
