@@ -1173,14 +1173,17 @@
   .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:12px;text-align:right;}
   .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:600;}
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;margin-left:auto;}
-  /* Our own value model's read on where he sits in his own team's real
-     pecking order (see teamRoleFor) -- deliberately styled like a plain
-     label, not a colored pos-tag pill, so it doesn't read as confidently
-     as a stat pulled from a real snap-count depth chart. */
+  /* Where he sits in his own team's real position pecking order (see
+     teamRoleFor) -- FantasyPros' actual depth chart for the vast majority of
+     players, our own value model filling in only for the handful it doesn't
+     cover. Deliberately styled like a plain label rather than a colored
+     pos-tag pill either way. The dashed variant is the tell for that
+     fallback case specifically -- the tooltip spells out why. */
   .pt-role-badge{
     font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);
     border:1px solid var(--line-soft);border-radius:4px;padding:0 4px;flex-shrink:0;
   }
+  .pt-role-badge.pt-role-est{border-style:dashed;}
   .tag-dots{display:inline-flex;gap:3px;vertical-align:middle;flex-shrink:0;}
   .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
@@ -2410,7 +2413,7 @@ const DRAFT_POOL = [
   {name:"Emanuel Wilson",pos:"RB",nfl:"SEA",mv:32,age:27.3},
   {name:"AJ Barner",pos:"WRTE",nfl:"SEA",mv:299,age:24.3},
   {name:"Pittsburgh Steelers",pos:"DST",nfl:"PIT",mv:40},
-  {name:"Kayshon Boutte",pos:"WRTE",nfl:"NE",mv:156,age:24.3},
+  {name:"Kayshon Boutte",pos:"WRTE",nfl:"HOU",mv:156,age:24.3},
   {name:"New England Patriots",pos:"DST",nfl:"NE",mv:40},
   {name:"Minnesota Vikings",pos:"DST",nfl:"MIN",mv:40},
   {name:"Jacksonville Jaguars",pos:"DST",nfl:"JAC",mv:40},
@@ -2496,7 +2499,7 @@ const DRAFT_POOL = [
   {name:"Theo Johnson",pos:"WRTE",nfl:"NYG",mv:39,age:25.5},
   {name:"Samaje Perine",pos:"RB",nfl:"CIN",mv:40},
   {name:"DJ Giddens",pos:"RB",nfl:"IND",mv:11,age:23.0},
-  {name:"Tua Tagovailoa",pos:"QB",nfl:"ATL",mv:106,age:28.5},
+  {name:"Tua Tagovailoa",pos:"QB",nfl:"MIA",mv:106,age:28.5},
   {name:"Ja'Kobi Lane",pos:"WRTE",nfl:"BAL",mv:123,age:22.0,rookie:true},
   {name:"Malachi Fields",pos:"WRTE",nfl:"NYG",mv:112,age:23.0,rookie:true},
   {name:"Will Reichard",pos:"PK",nfl:"MIN",mv:40},
@@ -2519,14 +2522,14 @@ const DRAFT_POOL = [
   {name:"Seth McGowan",pos:"RB",nfl:"IND",mv:13,age:24.8,rookie:true},
   {name:"Michael Penix Jr.",pos:"QB",nfl:"ATL",mv:158,age:26.3},
   {name:"Oscar Delp",pos:"WRTE",nfl:"NO",mv:105,age:23.0,rookie:true},
-  {name:"Keenan Allen",pos:"WRTE",nfl:"LAC",mv:18,age:34.3},
+  {name:"Keenan Allen",pos:"WRTE",nfl:"IND",mv:18,age:34.3},
   {name:"LeQuint Allen Jr.",pos:"RB",nfl:"JAC",mv:6,age:22.0},
   {name:"Hollywood Brown",pos:"WRTE",nfl:"PHI",mv:20,age:29.2},
   {name:"Shedeur Sanders",pos:"QB",nfl:"CLE",mv:80,age:24.5},
   {name:"Kirk Cousins",pos:"QB",nfl:"LV",mv:18,age:38.0},
   {name:"Brashard Smith",pos:"RB",nfl:"KC",mv:10,age:23.3},
   {name:"Deshaun Watson",pos:"QB",nfl:"CLE",mv:25,age:30.9},
-  {name:"Najee Harris",pos:"RB",nfl:"LAC",mv:10,age:28.4},
+  {name:"Najee Harris",pos:"RB",nfl:"NYG",mv:10,age:28.4},
   {name:"Mack Hollins",pos:"WRTE",nfl:"NE",mv:40},
   {name:"Tyreek Hill",pos:"WRTE",nfl:"FA",mv:368,age:32.5},
   {name:"Caleb Douglas",pos:"WRTE",nfl:"MIA",mv:36,age:22.9,rookie:true},
@@ -4824,7 +4827,7 @@ function renderPoolTierRail(){
             const nomBtn = gone ? '' : `<span class="pt-nom-btn" data-pt-nom="${esc}" title="Put ${p.name} on the clock">+</span>`;
             const posBadge = pos==='OVERALL' ? `<span class="pos-tag pos-${p.pos}" style="margin-right:5px;">${posLabel(p.pos)}</span>` : '';
             const role = teamRoleFor(p);
-            const roleBadge = role ? `<span class="pt-role-badge" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
+            const roleBadge = role ? `<span class="pt-role-badge${role.real?'':' pt-role-est'}" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
             const [tc1] = teamColors(p.nfl);
             // Two lines instead of cramming rank/name/tags/price onto one --
             // the name gets its own full-width line instead of fighting
@@ -4832,10 +4835,10 @@ function renderPoolTierRail(){
             // it before), and tags/price/nominate get their own line below
             // where they've each got space to actually be read. Face + team
             // color accent give it something to actually look at instead of
-            // a wall of identical text rows; the role badge is our own value
-            // model's read on his spot in the pecking order at his own real
-            // position on his own team (see teamRoleFor's own comment --
-            // this is an estimate, not a scraped depth chart).
+            // a wall of identical text rows; the role badge is his spot on
+            // FantasyPros' real depth chart at his own real position on his
+            // own team (see teamRoleFor's own comment -- dashed border is
+            // the tell for the handful it falls back to an estimate for).
             return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}" style="--team-c:${tc1};">
               <div class="pt-player-line1">${faceHTML(p,20)}<span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
               <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>
@@ -9349,17 +9352,55 @@ const RB_HANDCUFF = {"Tyler Allgeier":"Jeremiyah Love","Brian Robinson Jr.":"Bij
 const TRUE_TE = new Set(["AJ Barner","Adam Trautman","Austin Hooper","Ben Sinnott","Brenton Strange","Brock Bowers","Cade Otton","Charlie Kolar","Chig Okonkwo","Colby Parkinson","Cole Kmet","Colston Loveland","Dallas Goedert","Dalton Kincaid","Dalton Schultz","Daniel Bellinger","Darnell Washington","Darren Waller","David Njoku","Dawson Knox","Eli Raridon","Eli Stowers","Elijah Arroyo","Elijah Higgins","Erick All Jr.","Evan Engram","George Kittle","Greg Dulcich","Gunnar Helm","Harold Fannin Jr.","Hunter Henry","Isaiah Likely","Ja'Tavion Sanders","Jackson Hawes","Jake Ferguson","Jake Tonges","John Bates","Jonnu Smith","Josh Oliver","Justin Joly","Juwan Johnson","Kenyon Sadiq","Kyle Pitts Sr.","Luke Musgrave","Luke Schoonmaker","Mark Andrews","Marlin Klein","Mason Taylor","Max Klare","Michael Mayer","Mike Gesicki","Mitchell Evans","Mo Alie-Cox","Nate Boerkircher","Noah Fant","Noah Gray","Oronde Gadsden II","Oscar Delp","Pat Freiermuth","Sam LaPorta","T.J. Hockenson","Tanner Koziol","Taysom Hill","Terrance Ferguson","Theo Johnson","Tommy Myers","Tommy Tremble","Travis Kelce","Trey McBride","Tucker Kraft","Tyler Higbee","Tyler Warren","Will Kacmarek","Zach Ertz"]);
 function realPosOf(p){ return p.pos==='WRTE' ? (TRUE_TE.has(p.name)?'TE':'WR') : p.pos; }
 
-/* ---------- TEAM DEPTH ESTIMATE ----------
-   Not a real depth chart -- nobody publishes snap counts or a live chart
-   this tool could pull from, and one that's out of date by draft night is
-   worse than none. What it CAN do honestly: rank a player against his own
-   real-position teammates (WR against WR, TE against TE, same split TRUE_TE
-   already draws for the merged WRTE group) by the same mv the rest of the
-   tool already trusts for everything else. That answers the actual
-   question -- is this a team's clear WR1, or its third option behind two
-   other real bodies -- even though it's a value-model inference, not a
-   usage report. Grouped and cached once per team+position since DRAFT_POOL
-   doesn't change mid-session. */
+/* ---------- TEAM DEPTH CHART ----------
+   FantasyPros' own 2026 depth charts, QB/RB/WR/TE per team, players already
+   ordered by their ECR within each position -- pasted in by hand (no live
+   fetch this tool can do from a static file with no backend), refreshed the
+   same way DRAFT_POOL/FP_BOARD/CBS_AUCTION already are: swap the block,
+   nothing else changes. One correction from the source as delivered: it had
+   Tua Tagovailoa listed as Atlanta's QB1 and missing from Miami's list
+   entirely -- moved him to Miami, where he actually plays. */
+const NFL_DEPTH_CHART = {
+  ARI:{QB:["Jacoby Brissett","Carson Beck","Gardner Minshew II"],RB:["Jeremiyah Love","Tyler Allgeier","James Conner","Bam Knight"],WR:["Marvin Harrison Jr.","Michael Wilson","Kendrick Bourne","Reggie Virgil","Jalen Brooks","Simi Fehoko"],TE:["Trey McBride","Elijah Higgins","Tip Reiman","Teagan Quitoriano","Rivaldo Fairweather"]},
+  ATL:{QB:["Michael Penix Jr.","Cooper Rush"],RB:["Bijan Robinson","Brian Robinson Jr.","Tyler Goodson","Cash Jones","Nathan Carter"],WR:["Drake London","Zachariah Branch","Jahan Dotson","Olamide Zaccheaus","Juice Wells Jr.","Chris Blair","Vinny Anthony II","Dylan Drummond"],TE:["Kyle Pitts Sr.","Austin Hooper","Charlie Woerner","Joshua Simon","Jack Velling"]},
+  BAL:{QB:["Lamar Jackson","Tyler Huntley"],RB:["Derrick Henry","Justice Hill","Adam Randall","Rasheen Ali","Elijah Tau-Tolliver","Dontae McMillan"],WR:["Zay Flowers","Rashod Bateman","Ja'Kobi Lane","Elijah Sarratt","Devontez Walker","DeAndre Hopkins","LaJohntay Wester"],TE:["Mark Andrews","Matt Hibner","Durham Smythe","Josh Cuevas","Ty Pezza"]},
+  BUF:{QB:["Josh Allen","Kyle Allen","Shane Buechele"],RB:["James Cook III","Ray Davis","Ty Johnson","Frank Gore Jr."],WR:["DJ Moore","Khalil Shakir","Keon Coleman","Skyler Bell","Joshua Palmer","Mecole Hardman Jr.","Tyrell Shavers","Dante Pettis"],TE:["Dalton Kincaid","Dawson Knox","Jackson Hawes","Shane Zylstra"]},
+  CAR:{QB:["Bryce Young","Kenny Pickett","Haynes King"],RB:["Jonathon Brooks","Chuba Hubbard","Trevor Etienne","Miles Davis","AJ Dillon"],WR:["Tetairoa McMillan","Jalen Coker","Xavier Legette","Chris Brazzell II","John Metchie III","Jimmy Horn Jr.","Brycen Tremayne","Casey Washington","David Moore"],TE:["Darren Waller","Ja'Tavion Sanders","Tommy Tremble","Mitchell Evans"]},
+  CHI:{QB:["Caleb Williams","Tyson Bagent","Case Keenum"],RB:["D'Andre Swift","Kyle Monangai","Roschon Johnson","Salvon Ahmed","Brittain Brown"],WR:["Rome Odunze","Luther Burden III","Kalif Raymond","Zavion Thomas","Jahdae Walker","Scotty Miller","Maurice Alexander","Ray-Ray McCloud III"],TE:["Colston Loveland","Cole Kmet","Sam Roush","Stephen Carlson"]},
+  CIN:{QB:["Joe Burrow","Joe Flacco","Josh Johnson"],RB:["Chase Brown","Samaje Perine","Tahj Brooks","Jamal Haynes","Kentrel Bullock"],WR:["Ja'Marr Chase","Tee Higgins","Andrei Iosivas","Colbie Young","Mitch Tinsley","Dohnte Meyers","Ke'Shawn Williams"],TE:["Mike Gesicki","Erick All Jr.","Tanner Hudson","Jack Endries","Drew Sample","Cam Grandy"]},
+  CLE:{QB:["Shedeur Sanders","Deshaun Watson","Taylen Green","Dillon Gabriel"],RB:["Quinshon Judkins","Dylan Sampson","Raheim Sanders","Michael Burton","Ahmani Marshall"],WR:["KC Concepcion","Denzel Boston","Jerry Jeudy","Isaiah Bond","Cedric Tillman","Malachi Corley","Gage Larvadain"],TE:["Harold Fannin Jr.","Joe Royer","Blake Whiteheart","Jack Stoll","Brenden Bates","Carsen Ryan"]},
+  DAL:{QB:["Dak Prescott","Joe Milton III","Sam Howell"],RB:["Javonte Williams","Jaydon Blue","Malik Davis","Phil Mafah","Hunter Luepke"],WR:["CeeDee Lamb","George Pickens","Ryan Flournoy","KaVontae Turpin","Marquez Valdes-Scantling","Jonathan Mingo","Tyler Johnson","Camden Brown"],TE:["Jake Ferguson","Luke Schoonmaker","Michael Trigg","Brevyn Spann-Ford","DJ Rogers","Princeton Fant"]},
+  DEN:{QB:["Bo Nix","Jarrett Stidham","Sam Ehlinger"],RB:["J.K. Dobbins","RJ Harvey","Jonah Coleman","Jaleel McLaughlin","Tyler Badie","Adam Prentice"],WR:["Jaylen Waddle","Courtland Sutton","Pat Bryant","Troy Franklin","Marvin Mims Jr.","Lil'Jordan Humphrey","Michael Woods II","Michael Bandy"],TE:["Evan Engram","Justin Joly","Adam Trautman","Nate Adkins","Lucas Krull"]},
+  DET:{QB:["Jared Goff","Joshua Dobbs","Luke Altmyer"],RB:["Jahmyr Gibbs","Isiah Pacheco","Sione Vaki","Jacob Saylors","Raheem Blackshear"],WR:["Amon-Ra St. Brown","Jameson Williams","Isaac TeSlaa","Greg Dortch","Cedrick Wilson Jr.","Kendrick Law","Tom Kennedy"],TE:["Sam LaPorta","Tyler Conklin","Brock Wright","Zach Horton"]},
+  GB:{QB:["Jordan Love","Tyrod Taylor","Kyle McCord"],RB:["Josh Jacobs","MarShawn Lloyd","Chris Brooks","Damien Martinez","Pierre Strong Jr."],WR:["Christian Watson","Jayden Reed","Matthew Golden","Savion Williams","Skyy Moore","J. Michael Sturdivant","Bo Melton"],TE:["Tucker Kraft","Luke Musgrave","Josh Whyle","Drake Dabney","Messiah Swinson"]},
+  HOU:{QB:["C.J. Stroud","Davis Mills"],RB:["David Montgomery","Woody Marks","Jawhar Jordan","Noah Whittington","British Brooks","Owen Wright"],WR:["Nico Collins","Kayshon Boutte","Tank Dell","Jaylin Noel","Xavier Hutchinson","Justin Watson","Jared Wayne"],TE:["Dalton Schultz","Marlin Klein","Foster Moreau","Cade Stover","Brevin Jordan"]},
+  IND:{QB:["Daniel Jones","Anthony Richardson Sr.","Riley Leonard"],RB:["Jonathan Taylor","DJ Giddens","Seth McGowan","Ulysses Bentley IV","Anderson Castle"],WR:["Alec Pierce","Josh Downs","Keenan Allen","Nick Westbrook-Ikhine","Ashton Dulin","Deion Burks","Coleman Owen","Anthony Gould","Laquon Treadwell"],TE:["Tyler Warren","Mo Alie-Cox","Drew Ogletree","Will Mallory","Pharaoh Brown"]},
+  JAC:{QB:["Trevor Lawrence","Nick Mullens"],RB:["Bhayshul Tuten","Chris Rodriguez Jr.","LeQuint Allen Jr.","J'Mari Taylor","Ameer Abdullah","DeeJay Dallas"],WR:["Parker Washington","Brian Thomas Jr.","Jakobi Meyers","Travis Hunter","Josh Cameron","Michael Wortham"],TE:["Brenton Strange","Tanner Koziol","Nate Boerkircher","Hunter Long","Quintin Morris","Patrick Herbert"]},
+  KC:{QB:["Patrick Mahomes II","Justin Fields","Garrett Nussmeier"],RB:["Kenneth Walker III","Emmett Johnson","Emari Demercado","Brashard Smith","Jaydn Ott","Terion Stewart"],WR:["Rashee Rice","Xavier Worthy","Tyquan Thornton","Cyrus Allen","Jalen Royals","Nikko Remigio","Jason Brownlee"],TE:["Travis Kelce","Noah Gray","Jared Wiley","Jake Briningstool"]},
+  LAC:{QB:["Justin Herbert","Trey Lance","DJ Uiagalelei"],RB:["Omarion Hampton","Keaton Mitchell","Kimani Vidal","Jaret Patterson","Alec Ingold","Amar Johnson"],WR:["Ladd McConkey","Quentin Johnston","Tre' Harris","Brenen Thompson","KeAndre Lambert-Smith","Derius Davis"],TE:["Oronde Gadsden II","David Njoku","Charlie Kolar"]},
+  LAR:{QB:["Matthew Stafford","Ty Simpson","Jimmy Garoppolo"],RB:["Kyren Williams","Blake Corum","Jarquez Hunter","Ronnie Rivers","Dean Connors"],WR:["Puka Nacua","Davante Adams","Konata Mumpfield","Jordan Whittington","CJ Daniels","Xavier Smith","Tyler Scott"],TE:["Terrance Ferguson","Colby Parkinson","Tyler Higbee","Max Klare","Davis Allen"]},
+  LV:{QB:["Fernando Mendoza","Kirk Cousins","Aidan O'Connell"],RB:["Ashton Jeanty","Mike Washington Jr.","Dylan Laube","Roman Hemby","Raheem Mostert"],WR:["Tre Tucker","Jalen Nailor","Jack Bech","Dont'e Thornton Jr.","Malik Benson","Tyler Lockett","Deven Thompkins","Shedrick Jackson","Dareke Young"],TE:["Brock Bowers","Michael Mayer","Ian Thomas","Albert Okwuegbunam Jr.","Connor Heyward"]},
+  MIA:{QB:["Tua Tagovailoa","Malik Willis","Quinn Ewers","Cam Miller"],RB:["De'Von Achane","Jaylen Wright","Ollie Gordon II","Donovan Edwards"],WR:["Malik Washington","Chris Bell","Caleb Douglas","Jalen Tolbert","Kevin Coleman Jr.","Tutu Atwell","Jalen Reagor","Theo Wease Jr.","Tahj Washington","Terrace Marshall Jr."],TE:["Greg Dulcich","Will Kacmarek","Seydou Traore","Ben Sims","Cole Turner"]},
+  MIN:{QB:["Kyler Murray","J.J. McCarthy","Carson Wentz","Max Brosmer"],RB:["Jordan Mason","Aaron Jones Sr.","Demond Claiborne","Zavier Scott","Max Bredeson","Jermar Jefferson"],WR:["Justin Jefferson","Jordan Addison","Jauan Jennings","Tai Felton","Myles Price","Michael Briscoe","Jeshaun Jones"],TE:["T.J. Hockenson","Josh Oliver","Ben Yurosek","Gavin Bartholomew","Bryson Nesbit"]},
+  NE:{QB:["Drake Maye","Tommy DeVito","Behren Morton"],RB:["TreVeyon Henderson","Rhamondre Stevenson","Jam Miller","Reggie Gilliam","Lan Larison","Hassan Haskins"],WR:["A.J. Brown","Romeo Doubs","Kyle Williams","Mack Hollins","DeMario Douglas","Efton Chism III"],TE:["Hunter Henry","Eli Raridon","Julian Hill","CJ Dippre","Jack Westover","Tanner Arkin"]},
+  NO:{QB:["Tyler Shough","Spencer Rattler","Zach Wilson"],RB:["Travis Etienne Jr.","Alvin Kamara","Devin Neal","Kendre Miller","Audric Estime","Ty Chandler","CJ Donaldson"],WR:["Chris Olave","Jordyn Tyson","Devaughn Vele","Bryce Lance","Barion Brown","Mason Tipton","Kevin Austin Jr.","Bub Means"],TE:["Juwan Johnson","Oscar Delp","Noah Fant","Moliki Matavao"]},
+  NYG:{QB:["Jaxson Dart","Jameis Winston","Brandon Allen"],RB:["Cam Skattebo","Tyrone Tracy Jr.","Najee Harris","Devin Singletary","Patrick Ricard","Eric Gray"],WR:["Malik Nabers","Darnell Mooney","Malachi Fields","Darius Slayton","Calvin Austin III","Odell Beckham Jr.","Isaiah Hodgins","Jalin Hyatt"],TE:["Isaiah Likely","Theo Johnson","Thomas Fidone II","Tanner Conner","Chris Manhertz"]},
+  NYJ:{QB:["Geno Smith","Cade Klubnik","Brady Cook"],RB:["Breece Hall","Braelon Allen","Isaiah Davis"],WR:["Garrett Wilson","Adonai Mitchell","Omar Cooper Jr.","Isaiah Williams","Tim Patrick","Arian Smith"],TE:["Kenyon Sadiq","Mason Taylor","Jeremy Ruckert","Jelani Woods","Andrew Beck"]},
+  PHI:{QB:["Jalen Hurts","Tanner McKee","Andy Dalton"],RB:["Saquon Barkley","Tank Bigsby","Will Shipley","Dameon Pierce"],WR:["DeVonta Smith","Makai Lemon","Dontayvion Wicks","Hollywood Brown","Elijah Moore","Darius Cooper","Britain Covey"],TE:["Dallas Goedert","Eli Stowers","Stone Smartt","Grant Calcaterra","Johnny Mundt","Cameron Latu","E.J. Jenkins"]},
+  PIT:{QB:["Aaron Rodgers","Drew Allar","Mason Rudolph","Will Howard"],RB:["Jaylen Warren","Rico Dowdle","Kaleb Johnson","Eli Heidenreich","Travis Homer","Lew Nichols III"],WR:["DK Metcalf","Michael Pittman Jr.","Germie Bernard","Roman Wilson","Ben Skowronek","Kaden Wetjen"],TE:["Pat Freiermuth","Darnell Washington","Jaheim Bell","Robert Tonyan","Lance Mason","Lake McRee"]},
+  SEA:{QB:["Sam Darnold","Jalen Milroe","Drew Lock"],RB:["Jadarian Price","Zach Charbonnet","Emanuel Wilson","George Holani"],WR:["Jaxon Smith-Njigba","Rashid Shaheed","Cooper Kupp","Tory Horton","Jake Bobo","Velus Jones Jr.","Montorie Foster Jr.","Ricky White III","Cody White"],TE:["AJ Barner","Elijah Arroyo","Eric Saubert"]},
+  SF:{QB:["Brock Purdy","Mac Jones","Kurtis Rourke","Adrian Martinez"],RB:["Christian McCaffrey","Kaelon Black","Jordan James","Isaac Guerendo","Kyle Juszczyk","Khalil Herbert","Sincere McCormick"],WR:["Mike Evans","Deebo Samuel Sr.","De'Zhaun Stribling","Christian Kirk","Brandon Aiyuk","Demarcus Robinson","Jacob Cowing","Jordan Watkins"],TE:["George Kittle","Jake Tonges","Khalil Dinkins","Luke Farrell","Hayden Rucci","Brayden Willis"]},
+  TB:{QB:["Baker Mayfield","Jake Browning"],RB:["Bucky Irving","Kenny Gainwell","Sean Tucker","Josh Williams"],WR:["Emeka Egbuka","Chris Godwin Jr.","Jalen McMillan","Ted Hurst III","Tez Johnson","David Sills V","Kameron Johnson"],TE:["Cade Otton","Bauer Sharp","Payne Durham","Devin Culp","Ko Kieft","Kenny Fletcher Jr."]},
+  TEN:{QB:["Cam Ward","Will Levis","Mitchell Trubisky","Hendon Hooker"],RB:["Tony Pollard","Tyjae Spears","Nicholas Singleton","Michael Carter","Kalel Mullings","Julius Chestnut"],WR:["Carnell Tate","Wan'Dale Robinson","Calvin Ridley","Chimere Dike","Elic Ayomanor","Xavier Restrepo","Mason Kinsey"],TE:["Gunnar Helm","Daniel Bellinger","Kylen Granson","David Martin-Robinson","Joel Wilson"]},
+  WAS:{QB:["Jayden Daniels","Marcus Mariota","Sam Hartman","Athan Kaliakmanis"],RB:["Jacory Croskey-Merritt","Rachaad White","Kaytron Allen","Jerome Ford","Robert Henry Jr.","Jeremy McNichols"],WR:["Terry McLaurin","Stefon Diggs","Antonio Williams","Luke McCaffrey","Treylon Burks","Jaylin Lane","Dyami Brown","Van Jefferson"],TE:["Chig Okonkwo","Ben Sinnott","John Bates","Colson Yankoff"]}
+};
+
+/* Falls back to a value-model estimate (rank a player against his own
+   real-position teammates by the same mv the rest of the tool already
+   trusts) for anyone the real chart above doesn't cover -- a name it
+   doesn't have (deep bench, or DRAFT_POOL's spelling doesn't match), or a
+   free agent with no team at all. Kept honest in the tooltip either way:
+   teamRoleFor() below marks which source actually answered. */
 const _teamRoleCache = {};
 function teamRoleGroup(nfl, realPos){
   const key = nfl + '#' + realPos;
@@ -9375,17 +9416,32 @@ const ORDINAL = n => { const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20
 function teamRoleFor(p){
   if(!p.nfl || p.nfl==='FA') return null;
   const realPos = realPosOf(p);
+
+  const chart = (NFL_DEPTH_CHART[p.nfl]||{})[realPos];
+  if(chart){
+    const idx = chart.indexOf(p.name);
+    if(idx >= 0 && chart.length >= 2){
+      const rank = idx+1;
+      const ahead = chart.slice(0, idx);
+      const title = rank===1
+        ? `FantasyPros' depth chart has him atop ${p.nfl}'s ${realPos}s, of ${chart.length}.`
+        : `FantasyPros' depth chart has him ${ORDINAL(rank)} of ${chart.length} ${realPos}s on ${p.nfl}, behind ${ahead.join(', ')}.`;
+      return { pos:realPos, rank, of:chart.length, short:`${realPos}${rank}`, title, real:true };
+    }
+  }
+
+  // No real chart entry -- either this team+position isn't in the data, or
+  // his DRAFT_POOL name doesn't match the chart's spelling closely enough
+  // to find him in it. Estimate from our own value model instead.
   const group = teamRoleGroup(p.nfl, realPos);
   const idx = group.indexOf(p.name);
-  // Alone at the position (every QB not in a real competition, most kickers
-  // and defenses) isn't a depth question worth answering.
   if(idx < 0 || group.length < 2) return null;
   const rank = idx+1;
   const ahead = group.slice(0, idx);
   const title = rank===1
-    ? `Our value model's top ${realPos} on ${p.nfl}, of ${group.length}.`
-    : `Our value model has him ${ORDINAL(rank)} of ${group.length} ${realPos}s on ${p.nfl}, behind ${ahead.join(', ')}.`;
-  return { pos:realPos, rank, of:group.length, short:`${realPos}${rank}`, title };
+    ? `No real depth chart entry found for him -- our own value model has him top ${realPos} on ${p.nfl}, of ${group.length}.`
+    : `No real depth chart entry found for him -- our own value model has him ${ORDINAL(rank)} of ${group.length} ${realPos}s on ${p.nfl}, behind ${ahead.join(', ')}.`;
+  return { pos:realPos, rank, of:group.length, short:`${realPos}${rank}`, title, real:false };
 }
 
 /* ---------- TWO MORE FANTASYPROS REPORTS ----------
@@ -10133,7 +10189,7 @@ function poolTableHTML(list, opts){
     // row has the room for it.
     const goneBadge = r.gone ? `<span class="dead-tag" style="margin-left:4px;" title="Already drafted">TAKEN${r.owner?` &middot; ${r.owner}`:''}</span>` : '';
     const role = teamRoleFor(p);
-    const roleBadge = role ? `<span class="pt-role-badge" style="margin-left:4px;" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
+    const roleBadge = role ? `<span class="pt-role-badge${role.real?'':' pt-role-est'}" style="margin-left:4px;" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
     return `<tr class="pool-row${r.gone?' pool-row-gone':''}" data-open-card="${esc}" style="cursor:pointer;--rail:${RAIL[p.pos]||'transparent'};">
       <td style="text-align:left;">
         ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}${tagDotsHTML(p.name)}${roleBadge}
