@@ -8362,16 +8362,25 @@ function budgetTargets(slot, budget, n){
     return cands.filter(o=>o.inRange).sort((a,b)=>(b.sent.score-a.sent.score)||(a.d-b.d)).slice(0, n);
   }
 
-  /* Sort by quality, not by headroom, WITHIN the affordable range. Ranking
-     on headroom alone put $1 tight ends at the top of a $20 WR1 slot, which
-     is the efficiency trap wearing a different hat: a player you can chase
-     far past market is worthless if he was never worth much. If the
-     realistic range is too thin to fill the board (deep at a scarce
-     position), fall back to the best remaining value anywhere rather than
-     showing fewer names than asked for. */
+  /* Sorted by price first, VOR-quality only as the tiebreak. Price already
+     IS the market's own read on quality (that's what suggestedDollar's
+     whole aggregate blend is for), so it orders a browse the way any real
+     cheat sheet does -- studs first, replacement-level tail last -- while
+     VOR still breaks ties among similarly (or identically) priced names
+     instead of leaving that to whatever order availablePool() happened to
+     hand back. Sorting by VOR alone, tried first, looked right within a
+     tight budget band (price and VOR agree at the top of a position) but
+     fell apart once the range widened toward the $1-2 replacement tail,
+     where tiny, mostly-noise VOR gaps between otherwise-identical bench
+     arms outrank each other for no reason a reader could follow -- caught
+     when "see more" on a widened slot came back looking scrambled despite
+     being correctly value-sorted underneath. If the realistic range is too
+     thin to fill the board (deep at a scarce position), fall back to the
+     best remaining value anywhere rather than showing fewer names than
+     asked for. */
   const inRange = cands.filter(o=>o.inRange && o.v > 0);
   const pool = inRange.length >= n ? inRange : cands.filter(o=>o.v>0);
-  return pool.sort((a,b)=>(b.v*b.rm-a.v*a.rm)).slice(0, n);
+  return pool.sort((a,b)=>(b.d-a.d)||(b.v*b.rm-a.v*a.rm)).slice(0, n);
 }
 
 function targetBoard(perSlot){
@@ -14247,14 +14256,16 @@ function pickerHTML(slot, budget){
   } else if(cheapSlot){
     cands.sort((a,b)=>(b.sent.score-a.sent.score)||(a.d-b.d));
   } else {
-    // Same quality metric budgetTargets() ranks a starter slot by: real
-    // production above replacement this year, not five-year dynasty value.
-    // Sorting by raw mv here used to put a young, high-mv-but-low-output back
-    // (Ashton Jeanty, vor 5.4) ahead of a $23-25 stud who is actually the
-    // better real player right now (James Cook III, vor 10.9) -- the same
-    // long-vs-this-year mismatch groupRankFor's own comment already
-    // describes for Derrick Henry, just surfacing here instead.
-    cands.sort((a,b)=>(b.v*b.rm)-(a.v*a.rm));
+    // Same rule budgetTargets() sorts a starter slot by: price first (the
+    // market's own read on quality this year, not five-year dynasty value),
+    // VOR as the tiebreak. A pure VOR sort fixed the original complaint
+    // (raw mv put a young, high-mv-but-low-output back like Ashton Jeanty
+    // ahead of a $23-25 stud like James Cook III) but fell apart once
+    // widened past the budget band -- "see more" on a whole position came
+    // back looking scrambled, tiny VOR noise among a dozen $1-2 replacement
+    // arms outranking each other for no visible reason. Price-first reads
+    // like an actual cheat sheet at any range; VOR still breaks real ties.
+    cands.sort((a,b)=>(b.d-a.d)||((b.v*b.rm)-(a.v*a.rm)));
   }
   // Kickers and defenses are small pools, so truncating them just hides real
   // options behind a "see more" that serves no purpose. Show the lot.
