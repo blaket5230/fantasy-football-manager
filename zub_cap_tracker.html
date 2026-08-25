@@ -1182,20 +1182,18 @@
      cover. Deliberately styled like a plain label rather than a colored
      pos-tag pill either way. The dashed variant is the tell for that
      fallback case specifically -- the tooltip spells out why. */
+  /* Shared by the tier board's own line two AND the pool list's single
+     name column -- a 6px dot with 9px badge text read as genuinely hard to
+     see in the pool list specifically (one column, not three, so there was
+     always room), not just small in the abstract. Sized for that now;
+     nothing left that needs it smaller. */
   .pt-role-badge{
-    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);
-    border:1px solid var(--line-soft);border-radius:4px;padding:0 4px;flex-shrink:0;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--chalk-3);
+    border:1px solid var(--line-soft);border-radius:4px;padding:1px 6px;flex-shrink:0;
   }
   .pt-role-badge.pt-role-est{border-style:dashed;}
-  .tag-dots{display:inline-flex;gap:3px;vertical-align:middle;flex-shrink:0;}
-  .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
-  /* Line two's versions of the three shared classes above, scaled up to
-     match -- scoped to .pt-player-line2 rather than resizing the shared
-     rules outright, since .tag-dot/.pt-role-badge are also used at the
-     smaller, denser size the pool list actually needs. */
-  .pt-player-line2 .pt-role-badge{font-size:11px;padding:1px 6px;}
-  .pt-player-line2 .tag-dots{gap:4px;}
-  .pt-player-line2 .tag-dot{width:9px;height:9px;}
+  .tag-dots{display:inline-flex;gap:4px;vertical-align:middle;flex-shrink:0;}
+  .tag-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
   .pt-player-row{cursor:pointer;}
