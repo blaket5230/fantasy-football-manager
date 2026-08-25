@@ -3515,14 +3515,18 @@ if(!window.__planEscBound){
       if(document.activeElement !== box){ clearTheClock(); return; }
     }
     if(cardOpen){
-      /* Arrow keys walk the list and number keys rate, so a whole board can
-         be gone through without touching the mouse. 0 clears. */
+      /* Arrow keys walk the list and number keys tag, so a whole board can
+         be gone through without touching the mouse. 1 Avoid, 2 Target, 3
+         Sleeper, each a toggle; 0 clears all three. */
       if(e.key === 'Escape'){ closePlayerCard(); return; }
       if(e.key === 'ArrowLeft'){ stepCard(-1); return; }
       if(e.key === 'ArrowRight'){ stepCard(1); return; }
-      if(/^[0-5]$/.test(e.key)){
-        const n = Number(e.key);
-        setMyRead(cardOpen, n === 0 ? null : READ_SCALE[n-1].key);
+      if(e.key === '1'){ setPlayerTag(cardOpen, playerTag(cardOpen)==='avoid' ? null : 'avoid'); renderPlayerCard(); renderPoolView(); return; }
+      if(e.key === '2'){ setPlayerTag(cardOpen, playerTag(cardOpen)==='target' ? null : 'target'); renderPlayerCard(); renderPoolView(); return; }
+      if(e.key === '3'){ togglePlayerTagKey(cardOpen, 'sleeper'); renderPlayerCard(); renderPoolView(); return; }
+      if(e.key === '0'){
+        setPlayerTag(cardOpen, null);
+        if(tagsFor(cardOpen).includes('sleeper')) togglePlayerTagKey(cardOpen, 'sleeper');
         renderPlayerCard(); renderPoolView();
         return;
       }
@@ -5230,17 +5234,20 @@ function exportText(kind){
    doExport() above. Import exists too, a backup nobody can restore from
    isn't much of a backup. */
 function exportRatingsCSV(){
-  const reads = state.myReads || {};
-  const names = Object.keys(reads).sort((a,b)=>{
-    const pa = DRAFT_POOL.find(p=>p.name===a), pb = DRAFT_POOL.find(p=>p.name===b);
-    const posA = pa?pa.pos:'', posB = pb?pb.pos:'';
-    return posA!==posB ? posA.localeCompare(posB) : a.localeCompare(b);
-  });
+  // Reads now live as the Target/Avoid tag (see playerTag()), not a
+  // separate myReads store -- export whichever names carry one of those two.
+  const names = Object.keys(state.playerTags || {})
+    .filter(n=>playerTag(n))
+    .sort((a,b)=>{
+      const pa = DRAFT_POOL.find(p=>p.name===a), pb = DRAFT_POOL.find(p=>p.name===b);
+      const posA = pa?pa.pos:'', posB = pb?pb.pos:'';
+      return posA!==posB ? posA.localeCompare(posB) : a.localeCompare(b);
+    });
   const rows = [['Player','Position','Team','Rating','Multiplier','Market $','Your $']];
   names.forEach(name=>{
     const p = DRAFT_POOL.find(x=>x.name===name);
     if(!p) return;                       // stale entry (e.g. a removed custom player), skip
-    const info = READ_BY_KEY[reads[name]];
+    const info = READ_BY_KEY[playerTag(name)];
     if(!info) return;
     rows.push([p.name, p.pos, p.nfl||'', info.label, info.mult,
       suggestedDollar(p.mv,p.pos,p.name), myValue(p)]);
@@ -5301,16 +5308,18 @@ function importRatingsCSV(file){
       const ratingIdx = header.indexOf('rating');
       if(nameIdx<0 || ratingIdx<0) throw new Error('missing columns');
       pushUndo('importing ratings CSV');
-      state.myReads = state.myReads || {};
+      // Accepts both the current export's labels (Avoid/Target) and the
+      // retired five-point scale's, in case this is an older backup --
+      // Fade collapses onto Avoid, Chase onto Target, Maintain clears.
+      const LEGACY_LABELS = { avoid:'avoid', fade:'avoid', maintain:null, target:'target', chase:'target' };
       for(let i=1;i<rows.length;i++){
         const r = rows[i];
         if(!r || !r[nameIdx]) continue;
         const name = r[nameIdx].trim();
         const label = (r[ratingIdx]||'').trim().toLowerCase();
         const p = DRAFT_POOL.find(x=>x.name===name);
-        const entry = READ_SCALE.find(o=>o.label.toLowerCase()===label);
-        if(!p || !entry){ skipped++; continue; }
-        state.myReads[name] = entry.key;
+        if(!p || !(label in LEGACY_LABELS)){ skipped++; continue; }
+        setPlayerTag(name, LEGACY_LABELS[label]);
         applied++;
       }
       saveState();
@@ -6350,10 +6359,6 @@ function renderPlayerCard(){
   })();
 
   const stat = (k,v,t) => `<div class="pcard-stat" title="${(t||'').replace(/"/g,'')}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
-  const dots = READ_SCALE.map(o=>{
-    const cls = o.key==='avoid'||o.key==='fade' ? 'low' : (o.key==='target'||o.key==='chase' ? 'high' : '');
-    return `<div class="read-btn ${cls} ${rd===o.key?'on':''}" data-read="${o.key}" title="${o.blurb}">${o.label}</div>`;
-  }).join('');
 
   /* One label+headline+body card per idea, instead of a header stacked over
      a paragraph -- the number that matters is bold and up top, the sentence
@@ -6416,26 +6421,27 @@ function renderPlayerCard(){
     </div>
 
     <div class="pcard-sec">
-      <h4>Your read${rd?' &middot; '+READ_BY_KEY[rd].label:''}</h4>
-      <div class="rate-row">${dots}</div>
-      <p class="panel-sub" style="margin:4px 0 0;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">
+        <h4 style="margin-bottom:0;">Tags${rd?' &middot; '+READ_BY_KEY[rd].label:''}</h4>
+        <span class="row-act" tabindex="0" role="button" id="tagMgrToggle">${tagManagerOpen?'close':'manage tags'}</span>
+      </div>
+      <p class="panel-sub" style="margin:4px 0 8px;">
+        <strong>Target</strong> -- like him, comfortable chasing a bit above market.
+        <strong>Avoid</strong> -- don't like him, only interested at a real discount or as a last resort.
+        Target and Avoid are exclusive and are the only two that move a price.
+        <strong>Sleeper</strong> -- a $1-or-less endgame flier to comb for and try to win late; purely a label,
+        doesn't move his price. Custom tags are the same, just yours. Tap to toggle.
+      </p>
+      ${tagPickerHTML(p.name)}
+      ${tagManagerOpen ? tagManagerHTML() : ''}
+      <p class="panel-sub" style="margin:8px 0 0;">
         ${rd ? `${READ_BY_KEY[rd].blurb} At <strong>${READ_BY_KEY[rd].label}</strong> he is worth <strong>$${mine}</strong> to you rather than $${base}.`
-             : `Maintain leaves him at $${base}. Fade would make him $${Math.max(1,Math.round(base*0.8))}, Chase $${Math.round(base*1.35)}.`}
+             : `No Target/Avoid tag set -- he stays at his market price of $${base}.`}
         This feeds the verdict, the walk-away price and every plan.
       </p>
       <p class="panel-sub" style="margin:4px 0 0;color:var(--chalk-3);font-size:11px;">
-        Press 1 to 5 for Avoid through Chase, 0 to clear, arrow keys to move through the list.
+        On this card: 1 toggles Avoid, 2 toggles Target, 3 toggles Sleeper, 0 clears Target/Avoid/Sleeper, arrow keys move through the list.
       </p>
-    </div>
-
-    <div class="pcard-sec">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;">
-        <h4 style="margin-bottom:0;">Tags</h4>
-        <span class="row-act" tabindex="0" role="button" id="tagMgrToggle">${tagManagerOpen?'close':'manage tags'}</span>
-      </div>
-      <p class="panel-sub" style="margin:4px 0 8px;">Target and Avoid are the two that move any number -- everything else is just a label for yourself. Tap any to toggle; stack as many as you want.</p>
-      ${tagPickerHTML(p.name)}
-      ${tagManagerOpen ? tagManagerHTML() : ''}
     </div>
 
     <!-- Everything above is what you check on every player. Everything below
@@ -6525,16 +6531,14 @@ function renderPlayerCard(){
   if(pv) pv.addEventListener('click', ()=>stepCard(-1));
   const nx = document.getElementById('cardNext');
   if(nx) nx.addEventListener('click', ()=>stepCard(1));
-  host.querySelectorAll('[data-read]').forEach(d=>
-    d.addEventListener('click', ()=>{
-      const k = d.dataset.read;
-      setMyRead(p.name, myRead(p.name)===k ? null : k);
-      renderPlayerCard();
-      renderPoolView();
-    }));
+  // Target/Avoid stay a mutually-exclusive pair (setPlayerTag), same as the
+  // old read scale's on/off dots -- Sleeper and any custom tag are true
+  // independent multi-select (togglePlayerTagKey), unaffected by this.
   host.querySelectorAll('[data-tag-toggle]').forEach(d=>
     d.addEventListener('click', ()=>{
-      togglePlayerTagKey(p.name, d.dataset.tagToggle);
+      const key = d.dataset.tagToggle;
+      if(key === 'target' || key === 'avoid') setPlayerTag(p.name, playerTag(p.name)===key ? null : key);
+      else togglePlayerTagKey(p.name, key);
       refreshTagViews();
     }));
   host.querySelectorAll('[data-pdc-open]').forEach(d=>
@@ -6674,36 +6678,25 @@ function faceHTML(p, size){
    Each shifts what you are willing to pay. Avoid is deliberately severe: it
    means you are not buying him at the going rate and it would take a genuine
    giveaway to interest you.                                                 */
+// Retired the five-point scale the night of the draft (8/25) -- it and the
+// Target/Avoid tags below were two surfaces claiming to do the same thing,
+// and disagreeing about it was a real live bug. Now there is exactly one:
+// the Target/Avoid tag on the card. Sleeper is a third tag but carries no
+// multiplier -- it never appears in this table, see playerTag() below.
 const READ_SCALE = [
-  { key:'avoid',    label:'Avoid',    mult:0.55,
-    blurb:'Not a fan. It would take an egregiously low price to interest me.' },
-  { key:'fade',     label:'Fade',     mult:0.80,
-    blurb:'Not my favourite. I would not pay full price.' },
-  { key:'maintain', label:'Maintain', mult:1.00,
-    blurb:'Feels about right on value.' },
-  { key:'target',   label:'Target',   mult:1.15,
-    blurb:'I like him. Comfortable stretching a bit.' },
-  { key:'chase',    label:'Chase',    mult:1.35,
-    blurb:'Really like him. I want to find a way to get him.' },
+  { key:'avoid',  label:'Avoid',  mult:0.55,
+    blurb:"Don't like him. Only interested at a real discount, or as a last resort with plenty of money left over." },
+  { key:'target', label:'Target', mult:1.15,
+    blurb:'Like him. Comfortable chasing him a bit above market.' },
 ];
 const READ_BY_KEY = {}; READ_SCALE.forEach(r=>READ_BY_KEY[r.key]=r);
 
+// Thin alias -- "his read" is now just his Target/Avoid tag. Kept under
+// this name because dozens of call sites across the file already ask for
+// it this way; playerTag() (defined further down, hoisted so the forward
+// reference is fine) is the real source of truth.
 function myRead(name){
-  const v = (state.myReads || {})[name];
-  return READ_BY_KEY[v] ? v : null;
-}
-function setMyRead(name, key){
-  state.myReads = state.myReads || {};
-  if(!key || !READ_BY_KEY[key]) delete state.myReads[name];
-  else state.myReads[name] = key;
-  _myValCache = {};
-  _walkCache = {}; _walkKey = '';
-  _rowCache = null; _rowKey = '';
-  /* Written immediately rather than on the usual debounce. Ordinary edits can
-     wait, but this is deliberate work you would hate to redo, and marking a
-     player then closing the tab is exactly the sort of thing people do. */
-  flushSave();
-  readSavedToast(name, key);
+  return playerTag(name);
 }
 function readSavedToast(name, key){
   const el = document.getElementById('saveToast');
@@ -6715,28 +6708,14 @@ function readSavedToast(name, key){
 }
 function readMultiplier(name){
   const r = myRead(name);
-  if(r) return READ_BY_KEY[r].mult;
-  // Falls back to the coarser Target/Avoid tag (the chip picker on the
-  // card, a separate system from the five-point read above) when no
-  // five-point read is set. The tag picker's own copy already promises
-  // "Target and Avoid are the two that move any number" -- until this,
-  // that was only true for the target-board recommendation list, not for
-  // this multiplier, which is what actually reaches walkAwayPrice(),
-  // myValue(), and the bid panel's PURSUE/PASS verdict. A player tagged
-  // Avoid with no five-point read was showing PURSUE at $10 over market,
-  // which is exactly backwards from what tagging him Avoid was supposed
-  // to do.
-  const t = playerTag(name);
-  if(t === 'avoid') return READ_BY_KEY.avoid.mult;
-  if(t === 'target') return READ_BY_KEY.target.mult;
-  return 1;
+  return r ? READ_BY_KEY[r].mult : 1;
 }
 function readLabel(name){
   const r = myRead(name);
   return r ? READ_BY_KEY[r].label : 'no read yet';
 }
-/* One markup source for the rating pill, so avoid/fade/maintain/target/chase
-   look identical everywhere they show up instead of drifting per call site. */
+/* One markup source for the rating pill, so Avoid/Target look identical
+   everywhere they show up instead of drifting per call site. */
 function ratePillHTML(key, mini){
   if(!key || !READ_BY_KEY[key]) return '';
   const cls = mini ? `rate-pill ${key} mini` : `rate-pill ${key}`;
@@ -6760,18 +6739,33 @@ function myValue(p){
   return v;
 }
 
-/* One-time migration from the old 1 to 10 scale, so nothing already entered
-   is lost. */
+/* One-time migration onto the tag system from two retired formats: the
+   original 1-10 myRatings scale, and the five-point myReads scale that
+   replaced it and was itself retired the night of the draft (8/25) in
+   favor of a single Target/Avoid tag. Runs once at load; an existing tag
+   always wins, legacy data only fills a gap. */
 function migrateRatings(){
-  const old = state.myRatings;
-  if(!old || !Object.keys(old).length) return;
-  state.myReads = state.myReads || {};
-  Object.keys(old).forEach(n=>{
-    if(state.myReads[n]) return;
-    const v = old[n];
-    state.myReads[n] = v<=2 ? 'avoid' : (v<=4 ? 'fade' : (v===5 ? 'maintain' : (v<=7 ? 'target' : 'chase')));
-  });
+  const oldRatings = state.myRatings;
+  const oldReads = state.myReads;
+  const hasRatings = oldRatings && Object.keys(oldRatings).length;
+  const hasReads = oldReads && Object.keys(oldReads).length;
+  if(!hasRatings && !hasReads) return;
+  state.playerTags = state.playerTags || {};
+  const apply = (name, tag) => { if(tag && !playerTag(name)) setPlayerTag(name, tag); };
+  if(hasRatings){
+    Object.keys(oldRatings).forEach(n=>{
+      const v = oldRatings[n];
+      apply(n, v<=4 ? 'avoid' : (v>=7 ? 'target' : null));
+    });
+  }
+  if(hasReads){
+    Object.keys(oldReads).forEach(n=>{
+      const v = oldReads[n];
+      apply(n, (v==='avoid'||v==='fade') ? 'avoid' : ((v==='target'||v==='chase') ? 'target' : null));
+    });
+  }
   delete state.myRatings;
+  delete state.myReads;
   saveState();
 }
 
@@ -6800,19 +6794,15 @@ function playerTag(name){
   const tags = tagsFor(name);
   if(tags.includes('avoid')) return 'avoid';
   if(tags.includes('target')) return 'target';
-  // a rating is a stronger statement than a tag, so let it speak
-  const r = myRead(name);
-  if(r === 'avoid') return 'avoid';
-  if(r === 'chase' || r === 'target') return 'target';
   return null;
 }
 // Target/Avoid stay mutually exclusive with each other (the star/avoid/clear
 // cycle used in a couple of places), but this only ever touches those two
 // keys -- any Sleeper or custom tags already on the player are left alone.
-// Target/Avoid tags feed readMultiplier() (see above) same as the five-point
-// read does, so a tag change has to blow away the same caches setMyRead()
-// does -- otherwise the bid panel's PURSUE/PASS verdict and walk-away price
-// keep showing a stale number computed before the tag existed.
+// Target/Avoid tags feed readMultiplier(), so a tag change has to blow away
+// the same caches walkAwayPrice()/myValue() build from -- otherwise the bid
+// panel's PURSUE/PASS verdict and walk-away price keep showing a stale
+// number computed before the tag existed.
 function invalidatePriceCaches(){
   _myValCache = {};
   _walkCache = {}; _walkKey = '';
@@ -6825,6 +6815,7 @@ function setPlayerTag(name, tag){
   if(next.length) state.playerTags[name] = next; else delete state.playerTags[name];
   invalidatePriceCaches();
   saveState();
+  readSavedToast(name, tag);
 }
 function cycleTag(name){
   const cur = playerTag(name);
@@ -7027,7 +7018,7 @@ function walkAwayPrice(player){
   if(legal < 1) return null;
 
   const key = (state.draftPicks||[]).length + '#' + DRAFT_POOL.length + '#'
-            + Object.keys(state.myReads||{}).length + '#' + legal;
+            + Object.keys(state.playerTags||{}).length + '#' + legal;
   if(_walkKey !== key){ _walkCache = {}; _walkKey = key; }
   if(_walkCache[player.name] !== undefined) return _walkCache[player.name];
 
@@ -13193,7 +13184,7 @@ function draftedOwnerOf(name){
 let _rowCache = null, _rowKey = '';
 function poolRowsFor(){
   const key = (state.draftPicks||[]).length + '#' + DRAFT_POOL.length + '#'
-            + Object.keys(state.myReads||{}).length + '#' + state.currentYear + '#' + POOL_FILTERS.showDrafted;
+            + Object.keys(state.playerTags||{}).length + '#' + state.currentYear + '#' + POOL_FILTERS.showDrafted;
   if(_rowCache && _rowKey === key) return _rowCache;
   const built = buildPoolRows();
   _rowCache = built; _rowKey = key;
@@ -13327,17 +13318,21 @@ function applyPoolFilters(rows){
                  .sort((a,b)=>{const x=fpBoard(a.p.name),y=fpBoard(b.p.name);return (x?x.tier:99)-(y?y.tier:99);});
       break;
     case 'rated':
-      { const ord={chase:0,target:1,maintain:2,fade:3,avoid:4};
+      { const ord={target:0,avoid:1};
         list = list.filter(r=>myRead(r.p.name)!==null)
                    .sort((a,b)=>ord[myRead(a.p.name)]-ord[myRead(b.p.name)]); }
       break;
     case 'mylikes':
-      list = list.filter(r=>['target','chase'].includes(myRead(r.p.name)))
-                 .sort((a,b)=>(myRead(b.p.name)==='chase'?1:0)-(myRead(a.p.name)==='chase'?1:0));
+      list = list.filter(r=>myRead(r.p.name)==='target');
       break;
     case 'myfades':
-      list = list.filter(r=>['avoid','fade'].includes(myRead(r.p.name)))
-                 .sort((a,b)=>(myRead(a.p.name)==='avoid'?-1:0)-(myRead(b.p.name)==='avoid'?-1:0));
+      list = list.filter(r=>myRead(r.p.name)==='avoid');
+      break;
+    // Your own endgame flier list -- players tagged Sleeper to comb through
+    // and try to win for $1 late, distinct from the algorithmic 'sleeper'
+    // view above (tier/price/age derived, nobody tagged those by hand).
+    case 'mysleepers':
+      list = list.filter(r=>tagsFor(r.p.name).includes('sleeper'));
       break;
     case 'situation':
       list = list.filter(r=>analystNote(r.p.name))
@@ -13458,7 +13453,7 @@ function poolFilterBar(prefix){
           ${[['all','Everyone'],['need','Fills a hole, most urgent first'],['urgent','Running out'],['consensus','Expert targets'],
              ['fade','Expert fades'],['sleeper','Sleepers'],['young','Young enough to sign long'],
              ['split','Experts are split on them'],['agreed','Experts agree on them'],
-             ['rated','Players I have marked'],['myfades','My fades and avoids'],['mylikes','My targets and chases'],
+             ['rated','Players I have marked'],['myfades','My avoids'],['mylikes','My targets'],['mysleepers','My sleepers'],
              ['situation','Situation changed for them'],['contested','Analysts disagree on them'],['injury','On the injury watch'],
              ['handcuff','Handcuffs a back I own'],['easysos','Easiest schedules'],['hardsos','Hardest schedules'],
              ['beat','Sentiment: should beat the price'],['miss','Sentiment: likely to disappoint'],
@@ -13642,7 +13637,7 @@ function renderPoolView(){
     irf.addEventListener('change', ()=>{ if(irf.files[0]) importRatingsCSV(irf.files[0]); irf.value=''; });
   }
   const list = applyPoolFilters(poolRowsFor());
-  const rated = Object.keys(state.myReads||{}).length;
+  const rated = Object.keys(state.playerTags||{}).filter(n=>playerTag(n)).length;
   const goneShown = POOL_FILTERS.showDrafted ? list.filter(r=>r.gone).length : 0;
   document.getElementById('poolCount').textContent =
     `${list.length} player${list.length===1?'':'s'} shown of ${availablePool().length} still available`
