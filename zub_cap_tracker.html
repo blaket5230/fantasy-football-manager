@@ -1152,18 +1152,40 @@
      them. auto-fill just packs in as many ~180px columns as actually fit,
      so the same markup reflows correctly at any card width instead of
      needing a media query tuned to one specific layout. */
-  .pt-tier-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0 14px;}
-  .pt-player-row{display:flex;align-items:baseline;gap:6px;font-size:10.5px;padding:2px 0;color:var(--chalk-2);min-width:0;}
-  .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:16px;text-align:right;}
+  .pt-tier-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 10px;}
+  /* Each player got its own bordered card rather than just sitting in a grid
+     cell -- with three columns and no rule between them, a price at the end
+     of one row lined up close enough to the name starting the next column
+     that which belonged to which stopped being obvious at a glance. A card
+     boundary answers that the way a table's row lines used to, without
+     going back to two sparse columns to get it. */
+  .pt-player-row{
+    display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--chalk-2);min-width:0;
+    background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;
+    padding:4px 7px;
+  }
+  .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:14px;text-align:right;}
   .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;}
   .tag-dots{display:inline-flex;gap:2px;margin-left:5px;vertical-align:middle;}
   .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
-  .pt-player-row.pt-gone{opacity:.45;}
+  .pt-player-row.pt-gone{opacity:.45;background:transparent;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
-  .pt-player-row[data-pt-nom]{cursor:pointer;}
-  .pt-player-row[data-pt-nom]:hover{color:var(--chalk);}
-  .pt-player-row[data-pt-nom]:hover .pt-player-name{text-decoration:underline;}
+  .pt-player-row{cursor:pointer;}
+  .pt-player-row:hover{color:var(--chalk);border-color:var(--peri);background:rgba(123,143,247,.08);}
+  .pt-player-row:hover .pt-player-name{text-decoration:underline;}
+  /* The one thing that actually nominates, now that the row itself opens
+     the card instead. Small and round rather than matching row-act's usual
+     text-button look -- three columns of dense cards don't have room for a
+     labeled button, and + only ever means one thing here. */
+  .pt-nom-btn{
+    flex-shrink:0;width:16px;height:16px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;line-height:1;
+    color:var(--jade);border:1px solid rgba(63,182,139,.4);background:rgba(63,182,139,.1);
+    cursor:pointer;
+  }
+  .pt-nom-btn:hover{background:var(--jade);color:var(--ink);border-color:var(--jade);}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -4777,12 +4799,19 @@ function renderPoolTierRail(){
           // Position is implicit within a single-position tab, but Overall
           // mixes all five together, so each row needs its own badge --
           // otherwise a tier block is just an unlabeled wall of names.
+          // The whole row used to BE the nominate button, which meant there
+          // was no way to click through to a player's card from here -- the
+          // one place tags actually get assigned. Split the two: the row
+          // opens his card (same as everywhere else in the app a name is
+          // clickable), a dedicated "+" is the one thing that puts him on
+          // the clock, gone entirely once he's already off the board.
           const rows = capped.map(p=>{
             rankCounter++;
             const gone = taken.has(p.name);
-            const nomAttr = gone ? '' : ` data-pt-nom="${p.name.replace(/"/g,'&quot;')}"`;
+            const esc = p.name.replace(/"/g,'&quot;');
+            const nomBtn = gone ? '' : `<span class="pt-nom-btn" data-pt-nom="${esc}" title="Put ${p.name} on the clock">+</span>`;
             const posBadge = pos==='OVERALL' ? `<span class="pos-tag pos-${p.pos}" style="margin-right:5px;">${posLabel(p.pos)}</span>` : '';
-            return `<div class="pt-player-row${gone?' pt-gone':''}" title="${gone?p.name:`Put ${p.name} on the clock`}"${nomAttr}><span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}${tagDotsHTML(p.name)}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span></div>`;
+            return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}"><span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}${tagDotsHTML(p.name)}</span><span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label"><span>Tier ${i+1}</span><span class="pt-tier-count">${t.length}</span><span class="pt-tier-range">${priceRange}</span></div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
@@ -4810,12 +4839,18 @@ function renderPoolTierRail(){
     poolTierExpanded = !poolTierExpanded;
     renderPoolTierRail();
   });
-  // Still-available players double as a nomination shortcut -- click a name
-  // here to put him on the clock, same action the Nominate table's rows use.
-  // Already-drafted (struck-through) rows carry no data-pt-nom, so they're
-  // inert.
-  wrap.querySelectorAll('.pt-player-row[data-pt-nom]').forEach(row=>{
-    row.addEventListener('click', ()=> putOnTheClock(row.dataset.ptNom));
+  // Row click opens his card -- same as every other name in the app, and
+  // the one place tags actually get assigned (see the Tags section there).
+  // Gone players still open (useful to go back and check why you tagged
+  // him), they just don't get the nominate button below.
+  wrap.querySelectorAll('.pt-player-row[data-pt-card]').forEach(row=>{
+    row.addEventListener('click', ()=> openPlayerCard(row.dataset.ptCard));
+  });
+  // The nominate button is the one thing that puts him on the clock.
+  // stopPropagation so clicking + doesn't also fire the row's open-card
+  // handler above.
+  wrap.querySelectorAll('.pt-nom-btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{ e.stopPropagation(); putOnTheClock(btn.dataset.ptNom); });
   });
 }
 
