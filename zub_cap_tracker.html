@@ -2889,10 +2889,24 @@ function tierPriceTable(){
 // this league's $100 cap) is now checked FIRST and wins outright wherever
 // Clay's cheat sheet covers a player -- CBS_AUCTION and the FP_BOARD tier
 // fallback only run for the ~190 players Clay's sheet doesn't have. A tiny,
-// explicit per-player haircut list (currently just Trey McBride, "come down
-// a bit" off Clay's $19) rides on top for the rare case Blake wants a
-// specific number nudged rather than trusting Clay's read as-is.
-const MANUAL_PRICE_ADJUST = { "Trey McBride": -4 };
+// explicit per-player haircut list rides on top for the rare case Blake
+// wants a specific number nudged rather than trusting Clay's read as-is:
+//  - Trey McBride: -4 ("come down a bit" off Clay's $19)
+//  - Rashee Rice: -3 ("slightly high" at Clay's $20)
+//  - Jonathon Brooks / Chuba Hubbard: +6 / +5 off Clay's $1 floor for both.
+//    Blake's read from the spot-check: "I don't think Brooks and Hubbard
+//    are both $1 players, one of them will be a starter for the Carolina
+//    Panthers and both will get solid reps." Brooks priced a touch above
+//    Hubbard since DRAFT_CONFLICTS' own note says the weight of evidence
+//    (FantasyPros, PFF, DraftSharks) favors Brooks -- but this is a real
+//    committee, not a real gap, so they're kept close together rather than
+//    picking one outright.
+const MANUAL_PRICE_ADJUST = {
+  "Trey McBride": -4,
+  "Rashee Rice": -3,
+  "Jonathon Brooks": 6,
+  "Chuba Hubbard": 5,
+};
 function suggestedDollar(mv, pos, name){
   if(name){
     // A hard fact, not a price opinion, so it outranks every source below --
