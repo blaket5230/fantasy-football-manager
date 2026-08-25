@@ -7111,6 +7111,13 @@ function bindTagManagerControls(host, rerender){
 let _walkCache = {}, _walkKey = '';
 const WALK_CEILING_MULT = 1.15;
 const WALK_FLOOR_MULT = 0.85;
+// Blake's own hard line, stated flatly the night before the draft: never
+// spend more than this on any one player, full stop, no matter what a
+// Target tag or a hot market argues for -- a single injury shouldn't be
+// able to end his season's budget with it. Every other multiplier in this
+// function (ceiling/floor, rating, inflation) can push the number UP; this
+// is the one thing that overrides all of them on the way back down.
+const PERSONAL_MAX_BID = 33;
 function walkAwayPrice(player){
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   if(myIdx < 0) return null;
@@ -7182,10 +7189,15 @@ function walkAwayPrice(player){
   const inf = inflatedValue(player);
   if(inf.mult !== 1) last = Math.max(1, Math.round(last * inf.mult));
   const infNote = Math.abs(inf.mult - 1) >= 0.08 ? ` ${inf.basis}, so this reflects that.` : '';
+  const cappedByPersonal = last > PERSONAL_MAX_BID;
+  if(cappedByPersonal) last = PERSONAL_MAX_BID;
+  const capNote = cappedByPersonal
+    ? ` The math argues for more, but you don't go past $${PERSONAL_MAX_BID} on anyone -- that's your hard line, not his.`
+    : '';
   const out = { walk: last, market,
     note: (last >= market
       ? `Worth going to $${last}, which is $${last-market} past his $${market} market price, because of what the alternative actually leaves you.`
-      : `Stop at $${last}, below his $${market} market price: past that the same money builds a better eight elsewhere.`) + infNote };
+      : `Stop at $${last}, below his $${market} market price: past that the same money builds a better eight elsewhere.`) + infNote + capNote };
   _walkCache[player.name] = out;
   return out;
 }
