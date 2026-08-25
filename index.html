@@ -5581,14 +5581,21 @@ function bidQuickInsights(p, myIdx){
     if(clash) con(`Same Week ${myBye} bye as ${clash.name}, already yours.`);
   }
 
-  // Tier value: is he the bargain of his group, or is there a cheaper twin
+  // Tier value: is he the bargain of his group, or is there a real bargain
   // still on the board, or is he the last real option at this level at all.
   const ti = tierInfoFor(p);
   if(ti && ti.size > 1){
     if(ti.isCheapest) pro(`Best value in his tier of ${ti.size}.`);
     else {
+      const myPrice = suggestedDollar(p.mv, p.pos, p.name);
       const cd = suggestedDollar(ti.cheapest.mv, ti.cheapest.pos, ti.cheapest.name);
-      con(`${ti.cheapest.name} is in the same tier for about $${cd} less.`);
+      const gap = myPrice - cd;
+      // Almost everyone in a tier isn't the single cheapest member of it --
+      // flagging that as a con for the best player in the tier (a $4 gap to
+      // the tier floor on a $29 RB1) isn't a real bargain callout, it's just
+      // restating tier order. Only worth a con when the alternative is a
+      // genuinely different price point, not a normal spot in the ranking.
+      if(cd <= myPrice*0.7 && gap >= 2) con(`${ti.cheapest.name} is in the same tier for about $${gap} less.`);
     }
   } else if(ti){
     pro(`Alone in his tier, no real fallback if you pass.`);
@@ -7046,6 +7053,7 @@ function bindTagManagerControls(host, rerender){
    per player rather than one per row per render. */
 let _walkCache = {}, _walkKey = '';
 const WALK_CEILING_MULT = 1.15;
+const WALK_FLOOR_MULT = 0.85;
 function walkAwayPrice(player){
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   if(myIdx < 0) return null;
@@ -7080,10 +7088,25 @@ function walkAwayPrice(player){
      uses, so the algorithm's own unprompted pull tops out exactly where an
      explicit "I like him" judgment call starts. An actual Target/Avoid tag,
      a deliberate human decision rather than an algorithmic inference, is
-     what can still move it further from there. */
+     what can still move it further from there.
+
+     Floored the same way, symmetrically, for the opposite reason: vor()
+     runs on a July ECR consensus scrape (see groupRankFor's own comment),
+     not on the Clay pricing that's now suggestedDollar's primary source,
+     and those two disagree hard for a real player, not a hypothetical --
+     Derrick Henry's July consensus rank is 22nd at the position (age/decline
+     discount already baked in by scouts back then), so his vor-driven walk
+     price alone came out to $16 against a $25 Clay market price he's still
+     earning today. buildTiersFrom() hit this exact same fork already and
+     picked price over the internal model for exactly this reason (its own
+     comment names Henry specifically) -- this is the other half of that
+     same fix, applied where the internal model still drives the number
+     directly instead of just grouping players by it. */
   const market = suggestedDollar(player.mv, player.pos, player.name);
   const ceiling = Math.max(1, Math.round(market * WALK_CEILING_MULT));
+  const floor = Math.max(1, Math.round(market * WALK_FLOOR_MULT));
   if(last > ceiling) last = ceiling;
+  if(last < floor) last = floor;
   const mult = ratingMultiplier(player.name);
   if(mult !== 1) last = Math.max(1, Math.round(last * mult));
   const out = { walk: last, market,
