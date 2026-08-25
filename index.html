@@ -8317,12 +8317,62 @@ function opportunityCost(player, price){
    in your head at a table; a ranked list of two hundred is not.           */
 const EFFICIENCY_BAR = 0.30;   // points above replacement per dollar
 
+/* Who you can REALISTICALLY get for a slot's own budget, not just who is
+   best overall -- the one candidate list Target Board, the Squad Plan
+   starter row's auto-fallback, and the manual picker (pickerHTML) all now
+   share, so pinning $10 to a slot actually changes who shows up there
+   instead of just relabeling the same $29 studs "$10" and leaving you to
+   notice they were never realistic at that price.
+
+   Range is the same 0.5x-1.45x-of-budget band the manual picker already
+   used on its own before this -- keeping every "who fits this budget"
+   surface in the app anchored to one shared definition of "fits". */
+function budgetTargets(slot, budget, n){
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const cheapSlot = ['PK','DST'].includes(slot.eligible[0]);
+  const lo = cheapSlot ? 1 : Math.max(1, Math.floor(budget*0.5));
+  const hi = cheapSlot ? Math.max(1, budget*3) : Math.max(lo+1, Math.ceil(budget*1.45));
+
+  const cands = availablePool()
+    .filter(p=>slot.eligible.includes(p.pos))
+    /* rm bends quality the same way bidVerdict() already bends price for a
+       rated player (see ratingMultiplier there): Chase inflates a guy's
+       effective quality so he clears the bar and ranks higher even if he
+       is not quite the top raw number; Avoid does the reverse. Otherwise
+       rating someone Chase in Prep never actually surfaced him here, only
+       in the live bid verdict once you'd already found him yourself. */
+    .map(p=>{
+      const d = Math.max(1, suggestedDollar(p.mv, p.pos, p.name));
+      const rm = ratingMultiplier(p.name);
+      return { p, d, v:vor(p), eff: (vor(p)/d)*rm, rm, sent: sentimentFor(p), read: myRead(p.name),
+               inRange: d>=lo && d<=hi };
+    })
+    .filter(o=>o.d <= effMaxLegalBid(myIdx));
+
+  if(cheapSlot){
+    // cheap mandatory slots are not a value question, just take the best one
+    return cands.filter(o=>o.inRange).sort((a,b)=>(b.sent.score-a.sent.score)||(a.d-b.d)).slice(0, n);
+  }
+
+  /* Sort by quality, not by headroom, WITHIN the affordable range. Ranking
+     on headroom alone put $1 tight ends at the top of a $20 WR1 slot, which
+     is the efficiency trap wearing a different hat: a player you can chase
+     far past market is worthless if he was never worth much. If the
+     realistic range is too thin to fill the board (deep at a scarce
+     position), fall back to the best remaining value anywhere rather than
+     showing fewer names than asked for. */
+  const inRange = cands.filter(o=>o.inRange && o.v > 0);
+  const pool = inRange.length >= n ? inRange : cands.filter(o=>o.v>0);
+  return pool.sort((a,b)=>(b.v*b.rm-a.v*a.rm)).slice(0, n);
+}
+
 function targetBoard(perSlot){
   perSlot = perSlot || 4;
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   if(myIdx < 0) return [];
   const plan = planBudget();
   if(!plan) return [];
+  const base = planBaseline() || {};
 
   const claimed = new Set();
   const out = [];
@@ -8335,49 +8385,24 @@ function targetBoard(perSlot){
 
   holes.forEach(slot=>{
     const budget = plan.alloc[slot.key] || 1;
-    const cands = availablePool()
-      .filter(p=>slot.eligible.includes(p.pos) && !claimed.has(p.name))
-      /* Walk-away is a full lineup solve, so it is computed AFTER the list is
-         cut to the handful that actually make the board, not for every
-         eligible player on the way.
-
-         rm bends quality the same way bidVerdict() already bends price for a
-         rated player (see ratingMultiplier there): Chase inflates a guy's
-         effective quality so he clears the bar and ranks higher even if he
-         is not quite the top raw number; Avoid does the reverse. Otherwise
-         rating someone Chase in Prep never actually surfaced him here, only
-         in the live bid verdict once you'd already found him yourself. */
-      .map(p=>{
-        const d = Math.max(1, suggestedDollar(p.mv, p.pos, p.name));
-        const rm = ratingMultiplier(p.name);
-        return { p, d, v:vor(p), eff: (vor(p)/d)*rm, rm, walk: d, sent: sentimentFor(p), read: myRead(p.name) };
-      })
-      .filter(o=>o.d <= effMaxLegalBid(myIdx));
-
-    // cheap mandatory slots are not a value question, just take the best one
     const cheapSlot = ['PK','DST'].includes(slot.eligible[0]);
-    let picked;
-    if(cheapSlot){
-      picked = cands.sort((a,b)=>(b.sent.score-a.sent.score)||(a.d-b.d)).slice(0, perSlot);
-    } else {
-      const clears = cands.filter(o=>o.eff >= EFFICIENCY_BAR && o.v > 0);
-      const pool = clears.length >= perSlot ? clears : cands.filter(o=>o.v>0);
-      /* Sort by quality, not by headroom. Ranking on headroom alone put $1
-         tight ends at the top of the WR1 slot, which is the efficiency trap
-         wearing a different hat: a player you can chase far past market is
-         worthless if he was never worth much. You start eight, so the target
-         for a starting slot is the best player you can get. The walk-away
-         price then tells you how far to chase him, which is the part that
-         stops you overpaying. Quality picks the target, price caps the bid.
-         rm nudges that quality by your own read, same reasoning as above. */
-      picked = pool.sort((a,b)=>(b.v*b.rm-a.v*a.rm)).slice(0, perSlot);
-    }
+    // How this slot's own budget has drifted from the plan you first set --
+    // a real under/over spend elsewhere in the roster flows through
+    // planBudget()'s auto-rebalance into every unpinned slot's alloc, but
+    // that only shows up here as a bare number changing unless it's called
+    // out directly. Pinned slots never drift (you fixed the figure
+    // yourself), so this only ever flags money that moved on its own.
+    const manual = plan.manual || {};
+    const pinned = Number.isFinite(manual[slot.key]);
+    const baseline = base[slot.key];
+    const reinvest = (!pinned && typeof baseline === 'number') ? budget - baseline : 0;
     /* No walk-away solve here. The panel never displayed the number, so all it
        bought was an eight second wait to draw the board. The card computes it
        for the one player you open, which is where the answer is actually
        wanted. */
+    const picked = budgetTargets(slot, budget, perSlot).filter(o=>!claimed.has(o.p.name));
     picked.forEach(o=>claimed.add(o.p.name));
-    out.push({ slot, budget, cheapSlot, targets:picked });
+    out.push({ slot, budget, cheapSlot, pinned, reinvest, targets:picked });
   });
 
   return out;
@@ -14131,18 +14156,13 @@ function planBudget(){
 }
 
 // Best available players for a slot, at or near its budget.
+// Thin wrapper over budgetTargets() -- same underlying candidate list Target
+// Board uses, just remapped to the {x, d, exp} shape this function's own
+// callers (the Squad Plan starter row, the ideal-team gap check) already
+// expect, so fixing the "who fits this budget" logic in one place didn't
+// mean rewriting every call site too.
 function slotTargets(slot, budget, n){
-  const myIdx = teamIdxOf(MY_TEAM_OWNER);
-  const cands = availablePool().filter(x=>slot.eligible.includes(x.pos));
-  const scored = cands.map(x=>{
-    const d = suggestedDollar(x.mv, x.pos, x.name);
-    const exp = expertRead(x.name);
-    const fit = d <= budget ? 1 : Math.max(0, 1 - (d-budget)/Math.max(1,budget));
-    const bonus = exp ? (exp.kind==='target' ? 1.12 : (exp.kind==='avoid' ? 0.82 : 1)) : 1;
-    return { x, d, exp, score: x.mv * fit * bonus };
-  });
-  scored.sort((a,b)=>b.score-a.score);
-  return scored.slice(0, n||3);
+  return budgetTargets(slot, budget, n||3).map(o=>({ x:o.p, d:o.d, exp:expertRead(o.p.name) }));
 }
 
 /* The plan already re-allocates on every win. What it also needs to say is
@@ -14260,7 +14280,24 @@ function renderTargetBoard(){
   const shortRead = { avoid:'AV', fade:'FD', maintain:'MT', target:'TG', chase:'CH' };
   const readCol = { avoid:'var(--coral)', fade:'var(--coral)', maintain:'var(--chalk-2)',
                     target:'var(--jade)', chase:'var(--jade)' };
-  el.innerHTML = board.map(h=>{
+
+  // One unmissable headline when a real win has actually moved money, not
+  // just a number quietly changing in a slot header you might not be
+  // looking at. Only fires off SETTLED slots (planDrift), so this is never
+  // triggered by simply typing a different pin.
+  const plan = planBudget();
+  const drift = plan ? planDrift(plan) : null;
+  const freed = drift ? -drift.spentVsPlan : 0;
+  const driftBanner = (drift && drift.settled > 0 && Math.abs(freed) >= 2)
+    ? `<div class="trade-verdict ${freed>0?'ok':'bad'}" style="margin-bottom:14px;">
+        <strong>${freed>0?`+$${freed} freed up`:`$${Math.abs(freed)} over plan`}</strong>
+        ${freed>0
+          ? `vs. the plan you started with -- it's already spread across the slots below, marked where it landed.`
+          : `vs. the plan you started with -- open slots below have less to spend than you first set, marked where it came from.`}
+      </div>`
+    : '';
+
+  el.innerHTML = driftBanner + board.map(h=>{
     const rows = h.targets.map(o=>{
       const eff = o.eff >= EFFICIENCY_BAR;
       const col = eff ? 'var(--jade)' : 'var(--chalk-3)';
@@ -14276,9 +14313,14 @@ function renderTargetBoard(){
         <span class="b-nums"><strong>$${o.d}</strong><span style="color:${col};font-size:11px;margin-left:8px;">${h.cheapSlot?'':o.eff.toFixed(2)+'/$'}</span></span>
       </div>`;
     }).join('');
+    // Badge only ever appears on an UNPINNED slot: a pinned figure is a
+    // deliberate choice, not drift, so it never gets flagged as reinvestable.
+    const reinvestBadge = (!h.pinned && Math.abs(h.reinvest) >= 1)
+      ? ` <span style="color:${h.reinvest>0?'var(--gold)':'var(--coral)'};font-weight:700;">${h.reinvest>0?'+':''}$${h.reinvest} ${h.reinvest>0?'reinvest':'tighten'}</span>`
+      : '';
     return `<div style="margin-bottom:16px;">
       <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:4px;">
-        ${h.slot.label}${h.cheapSlot?' &middot; a dollar slot, just take a good one':` &middot; planned $${h.budget}`}
+        ${h.slot.label}${h.cheapSlot?' &middot; a dollar slot, just take a good one':` &middot; planned $${h.budget}${reinvestBadge}`}
       </div>${rows}</div>`;
   }).join('');
   el.querySelectorAll('[data-plan-pick]').forEach(b=>
