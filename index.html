@@ -195,10 +195,15 @@
     background:none;border:none;color:var(--chalk-3);cursor:pointer;
     font-family:'Archivo',sans-serif;font-size:13.5px;font-weight:600;
     letter-spacing:.01em;padding:12px 17px;white-space:nowrap;
-    transition:color var(--fast) var(--ease);position:relative;
+    transition:all var(--fast) var(--ease);position:relative;
+    border-radius:8px 8px 0 0;
   }
-  nav.tabs button:hover{color:var(--chalk-2);}
-  nav.tabs button.active{color:var(--chalk);}
+  nav.tabs button:hover{color:var(--chalk-2);background:rgba(255,255,255,.03);}
+  /* A filled tab, not just a bold label under a moving underline -- the
+     underline (.tab-indicator) still does the sliding-between-tabs motion,
+     this is what makes the CURRENT tab read as "selected" the instant you
+     land on the page, before anything moves. */
+  nav.tabs button.active{color:var(--chalk);background:rgba(229,181,103,.09);}
   .tab-indicator{
     position:absolute;bottom:-1px;height:2px;border-radius:2px;
     background:linear-gradient(90deg,var(--gold-deep),var(--gold));
@@ -286,6 +291,11 @@
     font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;
     color:var(--gold);letter-spacing:-.03em;line-height:1;
   }
+  /* Over the cap is not just more spending pressure, it's a rules
+     violation -- the gauge bar underneath already flips red for it, the
+     headline number should too rather than staying the same gold as a
+     team with $90 to spend. */
+  .cap-left-num.cap-over{color:var(--coral);}
   .cap-label{
     font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);
     text-transform:uppercase;letter-spacing:.15em;margin-top:4px;
@@ -604,10 +614,10 @@
     flex:1 1 auto;background:none;border:none;border-bottom:2px solid transparent;
     padding:8px 6px;cursor:pointer;font-family:'JetBrains Mono',monospace;
     font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-3);
-    transition:all var(--fast) var(--ease);white-space:nowrap;
+    transition:all var(--fast) var(--ease);white-space:nowrap;border-radius:5px 5px 0 0;
   }
-  .side-tab:hover{color:var(--chalk-2);}
-  .side-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+  .side-tab:hover{color:var(--chalk-2);background:rgba(255,255,255,.03);}
+  .side-tab.active{color:var(--gold);border-bottom-color:var(--gold);background:rgba(229,181,103,.09);}
   .side-tab .dot{
     display:inline-block;width:5px;height:5px;border-radius:50%;
     background:var(--coral);margin-left:4px;vertical-align:middle;
@@ -880,10 +890,10 @@
     background:none;border:none;border-bottom:2px solid transparent;
     padding:8px 14px;cursor:pointer;font-family:'Archivo',sans-serif;
     font-size:13.5px;font-weight:600;letter-spacing:-.01em;color:var(--chalk-3);
-    transition:all var(--fast) var(--ease);
+    transition:all var(--fast) var(--ease);border-radius:6px 6px 0 0;
   }
-  .sub-tab:hover{color:var(--chalk-2);}
-  .sub-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+  .sub-tab:hover{color:var(--chalk-2);background:rgba(255,255,255,.03);}
+  .sub-tab.active{color:var(--gold);border-bottom-color:var(--gold);background:rgba(229,181,103,.09);}
   .sub-tab .dot{
     display:inline-block;width:5px;height:5px;border-radius:50%;
     background:var(--coral);margin-left:4px;vertical-align:middle;
@@ -910,7 +920,12 @@
     padding:12px 16px;cursor:pointer;transition:all var(--mid) var(--ease);
     display:flex;flex-direction:column;gap:2px;
   }
-  .mode:hover{border-color:#31405A;}
+  /* Same lift-on-hover, settle-on-press language as .team-card and
+     button.primary -- the three macro modes are the single biggest click
+     on the page and were the one place still reading as a static labeled
+     box instead of something you press. */
+  .mode:hover{border-color:#31405A;transform:translateY(-2px);box-shadow:var(--shadow-2);}
+  .mode:active{transform:translateY(0);}
   .mode.active{
     border-color:var(--gold-deep);
     background:linear-gradient(180deg,rgba(229,181,103,.10),var(--surface));
@@ -1193,10 +1208,9 @@
      rather than relying on the label's own small type to carry the section
      break, which got lost once tiers started running the card's full width
      instead of a cramped 380px sidebar column. */
-  .pt-tier{margin-bottom:10px;padding-top:8px;border-top:1px solid var(--line-soft);}
-  .pt-tier:first-child{padding-top:0;border-top:none;}
+  .pt-tier{margin-bottom:8px;padding:9px 10px 10px;border-radius:9px;}
   .pt-tier-label{
-    display:flex;align-items:baseline;gap:7px;margin-bottom:4px;
+    display:flex;align-items:baseline;gap:7px;margin-bottom:6px;
     font-family:'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;
   }
   .pt-tier-label > span:first-child{font-size:11px;font-weight:700;color:var(--gold);}
@@ -1205,10 +1219,15 @@
   /* Fixed 1fr/1fr was tuned for the 380px sidebar this used to live in --
      now that Tiers is the middle card's own sub-tab, that left two ~320px
      columns holding one short name apiece and a wide dead strip between
-     them. auto-fill just packs in as many ~180px columns as actually fit,
-     so the same markup reflows correctly at any card width instead of
-     needing a media query tuned to one specific layout. */
-  .pt-tier-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 10px;}
+     them. auto-fill just packs in as many columns as actually fit, so the
+     same markup reflows correctly at any card width instead of needing a
+     media query tuned to one specific layout. 200px (was 180px) is wide
+     enough that the great majority of names fit their own line at this
+     font size -- measured against the whole pool, not eyeballed -- and
+     .pt-player-name below wrapping instead of ellipsis-truncating is the
+     backstop for the real outliers ("Marquez Valdes-Scantling", full DST
+     team names) rather than widening every column just for them. */
+  .pt-tier-players{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px 10px;}
   /* Each player got its own bordered card rather than just sitting in a grid
      cell -- with three columns and no rule between them, a price at the end
      of one row lined up close enough to the name starting the next column
@@ -1227,7 +1246,13 @@
   .pt-player-line1{display:flex;align-items:center;gap:6px;min-width:0;}
   .pt-player-line2{display:flex;align-items:center;gap:6px;min-width:0;}
   .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:12px;text-align:right;}
-  .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:13px;font-weight:700;color:var(--chalk);}
+  /* A wider column (above) fits the overwhelming majority of names on one
+     line, but no fixed width fits every name at this font size -- "Marquez
+     Valdes-Scantling", full DST team names on the Overall tab. Wrapping to
+     a second line instead of ellipsis-truncating means those never lose
+     information; the card just runs one line taller, which is a rare and
+     harmless outcome instead of a name nobody can actually read. */
+  .pt-player-name{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--chalk);white-space:normal;line-height:1.2;word-break:break-word;}
   /* Money, so it gets the same gold the rest of the app reserves for money
      (max bid, the $/man read) -- sized and weighted to match the bigger
      name above it rather than reading as fine print underneath it. */
@@ -1265,9 +1290,10 @@
     display:flex;align-items:center;justify-content:center;
     font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;line-height:1;
     color:var(--jade);border:1px solid rgba(63,182,139,.4);background:rgba(63,182,139,.1);
-    cursor:pointer;
+    cursor:pointer;transition:transform var(--fast) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
   }
   .pt-nom-btn:hover{background:var(--jade);color:var(--ink);border-color:var(--jade);}
+  .pt-nom-btn:active{transform:scale(.88);}
 
   .budget-row{
     display:flex;justify-content:space-between;align-items:center;gap:10px;
@@ -3636,7 +3662,7 @@ function renderLeagueGrid(){
         <div class="teamname">${t.team || '(no team name)'}</div>
         <div class="cap-row">
           <div>
-            <div class="cap-left-num">$${left}</div>
+            <div class="cap-left-num${over?' cap-over':''}">$${left}</div>
             <div class="cap-label">Cap space</div>
           </div>
         </div>
@@ -3679,7 +3705,10 @@ function renderTeamDetail(){
   document.getElementById('teamDetailName').textContent = t.team || '(no team name)';
   document.getElementById('teamDetailOwner').textContent = t.owner;
   document.getElementById('capSummaryYear').textContent = state.currentYear;
-  document.getElementById('capSummaryVal').textContent = '$'+capLeft(t, state.currentYear);
+  const teamCapLeft = capLeft(t, state.currentYear);
+  const capValEl = document.getElementById('capSummaryVal');
+  capValEl.textContent = '$'+teamCapLeft;
+  capValEl.classList.toggle('cap-over', teamCapLeft < 0);
 
   const table = document.getElementById('rosterTable');
   const thead = table.querySelector('thead');
@@ -4773,15 +4802,24 @@ function renderTeamBudgetTable(){
   const wrap = document.getElementById('teamBudgetBody');
   if(!wrap) return;
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  // Same spending-pressure read the All rosters cards already color their
+  // cap number by -- reused rather than invented fresh, so "what color does
+  // this number mean" only has one answer anywhere in the app.
+  const pressureColor = { 'must spend':'var(--coral)', scraping:'var(--chalk-3)', flexible:'var(--chalk-2)', done:'var(--jade)' };
+  const fm = forcedMoney();
   const rows = state.teams.map((t,i)=>{
     const rem = effOpenSlots(i);
     const left = effCapLeft(i, state.currentYear);
     const max = effMaxLegalBid(i);
     const out = rem<=0;
+    const myFm = fm.rows.find(r=>r.idx===i);
+    // Never overrides my own row's gold -- that row's whole point is
+    // reading as "you" at a glance, not "here is your spending pressure".
+    const leftColor = (out || i===myIdx) ? '' : (myFm ? pressureColor[myFm.pressure] : '');
     return `<tr class="${i===myIdx?'tbud-mine':''}">
       <td title="${(t.owner+(t.team?' · '+t.team:'')).replace(/"/g,'&quot;')}">${i===myIdx?'&#9733; ':''}${t.owner}</td>
       <td class="${out?'tbud-out':'tbud-max'}">$${max}</td>
-      <td class="${out?'tbud-out':''}">$${left}</td>
+      <td class="${out?'tbud-out':''}" style="${leftColor?`color:${leftColor};`:''}">$${left}</td>
       <td class="${out?'tbud-out':''}">${rem}</td>
     </tr>`;
   }).join('');
@@ -5044,7 +5082,15 @@ function renderPoolTierRail(){
               <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}${priceHTML}${nomBtn}</div>
             </div>`;
           }).join('');
-          return `<div class="pt-tier"><div class="pt-tier-label"><span>Tier ${i+1}</span><span class="pt-tier-count">${t.length}</span><span class="pt-tier-range">${priceRange}</span></div><div class="pt-tier-players">${rows}</div></div>`;
+          // A tinted band behind the whole tier, strongest at Tier 1 and
+          // fading out by around Tier 6, so the boundary between tiers reads
+          // as a visible block at a glance -- the way FantasyPros colors
+          // its own cheat sheet -- instead of only existing in the "Tier N"
+          // text you have to actually read to notice you crossed one. Peri,
+          // not gold: gold is reserved for money everywhere else on this
+          // card (the price on every row sits right next to this band).
+          const bandAlpha = Math.max(0.025, 0.12 - i*0.02);
+          return `<div class="pt-tier" style="background:rgba(123,143,247,${bandAlpha.toFixed(3)});"><div class="pt-tier-label"><span>Tier ${i+1}</span><span class="pt-tier-count">${t.length}</span><span class="pt-tier-range">${priceRange}</span></div><div class="pt-tier-players">${rows}</div></div>`;
         }).join('');
 
         const toggle = hiddenTierCount
@@ -6580,7 +6626,12 @@ function faceHTML(p, size){
   const [c1,c2] = teamColors(p.nfl);
   const url = headshotUrl(p.name);
   const ini = initialsOf(p.name);
-  const fall = `<span class="face-ini" style="font-size:${Math.round(px*0.34)}px;">${ini}</span>`;
+  // 16% of the pool (mostly deep bench and rookies) has no FantasyPros photo
+  // ID, so this fallback isn't a rare edge case -- it's the face on plenty
+  // of real rows. A flat 0.34x multiplier left it genuinely hard to read at
+  // the smallest avatars (7px on a 20px chip for two capital letters), so
+  // it's floored rather than left to scale all the way down.
+  const fall = `<span class="face-ini" style="font-size:${Math.max(9, Math.round(px*0.4))}px;">${ini}</span>`;
   return `<span class="face" style="width:${px}px;height:${px}px;background:linear-gradient(150deg,${c1},${c2});">
     ${url ? `<img src="${url}" alt="" loading="lazy" onerror="this.remove()">` : ''}${fall}
   </span>`;
