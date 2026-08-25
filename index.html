@@ -1264,6 +1264,11 @@
     border:1px solid var(--line-soft);border-radius:4px;padding:1px 6px;flex-shrink:0;
   }
   .pt-role-badge.pt-role-est{border-style:dashed;}
+  .pt-player-team{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--chalk-3);
+    display:inline-flex;align-items:center;gap:3px;flex-shrink:0;
+  }
+  .pt-player-sent{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;flex-shrink:0;}
   .tag-dots{display:inline-flex;gap:4px;vertical-align:middle;flex-shrink:0;}
   .tag-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
@@ -5035,6 +5040,15 @@ function renderPoolTierRail(){
             const role = teamRoleFor(p);
             const roleBadge = role ? `<span class="pt-role-badge${role.real?'':' pt-role-est'}" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
             const [tc1] = teamColors(p.nfl);
+            // The gap between the role badge and the price used to be
+            // dead space -- team and a sentiment trend read (same ++/+/=/
+            // -/-- language the Pool List already uses) fill it instead of
+            // adding a third line.
+            const teamHTML = p.nfl ? `<span class="pt-player-team">${logoHTML(p.nfl,13)}${p.nfl}</span>` : '';
+            const sent = sentimentFor(p);
+            const sStyle = { 'strong-buy':['var(--jade)','++'], 'buy':['var(--jade)','+'],
+              'fair':['var(--chalk-3)','='], 'fade':['var(--coral)','-'], 'strong-fade':['var(--coral)','--'] }[sent.cls];
+            const sentHTML = sStyle ? `<span class="pt-player-sent" style="color:${sStyle[0]};" title="Sentiment: ${sent.call} (${sent.score>0?'+':''}${sent.score})">${sStyle[1]}</span>` : '';
             // Gone: show what he actually sold for, with the projection
             // crossed out beside it rather than replaced -- the gap between
             // the two IS the information (paid way over/under our number),
@@ -5060,7 +5074,7 @@ function renderPoolTierRail(){
             // the tell for the handful it falls back to an estimate for).
             return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}" style="--team-c:${tc1};">
               <div class="pt-player-line1">${faceHTML(p,24)}<span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
-              <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}${priceHTML}${nomBtn}</div>
+              <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}${teamHTML}${sentHTML}${priceHTML}${nomBtn}</div>
             </div>`;
           }).join('');
           // A tinted band behind the whole tier, strongest at Tier 1 and
@@ -5444,10 +5458,17 @@ function renderDraftPool(){
     cnt.textContent = `${list.length} shown of ${availablePool().length} available`
       + (goneShown ? ` (${goneShown} of those already drafted)` : '');
   }
-  document.getElementById('draftPoolTable').innerHTML = poolTableHTML(list.slice(0,120), {action:true});
-  document.querySelectorAll('#draftPoolTable tr[data-pool-pick]').forEach(tr=>{
-    tr.addEventListener('click', ()=> putOnTheClock(tr.dataset.poolPick));
-  });
+  const dpt = document.getElementById('draftPoolTable');
+  dpt.innerHTML = poolTableHTML(list.slice(0,120), {action:true});
+  // Row click opens his card, same as everywhere else a name shows up --
+  // this panel's own copy already promised that and never delivered it,
+  // since data-open-card was never actually bound here. The dedicated "+"
+  // nominates directly without opening the card, and stops the click from
+  // also bubbling into the row's open-card handler.
+  dpt.querySelectorAll('[data-open-card]').forEach(el=>
+    el.addEventListener('click', ()=>openPlayerCard(el.dataset.openCard)));
+  dpt.querySelectorAll('[data-pool-nom]').forEach(el=>
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); putOnTheClock(el.dataset.poolNom); }));
 }
 /* The search used to lean on the pool table below filtering as you typed, and
    picked a player only on an exact full-name match. Once that table became
@@ -5668,8 +5689,10 @@ function renderBidPanel(){
 
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
-      ${faceHTML(p, 34)}
-      <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}${tagChipsHTML(p.name)}</h4>
+      <div data-bid-open-card style="display:flex;align-items:center;gap:11px;flex:1;min-width:0;cursor:pointer;" title="Open ${p.name.replace(/"/g,'&quot;')}'s full card -- outlook, depth chart, cheat-sheet tags, everything on him">
+        ${faceHTML(p, 34)}
+        <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}${tagChipsHTML(p.name)}</h4>
+      </div>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
     ${seiBid ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:2px 0 10px;">
@@ -5704,6 +5727,8 @@ function renderBidPanel(){
   });
   document.getElementById('logPickBtn').addEventListener('click', logCurrentPick);
   document.getElementById('clearClock').addEventListener('click', clearTheClock);
+  const bidOpen = panel.querySelector('[data-bid-open-card]');
+  if(bidOpen) bidOpen.addEventListener('click', ()=>openPlayerCard(p.name));
 
   fitDraftColumnsToViewport();
 }
@@ -13595,12 +13620,18 @@ function poolTableHTML(list, opts){
     const goneBadge = r.gone ? `<span class="dead-tag" style="margin-left:4px;" title="Already drafted">TAKEN${r.owner?` &middot; ${r.owner}`:''}</span>` : '';
     const role = teamRoleFor(p);
     const roleBadge = role ? `<span class="pt-role-badge${role.real?'':' pt-role-est'}" style="margin-left:4px;" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
+    // opts.action (Draft Day's sidebar list only) adds a dedicated nominate
+    // button -- its own click handler, separate from the row's own
+    // data-open-card, so you can put him on the clock without opening his
+    // card first, same "+" the Tiers rail already uses.
+    const nomBtn = (opts.action && !r.gone)
+      ? `<span class="pt-nom-btn" data-pool-nom="${esc}" title="Put ${p.name.replace(/"/g,'&quot;')} on the clock" style="margin-left:6px;">+</span>` : '';
     return `<tr class="pool-row${r.gone?' pool-row-gone':''}" data-open-card="${esc}" style="cursor:pointer;--rail:${RAIL[p.pos]||'transparent'};">
       <td style="text-align:left;">
         ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}${tagDotsHTML(p.name)}${roleBadge}
         <span class="pos-tag pos-${p.pos}" style="margin-left:4px;">${posLabel(p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${logoHTML(p.nfl,14)} ${p.nfl}</span>
-        ${flags}${goneBadge}
+        ${flags}${goneBadge}${nomBtn}
       </td>
       <td>${rateCell}</td>
       <td>${sTxt}</td>
