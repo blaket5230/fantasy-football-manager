@@ -5648,17 +5648,7 @@ function renderBidPanel(){
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   const teamOptions = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
 
-  // Suggested range: market anchor to the scarcity-adjusted figure, whichever
-  // order they land in -- same inputs the old live readout used, just shown
-  // as a band instead of one number that needed a slider to explore.
   const market = suggestedDollar(p.mv, p.pos, p.name);
-  const scarcity = scarcityForPos(p.pos);
-  const tier = tierFor(market);
-  const effectiveScarcityMult = tier==='elite' ? Math.max(1.0, scarcity.mult) : scarcity.mult;
-  const marketAdjusted = Math.max(1, Math.round(market*effectiveScarcityMult));
-  const rangeLo = Math.min(market, marketAdjusted);
-  const rangeHi = Math.max(market, marketAdjusted);
-  const rangeText = rangeLo===rangeHi ? `$${rangeLo}` : `$${rangeLo}&ndash;$${rangeHi}`;
 
   // Your own ceiling: the same walk-away math the old panel used, just the
   // headline number now instead of a secondary one.
@@ -5704,8 +5694,10 @@ function renderBidPanel(){
     </div>` : ''}
 
     <div class="bid-key-numbers">
-      <div class="bkn-box"><div class="bkn-label">Suggested bid</div><div class="bkn-value">${rangeText}</div></div>
-      <div class="bkn-box walk"><div class="bkn-label">Max bid for you${maxNote?` <span class="th-help" title="${maxNote.replace(/"/g,'&quot;')}">why</span>`:''}</div><div class="bkn-value">${maxVal?('$'+maxVal):'&mdash;'}</div></div>
+      <div class="bkn-box walk" style="flex:1;">
+        <div class="bkn-label">Max bid${maxNote?` <span class="th-help" title="${maxNote.replace(/"/g,'&quot;')}">why</span>`:''} <span style="font-weight:400;color:var(--chalk-3);">&middot; market $${market}</span></div>
+        <div class="bkn-value">${maxVal?('$'+maxVal):'&mdash;'}</div>
+      </div>
     </div>
 
     <div class="bid-insights">
@@ -6369,7 +6361,7 @@ function renderPlayerCard(){
   const verdict = (()=>{
     const parts = [];
     let light = 'gray';
-    const diff = mine - base;
+    const diff = (w ? w.walk : mine) - base;
     const bar = Math.max(2, base*0.08);
     if(diff >= bar){ parts.push('Good value'); light = 'jade'; }
     else if(diff <= -bar){ parts.push('Below your number'); light = 'coral'; }
@@ -6436,8 +6428,7 @@ function renderPlayerCard(){
          word of analysis. -->
     <div class="pcard-grid">
       ${stat('Market', '$'+base, 'What the analyst auction board says he is worth')}
-      ${stat('Worth to you', '$'+mine, 'The market figure bent by your own rating')}
-      ${stat('Walk away above', w?'$'+w.walk:'--', 'Past this, the same money builds a better starting eight elsewhere')}
+      ${stat('Max bid', w?'$'+w.walk:'--', 'The one number to actually bid to -- already bends for your Target/Avoid tag and caps how far the room dynamics alone can push it past market')}
       ${stat('Points above repl.', vor(p).toFixed(1), 'Projects '+projectedPpg(p).toFixed(1)+' a game against a replacement of '+replacementLevel(p.pos).toFixed(1))}
       ${stat('Tier', (()=>{const f=fpTierFor(p);return f?('T'+f):(ti?'T'+ti.tier:'--');})(),
         fpTierFor(p)?'FantasyPros expert tier':(ti&&ti.size>1?('Cheapest at this level is '+ti.cheapest.name):'Alone at this level'))}
@@ -6460,9 +6451,9 @@ function renderPlayerCard(){
       ${tagPickerHTML(p.name)}
       ${tagManagerOpen ? tagManagerHTML() : ''}
       <p class="panel-sub" style="margin:8px 0 0;">
-        ${rd ? `${READ_BY_KEY[rd].blurb} At <strong>${READ_BY_KEY[rd].label}</strong> he is worth <strong>$${mine}</strong> to you rather than $${base}.`
-             : `No Target/Avoid tag set -- he stays at his market price of $${base}.`}
-        This feeds the verdict, the walk-away price and every plan.
+        ${rd ? `${READ_BY_KEY[rd].blurb} At <strong>${READ_BY_KEY[rd].label}</strong>${w?` his Max bid moves to <strong>$${w.walk}</strong>`:` he is worth <strong>$${mine}</strong> to you`} rather than $${base} market.`
+             : `No Target/Avoid tag set -- Max bid stays at whatever the room dynamics alone justify.`}
+        This feeds the verdict, Max bid and every plan.
       </p>
       <p class="panel-sub" style="margin:4px 0 0;color:var(--chalk-3);font-size:11px;">
         On this card: 1 toggles Avoid, 2 toggles Target, 3 toggles Sleeper, 0 clears Target/Avoid/Sleeper, arrow keys move through the list.
@@ -7036,6 +7027,7 @@ function bindTagManagerControls(host, rerender){
    against the state that could change the answer, so a scan costs one solve
    per player rather than one per row per render. */
 let _walkCache = {}, _walkKey = '';
+const WALK_CEILING_MULT = 1.15;
 function walkAwayPrice(player){
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   if(myIdx < 0) return null;
@@ -7060,10 +7052,20 @@ function walkAwayPrice(player){
     return miss;
   }
 
-  /* Bend the ceiling by your own read too, otherwise rating a player a 2 makes
-     him cheaper to buy but the tool still tells you to chase him just as far,
-     which is incoherent. */
+  /* The opportunity-cost loop above has no natural ceiling of its own -- for
+     a real difference-maker at a thin position it kept climbing to +$9-10
+     over market (Gibbs and Bijan both walked to $38 against a $28-29
+     market, Bowers to $26 against $16, all with no Target/Avoid tag at
+     all), which is a fair reflection of "what the alternative costs you"
+     but not a number anyone should actually walk into a room planning to
+     pay. Capped at market+15% -- the same multiplier a Target tag already
+     uses, so the algorithm's own unprompted pull tops out exactly where an
+     explicit "I like him" judgment call starts. An actual Target/Avoid tag,
+     a deliberate human decision rather than an algorithmic inference, is
+     what can still move it further from there. */
   const market = suggestedDollar(player.mv, player.pos, player.name);
+  const ceiling = Math.max(1, Math.round(market * WALK_CEILING_MULT));
+  if(last > ceiling) last = ceiling;
   const mult = ratingMultiplier(player.name);
   if(mult !== 1) last = Math.max(1, Math.round(last * mult));
   const out = { walk: last, market,
@@ -7075,12 +7077,12 @@ function walkAwayPrice(player){
 }
 
 // The single "are we bidding on this guy or not" call Blake asked for the
-// night before draft, so nobody has to mentally synthesize the Suggested
-// bid, Max bid for you, and the pros/cons list themselves in the thirty
-// seconds a nomination gives you. No new pricing logic -- walkAwayPrice()
-// above already IS the dynamic ceiling (a full lineup solve against cap,
-// open slots, the remaining pool, and your own Target/Fade reads), this
-// just turns the walk-vs-market comparison it already makes into a
+// night before draft, so nobody has to mentally synthesize Max bid, market,
+// and the pros/cons list themselves in the thirty seconds a nomination
+// gives you. No new pricing logic -- walkAwayPrice() above already IS the
+// dynamic ceiling (a full lineup solve against cap, open slots, the
+// remaining pool, and your own Target/Avoid reads), this just turns the
+// walk-vs-market comparison it already makes into a
 // decisive call instead of a number you have to interpret yourself:
 //   PURSUE        -- your ceiling clears market, worth chasing up to it.
 //   DISCOUNT ONLY -- still in play, but only below market -- exactly the
