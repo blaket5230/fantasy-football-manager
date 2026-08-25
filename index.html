@@ -6423,6 +6423,7 @@ function renderPlayerCard(){
     <div class="pcard-tab-body ${pcardTab==='outlook'?'active':''}" data-pcard-tab-body="outlook">
       ${(()=>{ const cp = clayProjectionText(p); return cp ? insight('2026 projection', cp.headline, cp.body) : ''; })()}
       ${(()=>{ const ds = draftSharksText(p); return ds ? insight('Projection range', ds.headline, ds.body) : ''; })()}
+      ${(()=>{ const cu = clayUltimateText(p); return cu ? insight('Cheat sheet tags', cu.headline, cu.body) : ''; })()}
       ${insight('Production', prod.ppg!==undefined?prod.ppg+' ppg (2025)':null, prod.label)}
       ${insight('Positional runway', null, run.label)}
       ${sos!==null?insight('Schedule', `${sos} of 32`, `Where 1 is the easiest 2026 schedule for a ${posLabel(p.pos)}.`):''}
@@ -12095,6 +12096,124 @@ const CLAY_AUCTION = {
   'Kaytron Allen':{team:'WAS',posRk:'RB69',rank:240,price:0,bye:7},
 };
 
+// ESPN's "Ultimate Cheat Sheet" (Karabell/Clay/Loza/Cockcroft/Moody) -- 12 named
+// analyst lists (do-not-draft, TD-regression/progression picks, sleepers, fliers,
+// red flags, insurance RBs, bounce-back candidates). Each entry keeps the ADP shown
+// in the source PDF where the list itself displayed one (several lists show no ADP).
+const CLAY_ULTIMATE = {
+"A.J. Brown":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:27.1}],
+"Bhayshul Tuten":[{k:"loza_redflag",l:"Loza's Red-Flag Players to Draft"}],
+"Blake Corum":[{k:"loza_buzz",l:"Loza's Players Generating Buzz"},{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Breece Hall":[{k:"more_tds",l:"Clay: Projected for More TDs"},{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Brian Robinson Jr.":[{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Brock Purdy":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:104.3}],
+"Bucky Irving":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:55.4},{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Cade Otton":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Cam Skattebo":[{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Carnell Tate":[{k:"loza_buzz",l:"Loza's Players Generating Buzz"}],
+"Carson Beck":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"CeeDee Lamb":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Chase Brown":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:23.5}],
+"Chris Godwin Jr.":[{k:"bounce_back",l:"Players Who Will Bounce Back"}],
+"Chris Rodriguez Jr.":[{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Christian McCaffrey":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:6.9},{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Christian Watson":[{k:"loza_fliers",l:"Loza's Late-Round Fliers"}],
+"Chuba Hubbard":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:119.9}],
+"Cyrus Allen":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"DJ Moore":[{k:"bounce_back",l:"Players Who Will Bounce Back"}],
+"Dak Prescott":[{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Dallas Goedert":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:100.3},{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Dalton Kincaid":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:134.1}],
+"Daniel Jones":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:159.2}],
+"Darnell Washington":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"David Montgomery":[{k:"bounce_back",l:"Players Who Will Bounce Back"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:73.4}],
+"De'Von Achane":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"De'Zhaun Stribling":[{k:"loza_buzz",l:"Loza's Players Generating Buzz"}],
+"Demond Claiborne":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Derrick Henry":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:19.5}],
+"Dontayvion Wicks":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Drake Maye":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:47.3}],
+"Elijah Arroyo":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Evan Engram":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Fernando Mendoza":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:166.9}],
+"Garrett Wilson":[{k:"loza_redflag",l:"Loza's Red-Flag Players to Draft"},{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Greg Dulcich":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"},{k:"loza_fliers",l:"Loza's Late-Round Fliers"}],
+"Harold Fannin Jr.":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"},{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Hunter Henry":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:142.9}],
+"Isaac TeSlaa":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"J.K. Dobbins":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:121.0}],
+"Ja'Kobi Lane":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Jacory Croskey-Merritt":[{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Jadarian Price":[{k:"loza_fliers",l:"Loza's Late-Round Fliers"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:79.6}],
+"Jakobi Meyers":[{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Jalen Nailor":[{k:"loza_fliers",l:"Loza's Late-Round Fliers"}],
+"James Cook III":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:12.8}],
+"Jameson Williams":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:68.4}],
+"Jared Goff":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:138.5}],
+"Jauan Jennings":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Javonte Williams":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:37.3}],
+"Jaxson Dart":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:76.3},{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Jayden Daniels":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:50.8},{k:"loza_redflag",l:"Loza's Red-Flag Players to Draft"}],
+"Jaydon Blue":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Jaylin Noel":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Jerry Jeudy":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Jonathan Taylor":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Jonathon Brooks":[{k:"bounce_back",l:"Players Who Will Bounce Back"},{k:"have_skills",l:"Have Skills, Need Opportunity"},{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Jordan Addison":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:119.7}],
+"Jordan Love":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:159.3}],
+"Josh Allen":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:22.1},{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Josh Downs":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:125.8}],
+"Josh Jacobs":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:35.3}],
+"Justin Herbert":[{k:"loza_buzz",l:"Loza's Players Generating Buzz"}],
+"Justin Jefferson":[{k:"more_tds",l:"Clay: Projected for More TDs"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:12.2}],
+"Keaton Mitchell":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Kenneth Walker III":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:23.0},{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Kenny Gainwell":[{k:"loza_fliers",l:"Loza's Late-Round Fliers"},{k:"moody_values",l:"Moody's Top Draft-Day Values"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:121.0},{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Konata Mumpfield":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Kyle Monangai":[{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Kyle Pitts Sr.":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:65.7}],
+"Kyler Murray":[{k:"bounce_back",l:"Players Who Will Bounce Back"},{k:"moody_values",l:"Moody's Top Draft-Day Values"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:147.4}],
+"Kyren Williams":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:43.0}],
+"Mac Jones":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Malik Nabers":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:35.4}],
+"Malik Washington":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:160.0}],
+"Malik Willis":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:166.8}],
+"MarShawn Lloyd":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Mark Andrews":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:122.5}],
+"Marvin Harrison Jr.":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:89.5}],
+"Matthew Golden":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Michael Pittman Jr.":[{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Mike Evans":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:94.2}],
+"Nicholas Singleton":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Noah Whittington":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Omarion Hampton":[{k:"more_tds",l:"Clay: Projected for More TDs"},{k:"moody_values",l:"Moody's Top Draft-Day Values"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:27.8}],
+"Pat Bryant":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Patrick Mahomes":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:108.8}],
+"Quinshon Judkins":[{k:"loza_buzz",l:"Loza's Players Generating Buzz"}],
+"RJ Harvey":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Rachaad White":[{k:"bounce_back",l:"Players Who Will Bounce Back"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:134.1}],
+"Rashee Rice":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:22.3},{k:"loza_redflag",l:"Loza's Red-Flag Players to Draft"}],
+"Rashid Shaheed":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Ryan Flournoy":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Sean Tucker":[{k:"have_skills",l:"Have Skills, Need Opportunity"}],
+"Seth McGowan":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"T.J. Hockenson":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:133.3}],
+"Tai Felton":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"Tank Bigsby":[{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Tee Higgins":[{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Terry McLaurin":[{k:"bounce_back",l:"Players Who Will Bounce Back"},{k:"moody_values",l:"Moody's Top Draft-Day Values"}],
+"Tony Pollard":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:103.9}],
+"Travis Etienne Jr.":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:46.9},{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Tre' Harris":[{k:"cockcroft_sleepers",l:"Cockcroft's Deep Sleepers"}],
+"TreVeyon Henderson":[{k:"karabell_do_not_draft",l:"Karabell's Do Not Draft List",a:78.1},{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"}],
+"Tucker Kraft":[{k:"loza_buzz",l:"Loza's Players Generating Buzz"},{k:"fewer_tds",l:"Clay: Projected for Fewer TDs"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:94.8}],
+"Tyler Shough":[{k:"loza_fliers",l:"Loza's Late-Round Fliers"},{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:155.6}],
+"Wan'Dale Robinson":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:116.9}],
+"Xavier Worthy":[{k:"more_tds",l:"Clay: Projected for More TDs"}],
+"Zach Charbonnet":[{k:"moody_insurance",l:"Moody's Best Insurance RBs"}],
+"Zay Flowers":[{k:"karabell_do_draft",l:"Karabell's Do Draft List",a:41.6}],
+};
+
 // Clay's guide and DRAFT_POOL don't always spell a name the same way -- a
 // suffix either side carries and drops ("Ken Walker III" vs "Kenneth Walker
 // III" is a real first-name mismatch these four lookups can't fix, but the
@@ -12238,6 +12357,26 @@ function clayAuctionText(p){
     headline: `$${c.price} (Clay, $200 budget)`,
     body: `ESPN's Mike Clay values him at $${c.price} on his own $200-budget scale -- roughly $${scaled} scaled down to this league's $100 cap, ${diffTxt}.`,
   };
+}
+
+// Short display names for CLAY_ULTIMATE's 12 list keys -- the full labels
+// (e.g. "Karabell's Do Not Draft List") are kept in the data for the source
+// attribution, these are just for a compact headline/body.
+const ULTIMATE_SHORT = {
+  karabell_do_not_draft: 'Do Not Draft', karabell_do_draft: 'Do Draft',
+  fewer_tds: 'Fewer TDs Likely', more_tds: 'More TDs Likely',
+  have_skills: 'Skills, Needs Opportunity', loza_fliers: 'Late-Round Flier',
+  loza_redflag: 'Red Flag', loza_buzz: 'Generating Buzz',
+  cockcroft_sleepers: 'Deep Sleeper', moody_values: 'Draft-Day Value',
+  moody_insurance: 'Insurance RB', bounce_back: 'Bounce-Back Candidate',
+};
+function clayUltimateText(p){
+  const tags = clayLookup(CLAY_ULTIMATE, p.name);
+  if(!tags || !tags.length) return null;
+  const short = t => ULTIMATE_SHORT[t.k] + (t.a!=null ? ` (ADP ${t.a})` : '');
+  const headline = tags.map(short).join(', ');
+  const body = `ESPN's "Ultimate Cheat Sheet" flags him on: ${tags.map(t=>t.l + (t.a!=null?` (ADP ${t.a})`:'')).join('; ')}.`;
+  return { headline, body };
 }
 
 /* Falls back to a value-model estimate (rank a player against his own
