@@ -1169,10 +1169,13 @@
     border-radius:6px;padding:5px 7px 5px 6px;
   }
   .pt-player-line1{display:flex;align-items:center;gap:6px;min-width:0;}
-  .pt-player-line2{display:flex;align-items:center;gap:5px;min-width:0;}
+  .pt-player-line2{display:flex;align-items:center;gap:6px;min-width:0;}
   .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:12px;text-align:right;}
   .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:13px;font-weight:700;color:var(--chalk);}
-  .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;margin-left:auto;}
+  /* Money, so it gets the same gold the rest of the app reserves for money
+     (max bid, the $/man read) -- sized and weighted to match the bigger
+     name above it rather than reading as fine print underneath it. */
+  .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);flex-shrink:0;margin-left:auto;}
   /* Where he sits in his own team's real position pecking order (see
      teamRoleFor) -- FantasyPros' actual depth chart for the vast majority of
      players, our own value model filling in only for the handful it doesn't
@@ -1186,6 +1189,13 @@
   .pt-role-badge.pt-role-est{border-style:dashed;}
   .tag-dots{display:inline-flex;gap:3px;vertical-align:middle;flex-shrink:0;}
   .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  /* Line two's versions of the three shared classes above, scaled up to
+     match -- scoped to .pt-player-line2 rather than resizing the shared
+     rules outright, since .tag-dot/.pt-role-badge are also used at the
+     smaller, denser size the pool list actually needs. */
+  .pt-player-line2 .pt-role-badge{font-size:11px;padding:1px 6px;}
+  .pt-player-line2 .tag-dots{gap:4px;}
+  .pt-player-line2 .tag-dot{width:9px;height:9px;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
   .pt-player-row{cursor:pointer;}
