@@ -541,6 +541,33 @@
   .pcard-tab-body.active{display:block;}
   .pcard-tab-body .pcard-sec:first-child{margin-top:0;}
 
+  /* ---------- PLAYER CARD DRAFT SIGNAL METERS ---------- */
+  .pcard-signal{margin-top:0;}
+  .sig-row{display:flex;align-items:center;gap:10px;margin:7px 0;}
+  .sig-row-label{width:66px;flex-shrink:0;font-size:11.5px;color:var(--chalk-3);}
+  .sig-bar{flex:1;height:7px;border-radius:4px;background:var(--line-soft);overflow:hidden;}
+  .sig-bar-fill{height:100%;border-radius:4px;}
+  .sig-bar-fill.sig-good{background:var(--jade);}
+  .sig-bar-fill.sig-bad{background:var(--coral);}
+  .sig-bar-fill.sig-mid{background:var(--gold);}
+  .sig-row-val{width:76px;flex-shrink:0;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;}
+  .sig-row-val.sig-good{color:var(--jade);}
+  .sig-row-val.sig-bad{color:var(--coral);}
+  .sig-row-val.sig-mid{color:var(--gold);}
+
+  /* ---------- PLAYER CARD DEPTH CHART TAB ---------- */
+  .pdc-wrap{display:flex;flex-direction:column;gap:16px;}
+  .pdc-group-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-3);margin-bottom:5px;}
+  .pdc-group.pdc-group-active .pdc-group-label{color:var(--gold);}
+  .pdc-row{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;font-size:12.5px;color:var(--chalk-2);}
+  .pdc-row[data-pdc-open]{cursor:pointer;}
+  .pdc-row[data-pdc-open]:hover{background:rgba(123,143,247,.10);color:var(--chalk);}
+  .pdc-row.pdc-mine{background:rgba(229,181,103,.14);border:1px solid rgba(229,181,103,.4);font-weight:700;color:var(--chalk);}
+  .pdc-row.pdc-taken{opacity:.45;}
+  .pdc-row.pdc-taken .pdc-name{text-decoration:line-through;}
+  .pdc-rank{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);width:14px;text-align:right;flex-shrink:0;}
+  .pdc-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
   /* Even organized into tabs, a tab full of stacked headers-over-paragraphs
      still reads as one grey wall of text. Chunking each idea into its own
      bordered card, with the number that matters pulled out bold up top,
@@ -1111,6 +1138,35 @@
   @media (max-width:900px){ .all-rosters-grid{grid-template-columns:repeat(2,1fr);} }
   @media (max-width:520px){ .all-rosters-grid{grid-template-columns:1fr;} }
 
+  /* ---------- TEAM MONEY TABLE (draft sidebar) ----------
+     Sits above the tabbed sidebar panel and never scrolls out of view with
+     it, so .draft-sidebar>.panel's flex:1 0 auto (meant for the tabbed panel
+     growing to fill the column) is overridden here -- this one sizes to its
+     content and the tabbed panel below it takes the rest. */
+  .team-budget-panel{flex:0 0 auto!important;margin-bottom:12px!important;}
+  .tbud-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:10.5px;}
+  .tbud-table th{text-align:right;color:var(--chalk-3);font-weight:600;font-size:9px;letter-spacing:.05em;text-transform:uppercase;padding:2px 4px 4px;border-bottom:1px solid var(--line);}
+  .tbud-table th:first-child{text-align:left;}
+  .tbud-table td{padding:2.5px 4px;text-align:right;border-bottom:1px solid var(--line-soft);white-space:nowrap;color:var(--chalk-2);}
+  .tbud-table tr:last-child td{border-bottom:none;}
+  .tbud-table td:first-child{text-align:left;overflow:hidden;text-overflow:ellipsis;max-width:100px;}
+  .tbud-table tr.tbud-mine td{color:var(--gold);font-weight:700;}
+  .tbud-table tr.tbud-mine{background:rgba(229,181,103,.08);}
+  .tbud-table td.tbud-max{color:var(--chalk);font-weight:700;}
+  .tbud-table td.tbud-out{color:var(--chalk-3);opacity:.55;}
+
+  /* ---------- ROSTERS BOARD (snake-draft grid) ---------- */
+  .rb-table{border-collapse:collapse;width:100%;min-width:1500px;}
+  .rb-table th,.rb-table td{border:1px solid var(--line-soft);padding:4px 6px;vertical-align:middle;}
+  .rb-table thead th{position:sticky;top:0;background:var(--surface);z-index:1;font-size:11.5px;font-weight:700;color:var(--chalk);white-space:nowrap;text-align:left;}
+  .rb-table thead th.rb-mine{color:var(--gold);}
+  .rb-row-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--chalk-3);white-space:nowrap;position:sticky;left:0;background:var(--surface);z-index:1;}
+  .rb-chip{display:flex;align-items:center;gap:5px;min-width:118px;}
+  .rb-chip-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--chalk-2);}
+  .rb-chip-price{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--gold);flex-shrink:0;}
+  .rb-chip.rb-keeper{background:rgba(123,143,247,.10);border-radius:5px;padding:2px 4px;margin:-2px -4px;}
+  .rb-empty{color:var(--chalk-3);opacity:.5;}
+
   /* ---------- OTHER ROSTERS RAIL ---------- */
   .or-team-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:2px;color:var(--chalk);}
   .or-team-head span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1196,6 +1252,7 @@
   .tag-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
   .pt-player-row.pt-gone .pt-player-name{text-decoration:line-through;}
+  .pt-price-orig{text-decoration:line-through;color:var(--chalk-3);font-weight:400;font-size:10.5px;margin-right:4px;}
   .pt-player-row{cursor:pointer;}
   .pt-player-row:hover{color:var(--chalk);border-color:var(--peri);background:rgba(123,143,247,.08);}
   .pt-player-row:hover .pt-player-name{text-decoration:underline;}
@@ -2042,6 +2099,15 @@
       </div>
 
       <div class="draft-sidebar">
+        <!-- Every team's spending power, always visible regardless of which
+             sidebar tab is open below -- the number you actually need before
+             deciding whether to push a bid one more dollar is "can the field
+             even go there," not buried behind a tab click mid-bid. -->
+        <div class="panel team-budget-panel" id="teamBudgetPanel">
+          <h3 style="margin-bottom:6px;font-size:13px;">Team money</h3>
+          <div id="teamBudgetBody"></div>
+        </div>
+
         <!-- The player pool and what it says about the draft as a whole:
              who's actually left, how thin each position is running, and
              whether the room is overpaying or underpaying right now. -->
@@ -2085,8 +2151,14 @@
            dropdown or click required to see who has what. -->
       <div class="draft-rosters-col">
         <div class="panel">
-          <h3>All rosters</h3>
-          <p class="panel-sub">Live, including tonight's picks. Cap space is colored by spending pressure, same read the bid panel already uses. <span style="background:rgba(123,143,247,.18);padding:1px 5px;border-radius:3px;">Highlighted</span> names were already on the roster coming into tonight; everything else was drafted this session.</p>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;">
+            <h3 style="margin-bottom:0;">All rosters</h3>
+            <div class="side-tabs" id="rostersViewTabs" style="margin:0;">
+              <button class="side-tab active" data-rosters-view="cards">Cards</button>
+              <button class="side-tab" data-rosters-view="board">Board</button>
+            </div>
+          </div>
+          <p class="panel-sub">Live, including tonight's picks. Cap space is colored by spending pressure, same read the bid panel already uses. <span style="background:rgba(123,143,247,.18);padding:1px 5px;border-radius:3px;">Highlighted</span> names were already on the roster coming into tonight; everything else was drafted this session. <strong>Board</strong> lays every team out as one snake-draft grid instead.</p>
           <div id="allRostersBody"></div>
         </div>
       </div>
@@ -4035,6 +4107,18 @@ function draftedNamesSet(){
   state.draftPicks.forEach(p=>s.add(p.name));
   return s;
 }
+// What a taken player actually cost, checking tonight's live picks first
+// (his real winning bid) and falling back to a pre-existing roster's own
+// contract figure for a keeper who was never nominated this session.
+function actualPriceFor(name){
+  const pick = state.draftPicks.find(p=>p.name===name);
+  if(pick) return pick.price;
+  for(const t of state.teams){
+    const pl = t.players.find(p=>p.name===name && !p.deadCap);
+    if(pl) return pl.years[state.currentYear] || pl.base || 0;
+  }
+  return null;
+}
 /* ---------- PLAYERS WE DID NOT KNOW ABOUT ----------
    The pool is 281 names pulled from a ranking snapshot. Someone will nominate
    a player outside it, and if there is no way to log him the damage is not
@@ -4352,6 +4436,7 @@ function renderDraftView(){
      that covers all of them without needing to patch each call site. */
   renderStatusStrip();
 
+  renderTeamBudgetTable();
   renderAllRostersGrid();
   renderPoolTierRail();
   renderEndgame();
@@ -4678,31 +4763,90 @@ function renderInflation(){
    own header instead of living as a separate tab: cap space colored by the
    same spending-pressure read the bid panel already uses, plus the actual
    $-per-man detail underneath. */
+// Every team's spending power in one glance, pinned above the tabbed
+// sidebar so it never has to be clicked into mid-bid. Max is the number
+// that actually decides whether the field can outbid you (cap left minus
+// $1 held back per other open slot); Left and Rem. are the two things that
+// number is built from, shown alongside so a thin roster with lots of cap
+// left doesn't read the same as a full one.
+function renderTeamBudgetTable(){
+  const wrap = document.getElementById('teamBudgetBody');
+  if(!wrap) return;
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const rows = state.teams.map((t,i)=>{
+    const rem = effOpenSlots(i);
+    const left = effCapLeft(i, state.currentYear);
+    const max = effMaxLegalBid(i);
+    const out = rem<=0;
+    return `<tr class="${i===myIdx?'tbud-mine':''}">
+      <td title="${(t.owner+(t.team?' · '+t.team:'')).replace(/"/g,'&quot;')}">${i===myIdx?'&#9733; ':''}${t.owner}</td>
+      <td class="${out?'tbud-out':'tbud-max'}">$${max}</td>
+      <td class="${out?'tbud-out':''}">$${left}</td>
+      <td class="${out?'tbud-out':''}">${rem}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table class="tbud-table">
+    <thead><tr>
+      <th>Team</th>
+      <th title="Most this team can legally put on one player right now">Max</th>
+      <th title="Total cap space left this year">Left</th>
+      <th title="Open roster slots remaining">Rem.</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+/* A player is either a keeper -- already on the roster when tonight
+   started -- or a live pick logged during this session. Carrying that
+   through as `keeper` (and the $ actually on the books for him, from the
+   same two sources this reads elsewhere: a keeper's cap hit this year, a
+   fresh pick's winning bid) is what lets both roster views tell the two
+   apart as the board fills up, instead of every name reading the same
+   regardless of when he was acquired. Shared by the Cards and Board views
+   of "All rosters" so they can never silently drift apart on who's slotted
+   where -- one assignment, two ways of laying it out. */
+function teamRosterSlots(i){
+  const t = state.teams[i];
+  const deadN = t.players.filter(p=>p.deadCap).length;
+  const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos,price:p.years[state.currentYear]||p.base||0,keeper:true}))
+    .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos,price:p.price||0,keeper:false})));
+  const { starters, bench } = assignLineup(held);
+  const { slots: benchSlots, overflow } = assignBench(bench);
+  return { held, deadN, starters, benchSlots, overflow };
+}
+
+// Cards view (each team's own full roster stacked vertically) vs. Board
+// view (one wide table, a team per column, so the whole snake draft reads
+// as a single grid) -- same underlying teamRosterSlots() data either way.
+let rostersView = 'cards';
 function renderAllRostersGrid(){
   const wrap = document.getElementById('allRostersBody');
   if(!wrap) return;
+
+  const tabs = document.getElementById('rostersViewTabs');
+  if(tabs && !tabs.dataset.bound){
+    tabs.dataset.bound = '1';
+    tabs.querySelectorAll('[data-rosters-view]').forEach(b=>
+      b.addEventListener('click', ()=>{
+        rostersView = b.dataset.rostersView;
+        tabs.querySelectorAll('[data-rosters-view]').forEach(x=>x.classList.toggle('active', x===b));
+        renderAllRostersGrid();
+      }));
+  }
+
+  if(rostersView === 'board'){ renderRostersBoard(wrap); return; }
+
   const myIdx = teamIdxOf(MY_TEAM_OWNER);
   const fm = forcedMoney();
   const pressureColor = { 'must spend':'var(--coral)', scraping:'var(--chalk-3)', flexible:'var(--chalk-2)', done:'var(--jade)' };
   const railLabel = slot => slot.key==='FLEX' ? 'FLEX' : slot.label;
 
-  /* A player is either a keeper -- already on the roster when tonight
-     started -- or a live pick logged during this session. Carrying that
-     through as `keeper` (and the $ actually on the books for him, from the
-     same two sources renderAllRostersGrid already reads elsewhere: a
-     keeper's cap hit this year, a fresh pick's winning bid) is what lets the
-     board highlight the two apart as it fills up, instead of every name
-     reading the same regardless of when he was acquired. */
   const rowHTML = (label, pl) => pl
     ? `<div class="or-slot${pl.keeper?' or-keeper':''}"><span class="or-slot-label">${label}</span><span class="or-slot-name">${pl.name}</span><span class="or-slot-price">$${pl.price}</span></div>`
     : `<div class="or-slot"><span class="or-slot-label">${label}</span><span class="or-slot-empty">—</span></div>`;
 
   const cards = state.teams.map((t,i)=>{
-    const deadN = t.players.filter(p=>p.deadCap).length;
-    const held = t.players.filter(p=>!p.deadCap).map(p=>({name:p.name,pos:p.pos,price:p.years[state.currentYear]||p.base||0,keeper:true}))
-      .concat(picksForTeam(i).map(p=>({name:p.name,pos:p.pos,price:p.price||0,keeper:false})));
-    const { starters, bench } = assignLineup(held);
-    const { slots: benchSlots, overflow } = assignBench(bench);
+    const { held, deadN, starters, benchSlots, overflow } = teamRosterSlots(i);
 
     const starterRows = SLOTS.map(slot=>rowHTML(railLabel(slot), starters[slot.key])).join('');
     const benchRows = BENCH_SLOTS.map(slot=>rowHTML(railLabel(slot), benchSlots[slot.key])).join('');
@@ -4733,6 +4877,41 @@ function renderAllRostersGrid(){
   }).join('');
 
   wrap.innerHTML = `<div class="all-rosters-grid">${cards}</div>`;
+}
+
+// The snake-draft-sheet read: every team's own column, every roster spot
+// its own row, so who has what reads as one grid instead of 12 separate
+// cards you have to scan one at a time. Player names are looked up back
+// against DRAFT_POOL for a real headshot and team crest -- teamRosterSlots()
+// itself only carries name/pos/price, the minimum a cap calculation needs.
+function renderRostersBoard(wrap){
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const railLabel = slot => slot.key==='FLEX' ? 'FLEX' : slot.label;
+  const perTeam = state.teams.map((t,i)=>teamRosterSlots(i));
+
+  const headCells = state.teams.map((t,i)=>
+    `<th class="${i===myIdx?'rb-mine':''}" title="${t.owner.replace(/"/g,'&quot;')}${t.team?' · '+t.team.replace(/"/g,'&quot;'):''}">${i===myIdx?'&#9733; ':''}${t.owner}</th>`
+  ).join('');
+
+  const chip = pl => {
+    if(!pl) return `<span class="rb-empty">&mdash;</span>`;
+    const found = DRAFT_POOL.find(x=>x.name===pl.name);
+    const face = faceHTML({ name: pl.name, nfl: found ? found.nfl : null }, 20);
+    return `<div class="rb-chip${pl.keeper?' rb-keeper':''}" title="${pl.name.replace(/"/g,'&quot;')} &middot; $${pl.price}">
+      ${face}<span class="rb-chip-name">${pl.name}</span><span class="rb-chip-price">$${pl.price}</span>
+    </div>`;
+  };
+
+  const bodyRows = [...SLOTS, ...BENCH_SLOTS].map(slot=>{
+    const isStarter = SLOTS.includes(slot);
+    const cells = perTeam.map(pt => `<td>${chip(isStarter ? pt.starters[slot.key] : pt.benchSlots[slot.key])}</td>`).join('');
+    return `<tr><td class="rb-row-label">${railLabel(slot)}</td>${cells}</tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="table-scroll"><table class="rb-table">
+    <thead><tr><th></th>${headCells}</tr></thead>
+    <tbody>${bodyRows}</tbody>
+  </table></div>`;
 }
 
 /* Available pool, grouped by position, then by tier within it -- the same
@@ -4837,6 +5016,19 @@ function renderPoolTierRail(){
             const role = teamRoleFor(p);
             const roleBadge = role ? `<span class="pt-role-badge${role.real?'':' pt-role-est'}" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
             const [tc1] = teamColors(p.nfl);
+            // Gone: show what he actually sold for, with the projection
+            // crossed out beside it rather than replaced -- the gap between
+            // the two IS the information (paid way over/under our number),
+            // and losing the projection the moment he's off the board would
+            // throw that away right when it's most worth checking.
+            const projected = suggestedDollar(p.mv,p.pos,p.name);
+            const priceHTML = (()=>{
+              if(!gone) return `<span class="pt-player-price">$${projected}</span>`;
+              const actual = actualPriceFor(p.name);
+              return actual!=null
+                ? `<span class="pt-player-price pt-price-gone"><span class="pt-price-orig">$${projected}</span>$${actual}</span>`
+                : `<span class="pt-player-price pt-price-gone">$${projected}</span>`;
+            })();
             // Two lines instead of cramming rank/name/tags/price onto one --
             // the name gets its own full-width line instead of fighting
             // everything else for room and losing (that's what was truncating
@@ -4849,7 +5041,7 @@ function renderPoolTierRail(){
             // the tell for the handful it falls back to an estimate for).
             return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}" style="--team-c:${tc1};">
               <div class="pt-player-line1">${faceHTML(p,24)}<span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
-              <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>
+              <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}${priceHTML}${nomBtn}</div>
             </div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label"><span>Tier ${i+1}</span><span class="pt-tier-count">${t.length}</span><span class="pt-tier-range">${priceRange}</span></div><div class="pt-tier-players">${rows}</div></div>`;
@@ -5994,6 +6186,49 @@ function fpBoard(name){
 }
 function fpNote(name){ return FP_NOTES[name] || null; }
 
+/* A meter-style read of "overall / upside / bust risk" -- real numbers, not
+   a fabricated live feed: Overall is our own sentiment score (ADP gap,
+   analyst agreement, injury and age reads, already computed for the
+   verdict chip above); Upside and Bust risk are FantasyPros' own expert
+   panel ratings out of 5, baked into FP_BOARD alongside the tiers. Shown as
+   bars because a 1-5 star or a -40..+40 score reads faster as a filled bar
+   than as a bare number, same as the walk-away gauge already does. */
+function signalMetersHTML(fb, sent){
+  if(!fb && !sent) return '';
+  const clampPct = v => Math.max(4, Math.min(100, v));
+  const bucket = pct => pct>=80?'Very High':pct>=60?'High':pct>=40?'Moderate':pct>=20?'Low':'Very Low';
+  const rows = [];
+  if(sent){
+    const pct = clampPct(50 + Math.max(-40,Math.min(40,sent.score))/40*50);
+    const cls = sent.score>=12?'sig-good':(sent.score<=-12?'sig-bad':'sig-mid');
+    rows.push({ label:'Overall', pct, text:bucket(pct), cls });
+  }
+  if(fb && fb.upside!=null){
+    const pct = clampPct(fb.upside/5*100);
+    const cls = fb.upside>=4?'sig-good':(fb.upside<=2?'sig-bad':'sig-mid');
+    rows.push({ label:'Upside', pct, text:bucket(pct), cls });
+  }
+  if(fb && fb.bust!=null){
+    const pct = clampPct(fb.bust/5*100);
+    // Bust risk inverts the color scale from the other two rows -- a HIGH
+    // reading here is the bad outcome, so it's colored like a low reading
+    // would be anywhere else on the card.
+    const cls = fb.bust>=4?'sig-bad':(fb.bust<=2?'sig-good':'sig-mid');
+    rows.push({ label:'Bust risk', pct, text:bucket(pct), cls });
+  }
+  if(!rows.length) return '';
+  const barsHTML = rows.map(r=>`
+    <div class="sig-row">
+      <div class="sig-row-label">${r.label}</div>
+      <div class="sig-bar"><div class="sig-bar-fill ${r.cls}" style="width:${r.pct}%;"></div></div>
+      <div class="sig-row-val ${r.cls}">${r.text}</div>
+    </div>`).join('');
+  return `<div class="pcard-sec pcard-signal">
+    <h4>Draft signal <span class="th-help" title="Overall is our own sentiment score: ADP gap versus expert rank, analyst agreement, injury watch, and age against the curve. Upside and bust risk are FantasyPros' expert panel ratings, 1 to 5. Baked-in data, refreshed the same way the rest of this tool's numbers are -- not a live feed.">where this comes from</span></h4>
+    ${barsHTML}
+  </div>`;
+}
+
 /* FantasyPros publish their own tiers, built from the full expert panel. Mine
    were inferred from gaps in the value curve, which is a fair proxy and no
    more than that. Theirs win wherever they exist. */
@@ -6163,9 +6398,11 @@ function renderPlayerCard(){
       <button class="pcard-tab ${pcardTab==='rankings'?'active':''}" data-pcard-tab="rankings">Rankings</button>
       <button class="pcard-tab ${pcardTab==='value'?'active':''}" data-pcard-tab="value">Value</button>
       <button class="pcard-tab ${pcardTab==='outlook'?'active':''}" data-pcard-tab="outlook">Outlook</button>
+      <button class="pcard-tab ${pcardTab==='depth'?'active':''}" data-pcard-tab="depth">Depth Chart</button>
     </div>
 
     <div class="pcard-tab-body ${pcardTab==='rankings'?'active':''}" data-pcard-tab-body="rankings">
+      ${signalMetersHTML(fb, sent)}
       ${(()=>{
         if(!fb) return '';
         const d = dis;
@@ -6199,6 +6436,10 @@ function renderPlayerCard(){
       ${insight('Production', prod.ppg!==undefined?prod.ppg+' ppg (2025)':null, prod.label)}
       ${insight('Positional runway', null, run.label)}
       ${sos!==null?insight('Schedule', `${sos} of 32`, `Where 1 is the easiest 2026 schedule for a ${posLabel(p.pos)}.`):''}
+    </div>
+
+    <div class="pcard-tab-body ${pcardTab==='depth'?'active':''}" data-pcard-tab-body="depth">
+      ${depthChartTabHTML(p)}
     </div>
 
     <div class="pcard-sec pcard-links">
@@ -6237,6 +6478,8 @@ function renderPlayerCard(){
       togglePlayerTagKey(p.name, d.dataset.tagToggle);
       refreshTagViews();
     }));
+  host.querySelectorAll('[data-pdc-open]').forEach(d=>
+    d.addEventListener('click', ()=>openPlayerCard(d.dataset.pdcOpen)));
   const tmt = document.getElementById('tagMgrToggle');
   if(tmt) tmt.addEventListener('click', ()=>{ tagManagerOpen = !tagManagerOpen; renderPlayerCard(); });
   bindTagManagerControls(host, ()=>{ renderPlayerCard(); renderPoolView(); });
@@ -9450,6 +9693,43 @@ function teamRoleFor(p){
     ? `No real depth chart entry found for him -- our own value model has him top ${realPos} on ${p.nfl}, of ${group.length}.`
     : `No real depth chart entry found for him -- our own value model has him ${ORDINAL(rank)} of ${group.length} ${realPos}s on ${p.nfl}, behind ${ahead.join(', ')}.`;
   return { pos:realPos, rank, of:group.length, short:`${realPos}${rank}`, title, real:false };
+}
+
+// The player card's own Depth Chart tab: not just his one slot (the compact
+// role badge already covers that everywhere else), but his whole team laid
+// out by position, so you can see who's actually ahead of and behind him --
+// a handcuff, a rookie about to pass him, the room he has to work with.
+// Falls back to teamRoleGroup()'s value-model ordering, same as the badge
+// does, for the small slice of players the real chart doesn't cover.
+function depthChartTabHTML(p){
+  if(!p.nfl || p.nfl==='FA') return `<p class="panel-sub">Free agent -- no NFL team, so no depth chart.</p>`;
+  const chart = NFL_DEPTH_CHART[p.nfl];
+  if(!chart) return `<p class="panel-sub">No depth chart on file for ${p.nfl}.</p>`;
+  const myRealPos = realPosOf(p);
+  const taken = draftedNamesSet();
+  const order = ['QB','RB','WR','TE'];
+
+  const rowHTML = (name, idx, real) => {
+    const inPool = DRAFT_POOL.find(x=>x.name===name);
+    const mine = name === p.name;
+    const face = faceHTML({ name, nfl: p.nfl }, 22);
+    const openAttr = inPool ? ` data-pdc-open="${name.replace(/"/g,'&quot;')}"` : '';
+    return `<div class="pdc-row${mine?' pdc-mine':''}${taken.has(name)?' pdc-taken':''}"${openAttr}>
+      <span class="pdc-rank">${idx+1}</span>${face}<span class="pdc-name">${name}</span>
+    </div>`;
+  };
+
+  const groups = order.map(pos=>{
+    const real = chart[pos] || [];
+    const list = real.length ? real : teamRoleGroup(p.nfl, pos);
+    if(!list.length) return '';
+    return `<div class="pdc-group${pos===myRealPos?' pdc-group-active':''}">
+      <div class="pdc-group-label">${pos}${!real.length?' (estimated)':''}</div>
+      ${list.map((name,idx)=>rowHTML(name, idx, !!real.length)).join('')}
+    </div>`;
+  }).join('');
+
+  return `<div class="pdc-wrap">${groups}</div>`;
 }
 
 /* ---------- TWO MORE FANTASYPROS REPORTS ----------
