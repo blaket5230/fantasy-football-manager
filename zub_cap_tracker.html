@@ -2883,8 +2883,32 @@ function tierPriceTable(){
   return out;
 }
 
+// Blake's post-integration review (8/25, day before draft): he trusts Mike
+// Clay's board over the CBS_AUCTION list below, having compared both against
+// the rest of what got baked in this session. So CLAY_AUCTION (scaled to
+// this league's $100 cap) is now checked FIRST and wins outright wherever
+// Clay's cheat sheet covers a player -- CBS_AUCTION and the FP_BOARD tier
+// fallback only run for the ~190 players Clay's sheet doesn't have. A tiny,
+// explicit per-player haircut list (currently just Trey McBride, "come down
+// a bit" off Clay's $19) rides on top for the rare case Blake wants a
+// specific number nudged rather than trusting Clay's read as-is.
+const MANUAL_PRICE_ADJUST = { "Trey McBride": -4 };
 function suggestedDollar(mv, pos, name){
   if(name){
+    // A hard fact, not a price opinion, so it outranks every source below --
+    // see seasonEndingInjury(). This league's rules bar any multi-year
+    // signing for a player on season-ending IR, so there is no dynasty
+    // stash value to price in: he is worth exactly the $1 auction floor
+    // this draft, full stop, regardless of what any board says about him.
+    if(typeof seasonEndingInjury === 'function' && seasonEndingInjury(name)) return 1;
+    if(typeof CLAY_AUCTION !== 'undefined'){
+      const c = clayLookup(CLAY_AUCTION, name);
+      if(c){
+        let v = Math.max(1, Math.round(c.price/2));
+        if(MANUAL_PRICE_ADJUST[name] !== undefined) v = Math.max(1, v + MANUAL_PRICE_ADJUST[name]);
+        return v;
+      }
+    }
     const real = (typeof CBS_AUCTION !== 'undefined') ? CBS_AUCTION[name] : null;
     if(typeof real === 'number') return Math.max(1, real);
 
@@ -5620,7 +5644,7 @@ function renderBidPanel(){
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
     ${seiBid ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:2px 0 10px;">
-      OUT FOR THE SEASON &middot; ${seiBid.headline} <span style="font-weight:400;">(as of ${seiBid.date})</span>
+      DO NOT DRAFT &middot; OUT FOR THE SEASON &middot; ${seiBid.headline} <span style="font-weight:400;">-- Rule VIII.C bars a multi-year signing on IR, so he's worth the $1 floor, full stop (as of ${seiBid.date}).</span>
     </div>` : ''}
 
     <div class="bid-key-numbers">
@@ -6092,6 +6116,12 @@ function recommendedTerm(p){
   const cliff = AGE_CURVE[p.pos] || 29;
   const price = suggestedDollar(p.mv, p.pos, p.name);
 
+  // Rule VIII.C also bars a multi-year signing for a player on season-ending
+  // IR, same as an unsigned free agent below -- outranks everything else in
+  // this function, including the price rule right below it.
+  const sei = typeof seasonEndingInjury === 'function' ? seasonEndingInjury(p.name) : null;
+  if(sei) return { years:1, why:`On season-ending IR (${sei.headline.toLowerCase()}). Rule VIII.C bars any multi-year deal while he's on IR, so 1 year is the only legal term -- and at the $1 floor, there is no reason to take anything else.` };
+
   // The price rule outranks the age curve. A 23-year-old at $15 is still a
   // one-year signing here, because the escalator on a real base is the
   // liability, not his age.
@@ -6342,7 +6372,7 @@ function renderPlayerCard(){
 
     <p class="pcard-verdict-line">${verdict.text}.</p>
     ${sei ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:8px 0 0;">
-      OUT FOR THE SEASON &middot; ${sei.headline} <span style="font-weight:400;">(as of ${sei.date})</span>
+      DO NOT DRAFT &middot; OUT FOR THE SEASON &middot; ${sei.headline} <span style="font-weight:400;">-- Rule VIII.C bars a multi-year signing on IR, so he's worth the $1 floor, full stop (as of ${sei.date}).</span>
     </div>` : ''}
 
     <!-- Trimmed to the six numbers you check on every player regardless of
@@ -12411,12 +12441,28 @@ const DRAFT_CONFLICTS = {
 // this does fix. Exact match first, then match with the suffix stripped
 // from both sides, in either direction.
 function stripNameSuffix(n){ return n.replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i, '').trim(); }
+// The O(n) fallback scan below used to be cheap in practice -- every caller
+// was a card-render function, invoked once per card-open. That stopped
+// being true once suggestedDollar() (see below) started calling clayLookup
+// on every invocation for every player, including from deep inside the
+// Squad Plan / walk-away lineup optimizers that call it combinatorially
+// across the whole pool -- a real hang, not a flake (confirmed: Squad Plan
+// went from opening instantly to never resolving). Fixed by building the
+// stripped-name index once per map (cached by object identity in a
+// WeakMap) instead of re-scanning on every miss; same first-match-wins
+// semantics as the loop it replaces, just O(1) after the first lookup.
+const _clayLookupIndex = new WeakMap();
 function clayLookup(map, name){
   if(map[name] !== undefined) return map[name];
   const stripped = stripNameSuffix(name);
   if(map[stripped] !== undefined) return map[stripped];
-  for(const k in map){ if(stripNameSuffix(k) === stripped) return map[k]; }
-  return undefined;
+  let idx = _clayLookupIndex.get(map);
+  if(!idx){
+    idx = {};
+    for(const k in map){ const sk = stripNameSuffix(k); if(idx[sk] === undefined) idx[sk] = map[k]; }
+    _clayLookupIndex.set(map, idx);
+  }
+  return idx[stripped];
 }
 
 // The roster he actually plays behind, not just his own talent -- a good
@@ -12534,19 +12580,24 @@ function footballersText(p){
 
 // Clay's cheat sheet is scaled to a $200 budget, this league runs $100 --
 // the displayed number is always the scaled-down $100 figure (his raw $200
-// number is kept only as a footnote for transparency), so nothing on this
-// card reads like a $200-budget price by mistake.
+// number is kept only as a footnote for transparency). As of Blake's 8/25
+// review, Clay's scaled number IS the "Suggested" price shown everywhere
+// else on this card for anyone his sheet covers (see suggestedDollar), so
+// for the common case this insight is just showing its own provenance, not
+// a second opinion -- it only reads as a genuine comparison for the rare
+// player with a manual haircut on top (see MANUAL_PRICE_ADJUST).
 function clayAuctionText(p){
   const c = clayLookup(CLAY_AUCTION, p.name);
   if(!c) return null;
-  const ours = suggestedDollar(p.mv, p.pos, p.name);
   const scaled = Math.max(1, Math.round(c.price/2));
-  const diff = scaled - ours;
-  const diffTxt = diff===0 ? 'right in line with our own number'
-    : (diff>0 ? `about $${diff} above our own number` : `about $${Math.abs(diff)} below our own number`);
+  const ours = suggestedDollar(p.mv, p.pos, p.name);
+  const adj = MANUAL_PRICE_ADJUST[p.name];
+  const body = adj !== undefined
+    ? `ESPN's Mike Clay has him at $${scaled} once his own $200-budget scale ($${c.price} raw) is scaled to this league's $100 cap -- the Suggested price above is set $${Math.abs(adj)} ${adj<0?'below':'above'} that on purpose.`
+    : `This is where the Suggested price above comes from: ESPN's Mike Clay's own $200-budget scale ($${c.price} raw), scaled down to this league's $100 cap.`;
   return {
-    headline: `$${scaled} (Clay, scaled to $100 cap)`,
-    body: `ESPN's Mike Clay values him at $${scaled} once his own $200-budget scale ($${c.price} raw) is scaled down to this league's $100 cap, ${diffTxt}.`,
+    headline: `$${ours} (Clay, scaled to $100 cap)`,
+    body,
   };
 }
 
@@ -12587,11 +12638,14 @@ function latestNewsText(p){
 }
 
 // A hard fact, not a second opinion -- if LATEST_NEWS has him down with a
-// season-ending designation, that overrides nothing about his $ value (this
-// is a dynasty/keeper league; a cheap injured rookie can still be a
-// legitimate stash) but it MUST be impossible to miss at the table, so it
-// surfaces as its own unmissable flag rather than waiting inside a tab.
-const SEASON_ENDING_RE = /season-ending|out for (the season|all of 20\d\d)|placed on (season-ending )?ir\b/i;
+// season-ending designation, that's not just informational the way the rest
+// of this session's data is. Rule VIII.C bars signing a player on IR to a
+// multi-year deal (same clause that already bars it for an unsigned free
+// agent, see recommendedTerm below), so there is no dynasty stash value on
+// the table here: suggestedDollar() floors him at $1 and recommendedTerm()
+// forces 1 year. It's also surfaced as its own unmissable flag in the pool
+// row, the card, and the bid panel -- not left waiting inside a tab.
+const SEASON_ENDING_RE = /season-ending|season over|out for (the |all of )?(the )?20\d\d? ?season|out for (the )?season|placed on (season-ending )?ir\b/i;
 function seasonEndingInjury(name){
   const items = clayLookup(LATEST_NEWS, name);
   if(!items) return null;
@@ -13439,7 +13493,7 @@ function poolTableHTML(list, opts){
     const nt = analystNote(p.name);
     const sei = seasonEndingInjury(p.name);
     const flags =
-      (sei ? `<span class="dead-tag" style="color:#fff;background:var(--coral);border-color:var(--coral);font-weight:700;" title="${(sei.headline+' -- '+sei.detail).replace(/"/g,'&quot;')}">OUT</span>` : '')
+      (sei ? `<span class="dead-tag" style="color:#fff;background:var(--coral);border-color:var(--coral);font-weight:700;" title="${('DO NOT DRAFT -- '+sei.headline+'. Rule VIII.C bars a multi-year signing on IR, worth the $1 floor. '+sei.detail).replace(/"/g,'&quot;')}">OUT</span>` : '')
       + (inj ? '<span class="dead-tag" style="color:var(--coral);border-color:rgba(229,103,95,.45);" title="On ESPN\'s injury watch">inj</span>' : '')
       + (nt ? `<span class="dead-tag" style="color:${nt.dir>0?'var(--jade)':(nt.dir<0?'var(--coral)':'var(--gold)')};border-color:var(--line);" title="${nt.why.replace(/"/g,'')}">${nt.dir>0?'\u2191':(nt.dir<0?'\u2193':'\u21c5')}</span>` : '')
       + (p.unsigned ? '<span class="dead-tag">1yr</span>' : '');
