@@ -5650,6 +5650,12 @@ function renderBidPanel(){
     </div>`;
 
   const seiBid = seasonEndingInjury(p.name);
+  const verdict = seiBid ? null : pursuitVerdict(market, wa);
+  const VERDICT_STYLE = {
+    PURSUE: { bg:'var(--jade)', fg:'#08241a', label:'PURSUE' },
+    'DISCOUNT ONLY': { bg:'var(--gold)', fg:'#2b2003', label:'DISCOUNT ONLY' },
+    PASS: { bg:'var(--coral)', fg:'#fff', label:'PASS' },
+  };
 
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
@@ -5659,6 +5665,10 @@ function renderBidPanel(){
     </div>
     ${seiBid ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:2px 0 10px;">
       DO NOT DRAFT &middot; OUT FOR THE SEASON &middot; ${seiBid.headline} <span style="font-weight:400;">-- Rule VIII.C bars a multi-year signing on IR, so he's worth the $1 floor, full stop (as of ${seiBid.date}).</span>
+    </div>` : ''}
+    ${verdict ? `<div style="background:${VERDICT_STYLE[verdict.call].bg};color:${VERDICT_STYLE[verdict.call].fg};border-radius:8px;padding:10px 12px;margin:2px 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+      <span style="font-weight:800;font-size:15px;letter-spacing:.03em;">${VERDICT_STYLE[verdict.call].label}</span>
+      <span style="font-weight:400;font-size:12.5px;">${verdict.text}</span>
     </div>` : ''}
 
     <div class="bid-key-numbers">
@@ -7021,6 +7031,30 @@ function walkAwayPrice(player){
       : `Stop at $${last}, below his $${market} market price: past that the same money builds a better eight elsewhere.` };
   _walkCache[player.name] = out;
   return out;
+}
+
+// The single "are we bidding on this guy or not" call Blake asked for the
+// night before draft, so nobody has to mentally synthesize the Suggested
+// bid, Max bid for you, and the pros/cons list themselves in the thirty
+// seconds a nomination gives you. No new pricing logic -- walkAwayPrice()
+// above already IS the dynamic ceiling (a full lineup solve against cap,
+// open slots, the remaining pool, and your own Target/Fade reads), this
+// just turns the walk-vs-market comparison it already makes into a
+// decisive call instead of a number you have to interpret yourself:
+//   PURSUE        -- your ceiling clears market, worth chasing up to it.
+//   DISCOUNT ONLY -- still in play, but only below market -- exactly the
+//                    McCaffrey case from the spot-check: not paying market
+//                    price, but happy to win him if the room agrees.
+//   PASS          -- never worth it at any legal price. This does not
+//                    mean losing the position: the tier-value insight
+//                    already names the cheaper teammate in his tier below,
+//                    so a PASS here is "refocus on him instead," not
+//                    "give up on the slot."
+function pursuitVerdict(market, wa){
+  if(!wa) return null;
+  if(wa.walk <= 0) return { call:'PASS', text: wa.note };
+  if(wa.walk >= market) return { call:'PURSUE', text: wa.note };
+  return { call:'DISCOUNT ONLY', text: wa.note };
 }
 
 /* ---------- TARGET BOARD ----------
