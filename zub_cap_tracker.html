@@ -5630,6 +5630,13 @@ function bidQuickInsights(p, myIdx){
     .concat(picksForTeam(myIdx).map(h=>({name:h.name,pos:h.pos})));
   const byeWeekOf = name => { const src = DRAFT_POOL.find(d=>d.name===name); return src ? byeWeek(src) : null; };
 
+  // Your board: this is the one moment ranking targets beforehand was for,
+  // so it leads. boardEntryFor() already drove the Nominate tab's own Value
+  // plays (see nominationPlan()) -- it just never reached the bid panel
+  // itself, the one screen actually up while you're deciding a number.
+  const onBoard = boardEntryFor(p.name);
+  if(onBoard) pro(`Number ${onBoard.rank} on your board for ${onBoard.label}.`);
+
   // Handcuff: real backup/starter pairing, and you actually own the starter.
   const starterName = handcuffFor(p.name);
   if(starterName && myHeld.some(h=>h.name===starterName)){
