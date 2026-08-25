@@ -6715,7 +6715,21 @@ function readSavedToast(name, key){
 }
 function readMultiplier(name){
   const r = myRead(name);
-  return r ? READ_BY_KEY[r].mult : 1;
+  if(r) return READ_BY_KEY[r].mult;
+  // Falls back to the coarser Target/Avoid tag (the chip picker on the
+  // card, a separate system from the five-point read above) when no
+  // five-point read is set. The tag picker's own copy already promises
+  // "Target and Avoid are the two that move any number" -- until this,
+  // that was only true for the target-board recommendation list, not for
+  // this multiplier, which is what actually reaches walkAwayPrice(),
+  // myValue(), and the bid panel's PURSUE/PASS verdict. A player tagged
+  // Avoid with no five-point read was showing PURSUE at $10 over market,
+  // which is exactly backwards from what tagging him Avoid was supposed
+  // to do.
+  const t = playerTag(name);
+  if(t === 'avoid') return READ_BY_KEY.avoid.mult;
+  if(t === 'target') return READ_BY_KEY.target.mult;
+  return 1;
 }
 function readLabel(name){
   const r = myRead(name);
@@ -6795,11 +6809,21 @@ function playerTag(name){
 // Target/Avoid stay mutually exclusive with each other (the star/avoid/clear
 // cycle used in a couple of places), but this only ever touches those two
 // keys -- any Sleeper or custom tags already on the player are left alone.
+// Target/Avoid tags feed readMultiplier() (see above) same as the five-point
+// read does, so a tag change has to blow away the same caches setMyRead()
+// does -- otherwise the bid panel's PURSUE/PASS verdict and walk-away price
+// keep showing a stale number computed before the tag existed.
+function invalidatePriceCaches(){
+  _myValCache = {};
+  _walkCache = {}; _walkKey = '';
+  _rowCache = null; _rowKey = '';
+}
 function setPlayerTag(name, tag){
   state.playerTags = state.playerTags || {};
   const kept = tagsFor(name).filter(k=>k!=='target' && k!=='avoid');
   const next = tag ? [...kept, tag] : kept;
   if(next.length) state.playerTags[name] = next; else delete state.playerTags[name];
+  invalidatePriceCaches();
   saveState();
 }
 function cycleTag(name){
@@ -6814,6 +6838,7 @@ function togglePlayerTagKey(name, key){
   const cur = tagsFor(name);
   const next = cur.includes(key) ? cur.filter(k=>k!==key) : [...cur, key];
   if(next.length) state.playerTags[name] = next; else delete state.playerTags[name];
+  invalidatePriceCaches();
   saveState();
 }
 /* A tag can show in six different places (the player card that just set it,
