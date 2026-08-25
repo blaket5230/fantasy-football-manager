@@ -1165,14 +1165,22 @@
      holds everything else, with room to actually read it. */
   .pt-player-row{
     display:flex;flex-direction:column;gap:3px;font-size:10.5px;color:var(--chalk-2);min-width:0;
-    background:var(--surface);border:1px solid var(--line-soft);border-radius:6px;
-    padding:5px 7px;
+    background:var(--surface);border:1px solid var(--line-soft);border-left:3px solid var(--team-c,var(--line-soft));
+    border-radius:6px;padding:5px 7px 5px 6px;
   }
-  .pt-player-line1{display:flex;align-items:baseline;gap:6px;min-width:0;}
+  .pt-player-line1{display:flex;align-items:center;gap:6px;min-width:0;}
   .pt-player-line2{display:flex;align-items:center;gap:5px;min-width:0;}
-  .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:14px;text-align:right;}
+  .pt-player-rank{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);flex-shrink:0;width:12px;text-align:right;}
   .pt-player-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:600;}
   .pt-player-price{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--chalk-3);flex-shrink:0;margin-left:auto;}
+  /* Our own value model's read on where he sits in his own team's real
+     pecking order (see teamRoleFor) -- deliberately styled like a plain
+     label, not a colored pos-tag pill, so it doesn't read as confidently
+     as a stat pulled from a real snap-count depth chart. */
+  .pt-role-badge{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--chalk-3);
+    border:1px solid var(--line-soft);border-radius:4px;padding:0 4px;flex-shrink:0;
+  }
   .tag-dots{display:inline-flex;gap:3px;vertical-align:middle;flex-shrink:0;}
   .tag-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0;}
   .pt-player-row.pt-gone{opacity:.45;background:transparent;}
@@ -4815,14 +4823,22 @@ function renderPoolTierRail(){
             const esc = p.name.replace(/"/g,'&quot;');
             const nomBtn = gone ? '' : `<span class="pt-nom-btn" data-pt-nom="${esc}" title="Put ${p.name} on the clock">+</span>`;
             const posBadge = pos==='OVERALL' ? `<span class="pos-tag pos-${p.pos}" style="margin-right:5px;">${posLabel(p.pos)}</span>` : '';
+            const role = teamRoleFor(p);
+            const roleBadge = role ? `<span class="pt-role-badge" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
+            const [tc1] = teamColors(p.nfl);
             // Two lines instead of cramming rank/name/tags/price onto one --
             // the name gets its own full-width line instead of fighting
             // everything else for room and losing (that's what was truncating
             // it before), and tags/price/nominate get their own line below
-            // where they've each got space to actually be read.
-            return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}">
-              <div class="pt-player-line1"><span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
-              <div class="pt-player-line2">${tagDotsHTML(p.name)}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>
+            // where they've each got space to actually be read. Face + team
+            // color accent give it something to actually look at instead of
+            // a wall of identical text rows; the role badge is our own value
+            // model's read on his spot in the pecking order at his own real
+            // position on his own team (see teamRoleFor's own comment --
+            // this is an estimate, not a scraped depth chart).
+            return `<div class="pt-player-row${gone?' pt-gone':''}" data-pt-card="${esc}" title="${gone?p.name:`Open ${p.name}'s card`}" style="--team-c:${tc1};">
+              <div class="pt-player-line1">${faceHTML(p,20)}<span class="pt-player-rank">${rankCounter}</span><span class="pt-player-name">${posBadge}${p.name}</span></div>
+              <div class="pt-player-line2">${tagDotsHTML(p.name)}${roleBadge}<span class="pt-player-price">$${suggestedDollar(p.mv,p.pos,p.name)}</span>${nomBtn}</div>
             </div>`;
           }).join('');
           return `<div class="pt-tier"><div class="pt-tier-label"><span>Tier ${i+1}</span><span class="pt-tier-count">${t.length}</span><span class="pt-tier-range">${priceRange}</span></div><div class="pt-tier-players">${rows}</div></div>`;
@@ -6013,6 +6029,7 @@ function renderPlayerCard(){
   const note = analystNote(p.name);
   const inj = injuryWatch(p.name);
   const term = recommendedTerm(p);
+  const role = teamRoleFor(p);
   const sos = sosRank(p);
   const bye = byeWeek(p);
   const q = encodeURIComponent(p.name);
@@ -6101,6 +6118,7 @@ function renderPlayerCard(){
       ${stat('Tier', (()=>{const f=fpTierFor(p);return f?('T'+f):(ti?'T'+ti.tier:'--');})(),
         fpTierFor(p)?'FantasyPros expert tier':(ti&&ti.size>1?('Cheapest at this level is '+ti.cheapest.name):'Alone at this level'))}
       ${stat('Term', term.years+'yr', term.why)}
+      ${role ? stat('Team role', role.short, role.title) : ''}
     </div>
 
     <div class="pcard-sec">
@@ -9329,6 +9347,46 @@ const RB_HANDCUFF = {"Tyler Allgeier":"Jeremiyah Love","Brian Robinson Jr.":"Bij
    (achievableRoster()'s TE_CAP below), not for pricing, tiers, or anything
    else the merge already handles correctly. */
 const TRUE_TE = new Set(["AJ Barner","Adam Trautman","Austin Hooper","Ben Sinnott","Brenton Strange","Brock Bowers","Cade Otton","Charlie Kolar","Chig Okonkwo","Colby Parkinson","Cole Kmet","Colston Loveland","Dallas Goedert","Dalton Kincaid","Dalton Schultz","Daniel Bellinger","Darnell Washington","Darren Waller","David Njoku","Dawson Knox","Eli Raridon","Eli Stowers","Elijah Arroyo","Elijah Higgins","Erick All Jr.","Evan Engram","George Kittle","Greg Dulcich","Gunnar Helm","Harold Fannin Jr.","Hunter Henry","Isaiah Likely","Ja'Tavion Sanders","Jackson Hawes","Jake Ferguson","Jake Tonges","John Bates","Jonnu Smith","Josh Oliver","Justin Joly","Juwan Johnson","Kenyon Sadiq","Kyle Pitts Sr.","Luke Musgrave","Luke Schoonmaker","Mark Andrews","Marlin Klein","Mason Taylor","Max Klare","Michael Mayer","Mike Gesicki","Mitchell Evans","Mo Alie-Cox","Nate Boerkircher","Noah Fant","Noah Gray","Oronde Gadsden II","Oscar Delp","Pat Freiermuth","Sam LaPorta","T.J. Hockenson","Tanner Koziol","Taysom Hill","Terrance Ferguson","Theo Johnson","Tommy Myers","Tommy Tremble","Travis Kelce","Trey McBride","Tucker Kraft","Tyler Higbee","Tyler Warren","Will Kacmarek","Zach Ertz"]);
+function realPosOf(p){ return p.pos==='WRTE' ? (TRUE_TE.has(p.name)?'TE':'WR') : p.pos; }
+
+/* ---------- TEAM DEPTH ESTIMATE ----------
+   Not a real depth chart -- nobody publishes snap counts or a live chart
+   this tool could pull from, and one that's out of date by draft night is
+   worse than none. What it CAN do honestly: rank a player against his own
+   real-position teammates (WR against WR, TE against TE, same split TRUE_TE
+   already draws for the merged WRTE group) by the same mv the rest of the
+   tool already trusts for everything else. That answers the actual
+   question -- is this a team's clear WR1, or its third option behind two
+   other real bodies -- even though it's a value-model inference, not a
+   usage report. Grouped and cached once per team+position since DRAFT_POOL
+   doesn't change mid-session. */
+const _teamRoleCache = {};
+function teamRoleGroup(nfl, realPos){
+  const key = nfl + '#' + realPos;
+  if(!_teamRoleCache[key]){
+    _teamRoleCache[key] = DRAFT_POOL
+      .filter(x=>x.nfl===nfl && realPosOf(x)===realPos)
+      .sort((a,b)=>b.mv-a.mv)
+      .map(x=>x.name);
+  }
+  return _teamRoleCache[key];
+}
+const ORDINAL = n => { const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+function teamRoleFor(p){
+  if(!p.nfl || p.nfl==='FA') return null;
+  const realPos = realPosOf(p);
+  const group = teamRoleGroup(p.nfl, realPos);
+  const idx = group.indexOf(p.name);
+  // Alone at the position (every QB not in a real competition, most kickers
+  // and defenses) isn't a depth question worth answering.
+  if(idx < 0 || group.length < 2) return null;
+  const rank = idx+1;
+  const ahead = group.slice(0, idx);
+  const title = rank===1
+    ? `Our value model's top ${realPos} on ${p.nfl}, of ${group.length}.`
+    : `Our value model has him ${ORDINAL(rank)} of ${group.length} ${realPos}s on ${p.nfl}, behind ${ahead.join(', ')}.`;
+  return { pos:realPos, rank, of:group.length, short:`${realPos}${rank}`, title };
+}
 
 /* ---------- TWO MORE FANTASYPROS REPORTS ----------
    QB_TD_REGRESSION is their touchdown regression model: how far a quarterback
@@ -10074,9 +10132,11 @@ function poolTableHTML(list, opts){
     // rail already gives a taken player, plus who actually has him since this
     // row has the room for it.
     const goneBadge = r.gone ? `<span class="dead-tag" style="margin-left:4px;" title="Already drafted">TAKEN${r.owner?` &middot; ${r.owner}`:''}</span>` : '';
+    const role = teamRoleFor(p);
+    const roleBadge = role ? `<span class="pt-role-badge" style="margin-left:4px;" title="${role.title.replace(/"/g,'&quot;')}">${role.short}</span>` : '';
     return `<tr class="pool-row${r.gone?' pool-row-gone':''}" data-open-card="${esc}" style="cursor:pointer;--rail:${RAIL[p.pos]||'transparent'};">
       <td style="text-align:left;">
-        ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}${tagDotsHTML(p.name)}
+        ${faceHTML(p, 26)}<b style="margin-left:8px;">${p.name}</b>${rookie}${tagDotsHTML(p.name)}${roleBadge}
         <span class="pos-tag pos-${p.pos}" style="margin-left:4px;">${posLabel(p.pos)}</span>
         <span style="color:var(--chalk-3);font-family:'JetBrains Mono',monospace;font-size:11px;margin-left:4px;">${logoHTML(p.nfl,14)} ${p.nfl}</span>
         ${flags}${goneBadge}
