@@ -5611,12 +5611,17 @@ function renderBidPanel(){
         : `<div class="bi-empty">${emptyText}</div>`}
     </div>`;
 
+  const seiBid = seasonEndingInjury(p.name);
+
   panel.innerHTML = `
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 2px;">
       ${faceHTML(p, 34)}
       <h4 style="margin:0;flex:1;min-width:0;">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> <span style="color:var(--chalk-3);font-weight:400;font-family:'JetBrains Mono',monospace;font-size:11px;">${logoHTML(p.nfl,14)} ${p.nfl}</span> ${ratePillHTML(myRead(p.name))}${tagChipsHTML(p.name)}</h4>
       <span class="row-act" tabindex="0" role="button" id="clearClock" title="Clear the clock without logging a pick, for when somebody else wins him">&times; clear</span>
     </div>
+    ${seiBid ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:2px 0 10px;">
+      OUT FOR THE SEASON &middot; ${seiBid.headline} <span style="font-weight:400;">(as of ${seiBid.date})</span>
+    </div>` : ''}
 
     <div class="bid-key-numbers">
       <div class="bkn-box"><div class="bkn-label">Suggested bid</div><div class="bkn-value">${rangeText}</div></div>
@@ -6313,6 +6318,7 @@ function renderPlayerCard(){
     </div>`;
   };
 
+  const sei = seasonEndingInjury(p.name);
   const [tc1, tc2] = teamColors(p.nfl);
   host.innerHTML = `<div class="card-scrim" id="cardScrim"><div class="pcard" id="pcardBody" tabindex="-1"
       style="--tc1:${tc1};--tc2:${tc2};--tc1-a:${tc1}2E;">
@@ -6335,6 +6341,9 @@ function renderPlayerCard(){
     </div>
 
     <p class="pcard-verdict-line">${verdict.text}.</p>
+    ${sei ? `<div style="background:var(--coral);color:#fff;font-weight:700;font-size:13px;border-radius:8px;padding:8px 12px;margin:8px 0 0;">
+      OUT FOR THE SEASON &middot; ${sei.headline} <span style="font-weight:400;">(as of ${sei.date})</span>
+    </div>` : ''}
 
     <!-- Trimmed to the six numbers you check on every player regardless of
          context. Everything else (full contract math, 2025 pace, schedule)
@@ -12523,9 +12532,10 @@ function footballersText(p){
   };
 }
 
-// Clay's cheat sheet is scaled to a $200 budget, this league runs $100, so
-// a straight halving is shown alongside his own raw number rather than in
-// place of it -- an approximation, labeled as one, not a second authority.
+// Clay's cheat sheet is scaled to a $200 budget, this league runs $100 --
+// the displayed number is always the scaled-down $100 figure (his raw $200
+// number is kept only as a footnote for transparency), so nothing on this
+// card reads like a $200-budget price by mistake.
 function clayAuctionText(p){
   const c = clayLookup(CLAY_AUCTION, p.name);
   if(!c) return null;
@@ -12535,8 +12545,8 @@ function clayAuctionText(p){
   const diffTxt = diff===0 ? 'right in line with our own number'
     : (diff>0 ? `about $${diff} above our own number` : `about $${Math.abs(diff)} below our own number`);
   return {
-    headline: `$${c.price} (Clay, $200 budget)`,
-    body: `ESPN's Mike Clay values him at $${c.price} on his own $200-budget scale -- roughly $${scaled} scaled down to this league's $100 cap, ${diffTxt}.`,
+    headline: `$${scaled} (Clay, scaled to $100 cap)`,
+    body: `ESPN's Mike Clay values him at $${scaled} once his own $200-budget scale ($${c.price} raw) is scaled down to this league's $100 cap, ${diffTxt}.`,
   };
 }
 
@@ -12574,6 +12584,19 @@ function latestNewsText(p){
     body += ` Also: ${items.slice(1).map(it=>`${it.headline} (${it.date})`).join('; ')}.`;
   }
   return { headline: top.headline, body };
+}
+
+// A hard fact, not a second opinion -- if LATEST_NEWS has him down with a
+// season-ending designation, that overrides nothing about his $ value (this
+// is a dynasty/keeper league; a cheap injured rookie can still be a
+// legitimate stash) but it MUST be impossible to miss at the table, so it
+// surfaces as its own unmissable flag rather than waiting inside a tab.
+const SEASON_ENDING_RE = /season-ending|out for (the season|all of 20\d\d)|placed on (season-ending )?ir\b/i;
+function seasonEndingInjury(name){
+  const items = clayLookup(LATEST_NEWS, name);
+  if(!items) return null;
+  return items.find(it => it.category === 'injury' && it.direction === 'down' &&
+    SEASON_ENDING_RE.test(it.headline + ' ' + it.detail)) || null;
 }
 
 // Real observed/reported backfield role splits -- only surfaces for a
@@ -13414,8 +13437,10 @@ function poolTableHTML(list, opts){
     const rookie = p.rookie ? '<span class="pos-tag" style="margin-left:4px;">R</span>' : '';
     const inj = injuryWatch(p.name);
     const nt = analystNote(p.name);
+    const sei = seasonEndingInjury(p.name);
     const flags =
-      (inj ? '<span class="dead-tag" style="color:var(--coral);border-color:rgba(229,103,95,.45);" title="On ESPN\'s injury watch">inj</span>' : '')
+      (sei ? `<span class="dead-tag" style="color:#fff;background:var(--coral);border-color:var(--coral);font-weight:700;" title="${(sei.headline+' -- '+sei.detail).replace(/"/g,'&quot;')}">OUT</span>` : '')
+      + (inj ? '<span class="dead-tag" style="color:var(--coral);border-color:rgba(229,103,95,.45);" title="On ESPN\'s injury watch">inj</span>' : '')
       + (nt ? `<span class="dead-tag" style="color:${nt.dir>0?'var(--jade)':(nt.dir<0?'var(--coral)':'var(--gold)')};border-color:var(--line);" title="${nt.why.replace(/"/g,'')}">${nt.dir>0?'\u2191':(nt.dir<0?'\u2193':'\u21c5')}</span>` : '')
       + (p.unsigned ? '<span class="dead-tag">1yr</span>' : '');
 
