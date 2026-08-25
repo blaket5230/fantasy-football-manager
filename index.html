@@ -1654,7 +1654,15 @@
     font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
     text-transform:uppercase;color:var(--chalk-3);
   }
-  .picker-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(262px,1fr));gap:2px 12px;}
+  /* Single column, always. This list is a strict rank order (best target
+     first), and a multi-column CSS grid lays its DOM order out row-major
+     (item 1, 2, 3, 4 across the top row, then 5, 6, 7, 8) while a reader's
+     eye naturally tracks straight down one column before crossing to the
+     next -- so at 2 columns what actually reads down the left side is
+     ranks 1, 3, 5, 7..., which looks scrambled even though the underlying
+     order is correct. Top to bottom in one column is the only layout that
+     can't misread. */
+  .picker-list{display:flex;flex-direction:column;gap:2px;}
   .pk-row{
     display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:6px;
     font-size:12px;color:var(--chalk-2);transition:background var(--fast) var(--ease);
