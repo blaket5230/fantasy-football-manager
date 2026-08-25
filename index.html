@@ -14223,19 +14223,30 @@ function pickerHTML(slot, budget){
   // almost nothing. Bench pickers open on everything genuinely cheap instead.
   const lo = wide ? 1 : (isBench ? 1 : Math.max(1, Math.floor(budget*0.5)));
   const hi = wide ? 999 : (isBench ? 6 : Math.ceil(budget*1.45));
+  const cheapSlot = ['PK','DST'].includes(slot.eligible[0]);
   let cands = availablePool()
     .filter(x=>slot.eligible.includes(x.pos))
-    .map(x=>({ x, d:suggestedDollar(x.mv,x.pos,x.name), exp:expertRead(x.name) }))
+    .map(x=>({ x, d:suggestedDollar(x.mv,x.pos,x.name), exp:expertRead(x.name),
+               v:vor(x), rm:ratingMultiplier(x.name), sent:sentimentFor(x) }))
     .filter(o=>o.d >= lo && o.d <= hi);
-  if(isBench && !['PK','DST'].includes(slot.eligible[0])){
+  if(isBench && !cheapSlot){
     // depth spots: what matters is the value of a cheap long contract, not
     // who has the biggest name in the bargain bin
     cands.sort((a,b)=>{
       const sa = stashProfile(a.x), sb = stashProfile(b.x);
       return (sb ? sb.score : -1) - (sa ? sa.score : -1) || b.x.mv - a.x.mv;
     });
+  } else if(cheapSlot){
+    cands.sort((a,b)=>(b.sent.score-a.sent.score)||(a.d-b.d));
   } else {
-    cands.sort((a,b)=>b.x.mv-a.x.mv);
+    // Same quality metric budgetTargets() ranks a starter slot by: real
+    // production above replacement this year, not five-year dynasty value.
+    // Sorting by raw mv here used to put a young, high-mv-but-low-output back
+    // (Ashton Jeanty, vor 5.4) ahead of a $23-25 stud who is actually the
+    // better real player right now (James Cook III, vor 10.9) -- the same
+    // long-vs-this-year mismatch groupRankFor's own comment already
+    // describes for Derrick Henry, just surfacing here instead.
+    cands.sort((a,b)=>(b.v*b.rm)-(a.v*a.rm));
   }
   // Kickers and defenses are small pools, so truncating them just hides real
   // options behind a "see more" that serves no purpose. Show the lot.
