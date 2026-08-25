@@ -2860,7 +2860,10 @@ function derivedDollar(mv, pos){
    374 of 463 players. The tier knows nothing about age and everything about
    what he is worth this year, which is the question being asked. */
 let _tierPriceCache = null, _tierOrderCache = null;
-/* Where each player sits inside his own tier, computed once. */
+/* Where each player sits inside his own tier, computed once. Ordered by the
+   aggregate multi-source rank (groupRankFor), not any one board's own field,
+   so even the within-tier fine positioning reflects every source blended
+   together rather than just FantasyPros' read. */
 function tierOrder(){
   if(_tierOrderCache) return _tierOrderCache;
   const byTier = {};
@@ -2870,7 +2873,12 @@ function tierOrder(){
   });
   const out = {};
   Object.keys(byTier).forEach(t=>{
-    const l = byTier[t].sort((x,y)=>(FP_BOARD[x][5]||999)-(FP_BOARD[y][5]||999));
+    const l = byTier[t].sort((x,y)=>{
+      const px = DRAFT_POOL.find(p=>p.name===x), py = DRAFT_POOL.find(p=>p.name===y);
+      const rx = px ? groupRankFor(px) : undefined, ry = py ? groupRankFor(py) : undefined;
+      if(rx !== undefined && ry !== undefined) return rx - ry;
+      return (FP_BOARD[x][5]||999)-(FP_BOARD[y][5]||999);
+    });
     l.forEach((k,i)=>{ out[k] = { at:i, n:l.length }; });
   });
   _tierOrderCache = out;
@@ -2917,6 +2925,36 @@ const MANUAL_PRICE_ADJUST = {
   "Jonathon Brooks": 6,
   "Chuba Hubbard": 5,
 };
+// The two real auction-dollar sources, each with an as-of date so a stale
+// one fades rather than pulling the blend as hard as a fresh one -- the
+// same recency-weighted-mean machinery as groupRankFor, so the price and
+// the rank it is built on are aggregated the same way. Clay's cheat sheet
+// is the freshest read in the file (8/20); CBS_AUCTION is the older list
+// Blake said he trusts less once he'd compared both, so it still pulls the
+// number when it disagrees, just lightly.
+const DOLLAR_SOURCES = [
+  ['Clay', '2026-08-20', name => {
+    const c = clayLookup(CLAY_AUCTION, name);
+    if(!c) return null;
+    let v = Math.max(1, Math.round(c.price/2));
+    if(MANUAL_PRICE_ADJUST[name] !== undefined) v = Math.max(1, v + MANUAL_PRICE_ADJUST[name]);
+    return v;
+  }],
+  ['CBS', '2026-07-10', name => {
+    const real = (typeof CBS_AUCTION !== 'undefined') ? CBS_AUCTION[name] : null;
+    return typeof real === 'number' ? Math.max(1, real) : null;
+  }],
+];
+function blendedDollar(name){
+  let wsum = 0, total = 0;
+  DOLLAR_SOURCES.forEach(([,asOf,getPrice])=>{
+    const v = getPrice(name);
+    if(v == null) return;
+    const w = recencyWeight(asOf);
+    wsum += v*w; total += w;
+  });
+  return total ? Math.max(1, Math.round(wsum/total)) : null;
+}
 function suggestedDollar(mv, pos, name){
   if(name){
     // A hard fact, not a price opinion, so it outranks every source below --
@@ -2925,16 +2963,8 @@ function suggestedDollar(mv, pos, name){
     // stash value to price in: he is worth exactly the $1 auction floor
     // this draft, full stop, regardless of what any board says about him.
     if(typeof seasonEndingInjury === 'function' && seasonEndingInjury(name)) return 1;
-    if(typeof CLAY_AUCTION !== 'undefined'){
-      const c = clayLookup(CLAY_AUCTION, name);
-      if(c){
-        let v = Math.max(1, Math.round(c.price/2));
-        if(MANUAL_PRICE_ADJUST[name] !== undefined) v = Math.max(1, v + MANUAL_PRICE_ADJUST[name]);
-        return v;
-      }
-    }
-    const real = (typeof CBS_AUCTION !== 'undefined') ? CBS_AUCTION[name] : null;
-    if(typeof real === 'number') return Math.max(1, real);
+    const blended = blendedDollar(name);
+    if(blended != null) return blended;
 
     if(typeof FP_BOARD !== 'undefined' && FP_BOARD[name]){
       const tier = FP_BOARD[name][0];
@@ -7781,7 +7811,11 @@ const _groupRankCache = {};
 function groupRankFor(p){
   if(!_groupRankCache[p.pos]){
     const peers = DRAFT_POOL.filter(x=>x.pos===p.pos);
-    const byPrice = peers.slice().sort((a,b)=>suggestedDollar(b.mv,b.pos,b.name)-suggestedDollar(a.mv,a.pos,a.name));
+    // Raw mv, not suggestedDollar: suggestedDollar's own tier fallback calls
+    // back into groupRankFor for within-tier ordering, so pulling a $ price
+    // in here would recurse into a function still mid-build. mv is static
+    // input data, so it is always safe to read.
+    const byPrice = peers.slice().sort((a,b)=>b.mv-a.mv);
     const priceRank = {}; byPrice.forEach((x,i)=>{ priceRank[x.name]=i; });
 
     // One within-group ordinal map per source, built once per position,
