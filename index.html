@@ -1843,17 +1843,12 @@
     </div>
   </header>
 
-  <div class="status-strip" id="statusStrip"></div>
-
-  <!-- Everything below belongs to the currently active league. A league with
-       no working tools yet (anything that isn't this NFL auction-cap format)
-       shows the placeholder in #leaguePlaceholder instead -- see the LEAGUE
-       REGISTRY section for the switch. -->
-  <div id="appBody">
   <!-- Nine equal tabs told you nothing about what any of them were for or when
        you would want them. These are three different jobs done at three
        different times, so the navigation now says so: the mode picks the job,
-       the tabs beneath pick the tool. -->
+       the tabs beneath pick the tool. Sits above the status strip now, in the
+       title area, since it's the first choice you make on the page, not a
+       tool alongside the cap numbers. -->
   <nav class="modes" id="modeNav">
     <button class="mode active" data-mode="league">
       <span class="mode-top">
@@ -1878,6 +1873,13 @@
     </button>
   </nav>
 
+  <div class="status-strip" id="statusStrip"></div>
+
+  <!-- Everything below belongs to the currently active league. A league with
+       no working tools yet (anything that isn't this NFL auction-cap format)
+       shows the placeholder in #leaguePlaceholder instead -- see the LEAGUE
+       REGISTRY section for the switch. -->
+  <div id="appBody">
   <nav class="tabs" id="tabNav">
     <button data-view="league" data-mode="league" class="active">Rosters</button>
     <button data-view="trade" data-mode="league">Trade Analyzer</button>
