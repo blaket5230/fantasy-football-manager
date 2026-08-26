@@ -5370,6 +5370,7 @@ function computeStandings(){
   if(_standingsCache) return _standingsCache;
   const owners = Object.keys(SEASON_SCHEDULE);
   const rec = {}; owners.forEach(o=>rec[o] = { owner:o, w:0, l:0, t:0, pf:0, pa:0, gamesPlayed:0 });
+  const h2h = {}; owners.forEach(o=>{ h2h[o]={}; owners.forEach(p=>{ h2h[o][p]={w:0,l:0,t:0}; }); });
 
   for(let w=1; w<SEASON_WEEKS; w++){
     const wk = String(w);
@@ -5383,9 +5384,9 @@ function computeStandings(){
       if(so==null || sp==null) return;
       rec[o].pf += so; rec[o].pa += sp; rec[o].gamesPlayed++;
       rec[opp].pf += sp; rec[opp].pa += so; rec[opp].gamesPlayed++;
-      if(so>sp){ rec[o].w++; rec[opp].l++; }
-      else if(sp>so){ rec[opp].w++; rec[o].l++; }
-      else { rec[o].t++; rec[opp].t++; }
+      if(so>sp){ rec[o].w++; rec[opp].l++; h2h[o][opp].w++; h2h[opp][o].l++; }
+      else if(sp>so){ rec[opp].w++; rec[o].l++; h2h[opp][o].w++; h2h[o][opp].l++; }
+      else { rec[o].t++; rec[opp].t++; h2h[o][opp].t++; h2h[opp][o].t++; }
     });
   }
 
@@ -5405,8 +5406,23 @@ function computeStandings(){
     ...r, pct: r.gamesPlayed ? (r.w + r.t*0.5)/r.gamesPlayed : 0,
     division: divisionOf(r.owner)
   }));
-  const tiebreak = (a,b) => (b.pct-a.pct) || (b.pf-a.pf);
+  // Real-rules chain: win% -> points scored -> head-to-head -> most points
+  // allowed -> coin flip (last step isn't something we can fairly automate,
+  // so a true tie just falls through and gets flagged for a manual call).
+  const tiebreak = (a,b) => {
+    if(b.pct !== a.pct) return b.pct - a.pct;
+    if(b.pf !== a.pf) return b.pf - a.pf;
+    const ab = h2h[a.owner]?.[b.owner], ba = h2h[b.owner]?.[a.owner];
+    if(ab && ba){
+      const net = ab.w - ba.w;
+      if(net !== 0) return -net;
+    }
+    if(b.pa !== a.pa) return b.pa - a.pa;
+    return 0;
+  };
   rows.sort(tiebreak);
+  let hasUnresolvedTie = false;
+  for(let i=1;i<rows.length;i++){ if(tiebreak(rows[i-1], rows[i])===0) hasUnresolvedTie = true; }
 
   const divisionWinners = new Set();
   ZUB_DIVISIONS.forEach(d=>{
@@ -5417,7 +5433,7 @@ function computeStandings(){
   const playoffSet = new Set([...divisionWinners, ...wildcards]);
   const byeTeams = [...rows].filter(r=>playoffSet.has(r.owner)).sort((a,b)=>b.pf-a.pf).slice(0,2).map(r=>r.owner);
 
-  _standingsCache = { rows, divisionWinners, wildcards, playoffSet, byeTeams, gauntletComplete };
+  _standingsCache = { rows, divisionWinners, wildcards, playoffSet, byeTeams, gauntletComplete, h2h, hasUnresolvedTie };
   return _standingsCache;
 }
 
@@ -5433,7 +5449,7 @@ function renderStandingsView(){
     </div>`;
     return;
   }
-  const { rows, divisionWinners, wildcards, byeTeams, gauntletComplete } = computeStandings();
+  const { rows, divisionWinners, wildcards, byeTeams, gauntletComplete, hasUnresolvedTie } = computeStandings();
 
   const rowHtml = rows.map((r,i)=>{
     const tag = divisionWinners.has(r.owner) ? `<span class="grade-pill g-good" style="font-size:9px;padding:2px 6px;">DIV</span>`
@@ -5452,7 +5468,7 @@ function renderStandingsView(){
     <div class="chron-hero">
       <div class="chron-kicker">League &middot; Standings</div>
       <h2>The picture as of the scores you've entered.</h2>
-      <p>Sorted by winning percentage, then points scored. Head-to-head and points-against tiebreakers from the real rules aren't automated here yet -- close ties may need a manual look. ${gauntletComplete ? "Week 14's gauntlet is fully resolved below." : "Week 14 won't factor in until every team has a score logged that week."}</p>
+      <p>Sorted the way the real rules call for it: winning percentage &rarr; points scored &rarr; head-to-head &rarr; most points allowed. ${hasUnresolvedTie ? "One matchup right now is still dead-even on every one of those -- that one comes down to an actual coin flip, not something I can resolve for you." : ""} ${gauntletComplete ? "Week 14's gauntlet is fully resolved below." : "Week 14 won't factor in until every team has a score logged that week."}</p>
     </div>
     <div class="chron-card">
       <table style="width:100%;border-collapse:collapse;">
