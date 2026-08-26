@@ -5087,11 +5087,16 @@ function computeTeamReport(i){
     .map(p=>({...p, delta: marketPriceFor(p)-p.price}));
   priced.sort((a,b)=>b.delta-a.delta);
 
+  const keeperPriced = [...starterList, ...bench].filter(p=>p.keeper && marketPriceFor(p)!=null)
+    .map(p=>({...p, delta: marketPriceFor(p)-p.price}));
+  keeperPriced.sort((a,b)=>b.delta-a.delta);
+
   return {
     idx:i, owner:t.owner, team:t.team||t.owner,
     starterProjPts, draftValue, keeperValue, keeperCount:keeperList.length,
     starters: starterList, bench,
-    steal: priced[0]||null, reach: priced[priced.length-1]||null
+    steal: priced[0]||null, reach: priced[priced.length-1]||null,
+    bestKeeper: keeperPriced[0]||null
   };
 }
 
@@ -5143,6 +5148,8 @@ function renderChronicle(){
 
   const topTeam = reports[0];
   const stealAll = reports.map(r=>r.steal).filter(Boolean).sort((a,b)=>b.delta-a.delta)[0];
+  const reachAll = reports.map(r=>r.reach).filter(Boolean).sort((a,b)=>a.delta-b.delta)[0];
+  const bestKeeperAll = reports.map(r=>r.bestKeeper).filter(Boolean).sort((a,b)=>b.delta-a.delta)[0];
 
   host.innerHTML = `
     <div class="chron-hero">
@@ -5159,6 +5166,14 @@ function renderChronicle(){
       <div class="chron-card">
         <div class="cc-label">Biggest steal, league-wide</div>
         ${stealAll ? `<div class="cc-title">${stealAll.name}</div><div class="cc-sub">${reports.find(r=>r.steal===stealAll).team} &middot; paid $${stealAll.price}, worth $${stealAll.price+stealAll.delta}</div><p>+$${stealAll.delta} under market. Nobody else in the room got that kind of production for that kind of money.</p>` : `<p>Nothing to report yet.</p>`}
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Biggest reach, league-wide</div>
+        ${reachAll ? `<div class="cc-title">${reachAll.name}</div><div class="cc-sub">${reports.find(r=>r.reach===reachAll).team} &middot; paid $${reachAll.price}, worth $${reachAll.price+reachAll.delta}</div><p>&minus;$${Math.abs(reachAll.delta)} over market. Somebody wanted this one badly enough to pay for it twice.</p>` : `<p>Nothing to report yet.</p>`}
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Best keeper on the books</div>
+        ${bestKeeperAll ? `<div class="cc-title">${bestKeeperAll.name}</div><div class="cc-sub">${reports.find(r=>r.bestKeeper===bestKeeperAll).team} &middot; locked at $${bestKeeperAll.price}, worth $${bestKeeperAll.price+bestKeeperAll.delta}</div><p>+$${bestKeeperAll.delta} of pure surplus sitting on a contract from a season ago. That's the kind of call that wins a league.</p>` : `<p>No keepers priced into the pool yet.</p>`}
       </div>
       <div class="chron-card">
         <div class="cc-label">Strongest projected lineup</div>
@@ -5207,6 +5222,11 @@ function renderRecap(){
       return `<tr><td style="color:var(--chalk-3);font:500 11px 'JetBrains Mono',monospace;">${p.pos}</td><td>${p.name}</td><td style="text-align:right;font-family:'JetBrains Mono',monospace;">$${p.price}</td><td style="text-align:right;">${deltaTxt}</td></tr>`;
     }).join('');
     const benchStr = r.bench.map(p=>`${p.name}${p.keeper?' (K)':''} $${p.price}`).join(', ');
+    const callouts = [
+      r.steal ? `<span style="color:var(--jade);">Best value:</span> ${r.steal.name} <span style="color:var(--chalk-3);">(+$${r.steal.delta})</span>` : null,
+      r.reach ? `<span style="color:var(--coral);">Biggest reach:</span> ${r.reach.name} <span style="color:var(--chalk-3);">(&minus;$${Math.abs(r.reach.delta)})</span>` : null,
+      r.bestKeeper ? `<span style="color:var(--peri);">Best keeper:</span> ${r.bestKeeper.name} <span style="color:var(--chalk-3);">(+$${r.bestKeeper.delta})</span>` : null
+    ].filter(Boolean).join(' &middot; ');
     return `<div class="chron-card" style="${r.idx===myIdx?'border-color:var(--gold);':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
         <div><div class="cc-title">${r.team}${r.idx===myIdx?' &#9733;':''}</div><div class="cc-sub">${r.owner} &middot; rank #${r.rank}</div></div>
@@ -5217,6 +5237,7 @@ function renderRecap(){
         <div><div style="color:var(--chalk-3);font-size:9.5px;">DRAFT $</div><span style="color:${r.draftValue>=0?'var(--jade)':'var(--coral)'}">${r.draftValue>=0?'+':''}$${r.draftValue}</span></div>
         <div><div style="color:var(--chalk-3);font-size:9.5px;">KEEPER $</div>${r.keeperCount?`<span style="color:${r.keeperValue>=0?'var(--jade)':'var(--coral)'}">${r.keeperValue>=0?'+':''}$${r.keeperValue}</span>`:'&ndash;'}</div>
       </div>
+      ${callouts ? `<p style="font-size:11.5px;margin:0 0 10px;line-height:1.6;">${callouts}</p>` : ''}
       <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px;">${starterRows}</table>
       <div style="font-size:11.5px;color:var(--chalk-3);line-height:1.6;">Bench: ${benchStr}</div>
     </div>`;
