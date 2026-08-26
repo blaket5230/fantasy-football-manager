@@ -5128,6 +5128,149 @@ function allTeamReports(){
 }
 function gradeTier(g){ return g[0]==='A' ? 'g-good' : g[0]==='B' ? 'g-mid' : 'g-low'; }
 
+/* ---------- LEAGUE INTEL (The Draft > Recap) ----------
+   Reads live off allTeamReports(), so this isn't a one-time write-up of
+   this year's draft -- it's a real engine that recomputes from whatever
+   draft is actually in state, this year or any future one. Room-tendency
+   scouting: which positions and price tiers this specific 12-owner room
+   over/underpays relative to the market model, and which owners have
+   which habits. Deliberately doesn't feed back into marketPriceFor/
+   suggestedDollar -- that stays an objective outside valuation so grades
+   stay comparable year to year. This is coaching, not a rewrite of value. */
+function ilStats(arr){
+  const n = arr ? arr.length : 0; if(!n) return null;
+  const sumDelta = arr.reduce((s,p)=>s+p.delta,0);
+  const sumPrice = arr.reduce((s,p)=>s+p.price,0);
+  const sumMkt = arr.reduce((s,p)=>s+p.market,0);
+  return { n, sumDelta, avgDelta: +(sumDelta/n).toFixed(2), pctVsMarket: sumMkt ? +(((sumPrice-sumMkt)/sumMkt)*100).toFixed(1) : 0 };
+}
+function ilTierOf(mkt){
+  if(mkt>=20) return 'Elite ($20+)';
+  if(mkt>=10) return 'High ($10-19)';
+  if(mkt>=5) return 'Mid ($5-9)';
+  if(mkt>=2) return 'Value ($2-4)';
+  return 'Floor ($1)';
+}
+const IL_TIER_ORDER = ['Elite ($20+)','High ($10-19)','Mid ($5-9)','Value ($2-4)','Floor ($1)'];
+function computeLeagueIntel(){
+  const reports = allTeamReports();
+  const picks = [], keeperPicks = [];
+  reports.forEach(r=>{
+    [...r.starters, ...r.bench].forEach(p=>{
+      const mkt = marketPriceFor(p);
+      if(mkt==null) return;
+      const row = { name:p.name, pos:p.pos, price:p.price, market:mkt, delta:mkt-p.price, owner:r.owner, team:r.team };
+      (p.keeper ? keeperPicks : picks).push(row);
+    });
+  });
+
+  const posSplit = {};
+  picks.forEach(p=>{ posSplit[p.pos] = (posSplit[p.pos]||0) + p.price; });
+  const totalSpend = Object.values(posSplit).reduce((a,b)=>a+b,0);
+
+  function tierTable(pos){
+    const byTier = {};
+    picks.filter(p=>p.pos===pos).forEach(p=>{ (byTier[ilTierOf(p.market)] ||= []).push(p); });
+    return IL_TIER_ORDER.map(t=>({ tier:t, stats: ilStats(byTier[t]) })).filter(row=>row.stats);
+  }
+
+  const byOwner = {};
+  picks.forEach(p=>{
+    const d = byOwner[p.owner] ||= { team:p.team, all:[], RB:[], WRTE:[] };
+    d.all.push(p);
+    (d[p.pos] ||= []).push(p);
+  });
+  const ownerRows = Object.entries(byOwner).map(([owner,d])=>{
+    const kp = keeperPicks.filter(k=>k.owner===owner);
+    return { owner, team:d.team, all: ilStats(d.all), rb: ilStats(d.RB||[]), wr: ilStats(d.WRTE||[]), keeper: ilStats(kp) };
+  }).sort((a,b)=> (b.all?b.all.sumDelta:0) - (a.all?a.all.sumDelta:0));
+
+  return { sampleN: picks.length, posSplit, totalSpend, rbTiers: tierTable('RB'), wrTiers: tierTable('WRTE'), ownerRows };
+}
+function ownerSignature(o){
+  const bits = [];
+  if(o.rb && o.rb.n>=2){
+    if(o.rb.avgDelta<=-2) bits.push('chases RB hard, consistently over model price');
+    else if(o.rb.avgDelta>=0.3) bits.push('disciplined on RB, rarely overpays');
+  }
+  if(o.wr && o.wr.n>=2){
+    if(o.wr.avgDelta>=1) bits.push('finds real value at WR/TE');
+    else if(o.wr.avgDelta<=-1) bits.push('leaves WR/TE money on the table');
+  }
+  if(o.keeper && o.keeper.n>=1){
+    if(o.keeper.avgDelta>=5) bits.push('sharp long-term keeper calls');
+    else if(o.keeper.avgDelta<=-3) bits.push("keeper decisions haven't paid off");
+  }
+  if(!bits.length) bits.push("bids close to the room's own consensus across the board");
+  return bits.join(' &middot; ');
+}
+function renderLeagueIntel(){
+  const host = document.getElementById('leagueIntelBody');
+  if(!host) return;
+  const intel = computeLeagueIntel();
+  if(intel.sampleN < 20){ host.innerHTML = ''; return; }
+
+  const posLabel = { RB:'RB', WRTE:'WR/TE', QB:'QB', PK:'PK', DST:'DST' };
+  const splitRows = Object.entries(intel.posSplit).sort((a,b)=>b[1]-a[1]).map(([pos,amt])=>
+    `<div class="div-team-row"><span class="dt-name">${posLabel[pos]||pos}</span><span style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;">$${amt} &middot; ${(amt/intel.totalSpend*100).toFixed(1)}%</span></div>`
+  ).join('');
+
+  function tierRows(rows){
+    return rows.map(r => {
+      const over = r.stats.pctVsMarket < 0 ? 'var(--jade)' : r.stats.pctVsMarket > 0 ? 'var(--coral)' : 'var(--chalk-3)';
+      return `<tr><td>${r.tier}</td><td style="text-align:right;color:var(--chalk-3);">n=${r.stats.n}</td>
+        <td style="text-align:right;font-family:'JetBrains Mono',monospace;">${r.stats.avgDelta>=0?'+':''}$${r.stats.avgDelta}/pick</td>
+        <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${over};">${r.stats.pctVsMarket>0?'+':''}${r.stats.pctVsMarket}%</td></tr>`;
+    }).join('');
+  }
+  const tierHead = `<thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+    <th style="text-align:left;padding-bottom:6px;">Tier</th><th style="text-align:right;">Picks</th><th style="text-align:right;">Avg $ vs model</th><th style="text-align:right;">vs model</th>
+  </tr></thead>`;
+
+  const ownerRowsHtml = intel.ownerRows.map(o => {
+    const fmt = (s) => s ? `${s.avgDelta>=0?'+':''}$${s.avgDelta}` : '&ndash;';
+    return `<tr>
+      <td><b style="color:var(--chalk);">${nickOf(o.owner)}</b><div style="color:var(--chalk-3);font-size:10.5px;">${o.owner}</div></td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${o.all.sumDelta>=0?'var(--jade)':'var(--coral)'};">${o.all.sumDelta>=0?'+':''}$${o.all.sumDelta}</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;">${fmt(o.rb)}</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;">${fmt(o.wr)}</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;">${fmt(o.keeper)}</td>
+      <td style="font-size:11px;color:var(--chalk-3);max-width:260px;">${ownerSignature(o)}</td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-card" style="margin-top:8px;">
+      <div class="cc-label">League Intel &middot; reading the room</div>
+      <p style="margin-bottom:14px;">This isn't a write-up -- it's read live off the actual auction in state, so it'll re-tell this same story off next year's real numbers once you draft again. Read it as coaching for how <i>this specific room</i> bids, not a correction to the underlying player values.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:18px;">
+        <div>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Where the money actually goes</div>
+          ${splitRows}
+        </div>
+        <div>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">RB, by price tier</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">${tierHead}<tbody>${tierRows(intel.rbTiers)}</tbody></table>
+        </div>
+        <div>
+          <div style="font:600 11px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">WR/TE, by price tier</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">${tierHead}<tbody>${tierRows(intel.wrTiers)}</tbody></table>
+        </div>
+      </div>
+      <div style="font:600 11px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Owner scouting report</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px;">
+          <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+            <th style="text-align:left;padding-bottom:6px;">Owner</th><th style="text-align:right;">Total $ vs model</th><th style="text-align:right;">RB avg</th><th style="text-align:right;">WR/TE avg</th><th style="text-align:right;">Keeper avg</th><th style="text-align:left;">Tendency</th>
+          </tr></thead>
+          <tbody>${ownerRowsHtml}</tbody>
+        </table>
+      </div>
+      <p style="font-size:11px;color:var(--chalk-3);margin-top:12px;">One draft's worth of picks per owner/tier -- directional, not statistically bulletproof. Weighs more once a second season's data folds in.</p>
+    </div>
+  `;
+}
+
 /* ---------- CHRONICLE (Home) ---------- */
 function renderChronicle(){
   const host = document.getElementById('chronicleBody');
@@ -5250,7 +5393,9 @@ function renderRecap(){
       <p>60% starting-lineup strength, 40% value bought in the live auction -- keepers carved out of the value half so a good keeper call from a past season never gets mistaken for this year's draft skill. Starters are the true best-eight, not whoever happened to fall into a slot on nomination order.</p>
     </div>
     <div class="chron-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));">${cards}</div>
+    <div id="leagueIntelBody"></div>
   `;
+  renderLeagueIntel();
 }
 
 /* ---------- SCHEDULE & DIVISIONS (League > Schedule) ---------- */
