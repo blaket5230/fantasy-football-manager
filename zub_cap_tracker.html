@@ -1968,6 +1968,7 @@
   <nav class="tabs" id="tabNav">
     <button data-view="chronicle" data-mode="home" class="active">The Chronicle</button>
 
+    <button data-view="standings" data-mode="leaguehub" hidden>Standings</button>
     <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
@@ -1988,6 +1989,11 @@
   <!-- HOME / CHRONICLE VIEW -->
   <div class="view active" id="view-chronicle">
     <div id="chronicleBody"></div>
+  </div>
+
+  <!-- STANDINGS VIEW -->
+  <div class="view" id="view-standings">
+    <div id="standingsBody"></div>
   </div>
 
   <!-- LEAGUE VIEW -->
@@ -3376,7 +3382,12 @@ function renderLeagueModal(){
 const SEED_TEAMS_JSON = JSON.stringify(SEED_TEAMS);
 let state = { teams: JSON.parse(SEED_TEAMS_JSON), currentYear: 2026, draftPicks: [], seedVersion: 6,
   // your call, not the value ranking: Williams starts, Daniels is the backup
-  rosterRole: { 'Caleb Williams':'start', 'Jayden Daniels':'bench' } };
+  rosterRole: { 'Caleb Williams':'start', 'Jayden Daniels':'bench' },
+  // weekly fantasy points, keyed by week number (string) then by owner name.
+  // Nothing pulls these in automatically -- there's no live score feed --
+  // so this is however far the standings can ever be ahead of what's
+  // actually been typed in.
+  weeklyScores: {} };
 let activeTeamIdx = null;
 let leagueGridPainted = false;
 
@@ -3412,6 +3423,7 @@ async function loadState(){
           state = parsed;
           if(!state.slotTargets) state.slotTargets = {};
           if(!state.planManual) state.planManual = {};
+          if(!state.weeklyScores) state.weeklyScores = {};
         } else {
           // Rosters are stale. Take the corrected seed, keep everything the
           // user actually created on top of it.
@@ -3427,6 +3439,7 @@ async function loadState(){
             myRatings: parsed.myRatings || {},
             myReads: parsed.myReads || {},
             rosterRole: parsed.rosterRole || state.rosterRole,
+            weeklyScores: parsed.weeklyScores || {},
             planBaseline: null,
             seedVersion: SEED_VERSION
           };
@@ -3457,6 +3470,7 @@ function reseedRosters(){
     draftPicks: state.draftPicks || [],
     planManual: state.planManual || {},
     rosterRole: state.rosterRole || { 'Caleb Williams':'start', 'Jayden Daniels':'bench' },
+    weeklyScores: state.weeklyScores || {},
     planBaseline: null,
     seedVersion: SEED_VERSION
   };
@@ -3516,6 +3530,7 @@ function savePayload(){
     myRatings: state.myRatings || {},
     myReads: state.myReads || {},
     rosterRole: state.rosterRole || {},
+    weeklyScores: state.weeklyScores || {},
     planBaseline: state.planBaseline || null,
     seedVersion: state.seedVersion
   };
@@ -3615,7 +3630,7 @@ function contractedYears(p){
 /* Switching mode shows only that mode's tools and lands you on the first one.
    The tabs still do the real work; the mode just decides which are on offer,
    so you are never scanning past six things you cannot use right now. */
-const MODE_DEFAULT = { home:'chronicle', leaguehub:'league', league:'trade', draft:'recap' };
+const MODE_DEFAULT = { home:'chronicle', leaguehub:'standings', league:'trade', draft:'recap' };
 let currentMode = 'home';
 
 function showMode(mode){
@@ -3665,6 +3680,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='chronicle') renderChronicle();
     if(btn.dataset.view==='schedule') renderScheduleView();
     if(btn.dataset.view==='rules') renderRulesView();
+    if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='recap') renderRecap();
   });
 });
@@ -5223,14 +5239,42 @@ const ZUB_DIVISIONS = [
   {name:"South", teams:["Justin McDonald","Brett Booker","Blake Taylor"]},
   {name:"West", teams:["Jon Thorn","Scott Bull","Ryan Monigan"]}
 ];
+function divisionOf(owner){ return ZUB_DIVISIONS.find(d=>d.teams.includes(owner))?.name || null; }
+function nickOf(owner){ const i=teamIdxOf(owner); return i>=0 ? (state.teams[i].team||owner) : owner; }
+
+/* Pulled straight off the real CBS schedule grid. Every week checked out
+   internally consistent except week 3, where the transcription put JS Bull
+   opposite two different teams at once and left Ryan Monigan with no
+   opponent at all -- rather than guess, those four teams' week 3 is left
+   null. Confirm it directly if it matters before relying on it. */
+const SEASON_SCHEDULE = {
+  "Justin McDonald": {"1":"Blake Taylor", "2":"Brett Booker", "3":"Brandon Hill", "4":"PJ Humphreys", "5":"Caleb DeWoody", "6":"JS Bull", "7":"Travis and Wayne Banks", "8":"Tom McDonald", "9":"Scott Bull", "10":"Ryan Monigan", "11":"Jon Thorn", "12":"Blake Taylor", "13":"Brett Booker", "14":"Blake Taylor"},
+  "Blake Taylor": {"1":"Justin McDonald", "2":"PJ Humphreys", "3":"Brett Booker", "4":"Caleb DeWoody", "5":"Brandon Hill", "6":"Tom McDonald", "7":"JS Bull", "8":"Travis and Wayne Banks", "9":"Jon Thorn", "10":"Scott Bull", "11":"Brett Booker", "12":"Justin McDonald", "13":"Ryan Monigan", "14":"Justin McDonald"},
+  "Brett Booker": {"1":"Caleb DeWoody", "2":"Justin McDonald", "3":"Blake Taylor", "4":"Brandon Hill", "5":"PJ Humphreys", "6":"Travis and Wayne Banks", "7":"Tom McDonald", "8":"JS Bull", "9":"Ryan Monigan", "10":"Jon Thorn", "11":"Blake Taylor", "12":"Scott Bull", "13":"Justin McDonald", "14":"Caleb DeWoody"},
+  "PJ Humphreys": {"1":"Brandon Hill", "2":"Blake Taylor", "3":"Caleb DeWoody", "4":"Justin McDonald", "5":"Brett Booker", "6":"Ryan Monigan", "7":"Jon Thorn", "8":"Scott Bull", "9":"Travis and Wayne Banks", "10":"JS Bull", "11":"Caleb DeWoody", "12":"Brandon Hill", "13":"Tom McDonald", "14":"Brandon Hill"},
+  "Caleb DeWoody": {"1":"Brett Booker", "2":"Brandon Hill", "3":"PJ Humphreys", "4":"Blake Taylor", "5":"Justin McDonald", "6":"Scott Bull", "7":"Ryan Monigan", "8":"Jon Thorn", "9":"JS Bull", "10":"Tom McDonald", "11":"PJ Humphreys", "12":"Travis and Wayne Banks", "13":"Brandon Hill", "14":"Brett Booker"},
+  "Brandon Hill": {"1":"PJ Humphreys", "2":"Caleb DeWoody", "3":"Justin McDonald", "4":"Brett Booker", "5":"Blake Taylor", "6":"Jon Thorn", "7":"Scott Bull", "8":"Ryan Monigan", "9":"Tom McDonald", "10":"Travis and Wayne Banks", "11":"JS Bull", "12":"PJ Humphreys", "13":"Caleb DeWoody", "14":"PJ Humphreys"},
+  "Travis and Wayne Banks": {"1":"Scott Bull", "2":"JS Bull", "3":"Tom McDonald", "4":"Jon Thorn", "5":"Ryan Monigan", "6":"Brett Booker", "7":"Justin McDonald", "8":"Blake Taylor", "9":"PJ Humphreys", "10":"Brandon Hill", "11":"Tom McDonald", "12":"Caleb DeWoody", "13":"JS Bull", "14":"Scott Bull"},
+  "Tom McDonald": {"1":"JS Bull", "2":"Ryan Monigan", "3":"Travis and Wayne Banks", "4":"Scott Bull", "5":"Jon Thorn", "6":"Blake Taylor", "7":"Brett Booker", "8":"Justin McDonald", "9":"Brandon Hill", "10":"Caleb DeWoody", "11":"Travis and Wayne Banks", "12":"JS Bull", "13":"PJ Humphreys", "14":"JS Bull"},
+  "JS Bull": {"1":"Tom McDonald", "2":"Travis and Wayne Banks", "3":null, "4":"Ryan Monigan", "5":"Scott Bull", "6":"Justin McDonald", "7":"Blake Taylor", "8":"Brett Booker", "9":"Caleb DeWoody", "10":"PJ Humphreys", "11":"Brandon Hill", "12":"Tom McDonald", "13":"Travis and Wayne Banks", "14":"Tom McDonald"},
+  "Ryan Monigan": {"1":"Jon Thorn", "2":"Tom McDonald", "3":null, "4":"JS Bull", "5":"Travis and Wayne Banks", "6":"PJ Humphreys", "7":"Caleb DeWoody", "8":"Brandon Hill", "9":"Brett Booker", "10":"Justin McDonald", "11":"Scott Bull", "12":"Jon Thorn", "13":"Blake Taylor", "14":"Jon Thorn"},
+  "Jon Thorn": {"1":"Ryan Monigan", "2":"Scott Bull", "3":null, "4":"Travis and Wayne Banks", "5":"Tom McDonald", "6":"Brandon Hill", "7":"PJ Humphreys", "8":"Caleb DeWoody", "9":"Blake Taylor", "10":"Brett Booker", "11":"Justin McDonald", "12":"Ryan Monigan", "13":"Scott Bull", "14":"Ryan Monigan"},
+  "Scott Bull": {"1":"Travis and Wayne Banks", "2":"Jon Thorn", "3":null, "4":"Tom McDonald", "5":"JS Bull", "6":"Caleb DeWoody", "7":"Brandon Hill", "8":"PJ Humphreys", "9":"Justin McDonald", "10":"Blake Taylor", "11":"Ryan Monigan", "12":"Brett Booker", "13":"Jon Thorn", "14":"Travis and Wayne Banks"}
+};
+const SEASON_WEEKS = 14;
+
 function renderScheduleView(){
   const host = document.getElementById('scheduleBody');
   if(!host) return;
-  const nameOf = owner => { const i=teamIdxOf(owner); return i>=0 ? (state.teams[i].team||owner) : owner; };
   const divs = ZUB_DIVISIONS.map(d=>{
-    const rows = d.teams.map(o=>`<div class="div-team-row"><span><span class="dt-name">${nameOf(o)}</span><span class="dt-owner">${o}</span></span></div>`).join('');
+    const rows = d.teams.map(o=>`<div class="div-team-row"><span><span class="dt-name">${nickOf(o)}</span><span class="dt-owner">${o}</span></span></div>`).join('');
     return `<div class="div-card"><h4>${d.name} Division</h4>${rows}</div>`;
   }).join('');
+
+  if(!scheduleSelectedWeek) scheduleSelectedWeek = currentScheduleWeek();
+  const weekBtns = Array.from({length:SEASON_WEEKS}, (_,i)=>i+1).map(w=>
+    `<button class="side-tab${w===scheduleSelectedWeek?' active':''}" data-week="${w}">Wk ${w}</button>`).join('');
+
   host.innerHTML = `
     <div class="chron-hero">
       <div class="chron-kicker">League &middot; Format</div>
@@ -5238,7 +5282,188 @@ function renderScheduleView(){
       <p>Two games against each of your two division rivals, one against everybody else. All 4 division winners make the 6-team playoff field automatically; the best remaining record and the most remaining points fill the last two wildcard spots. Whoever scores the most total points over the regular season gets the Week 15 bye, seed be damned.</p>
       <p><b>The Week 14 gauntlet:</b> every team's "opponent" that week is the entire league. Score top-6 leaguewide and I'm crediting you a win no matter what your actual matchup says on paper; land in the bottom 6 and it's a loss regardless. It's the last week before the picture locks, and it has ended clean playoff bids before.</p>
     </div>
-    <div class="div-grid">${divs}</div>
+    <div class="div-grid" style="margin-bottom:24px;">${divs}</div>
+
+    <div class="chron-card">
+      <div class="cc-label">Enter scores</div>
+      <p style="margin-bottom:12px;">Nothing pulls these in automatically -- there's no live CBS feed -- so the standings only know what gets typed in here.</p>
+      <div class="side-tabs" style="flex-wrap:wrap;margin-bottom:16px;">${weekBtns}</div>
+      <div id="weekScoreBody"></div>
+    </div>
+  `;
+  document.querySelectorAll('#scheduleBody [data-week]').forEach(b=>
+    b.addEventListener('click', ()=>{ scheduleSelectedWeek = Number(b.dataset.week); renderScheduleView(); }));
+  renderWeekScoreBody();
+}
+
+function currentScheduleWeek(){
+  for(let w=1; w<=SEASON_WEEKS; w++){
+    const owners = Object.keys(SEASON_SCHEDULE);
+    const anyMissing = owners.some(o => SEASON_SCHEDULE[o][w] && (state.weeklyScores[w]?.[o]==null));
+    if(anyMissing) return w;
+  }
+  return SEASON_WEEKS;
+}
+
+let scheduleSelectedWeek = null;
+function renderWeekScoreBody(){
+  const body = document.getElementById('weekScoreBody');
+  if(!body) return;
+  const w = scheduleSelectedWeek;
+  const wk = String(w);
+  const owners = Object.keys(SEASON_SCHEDULE);
+  const seen = new Set();
+  const rows = [];
+  if(w === 14){
+    rows.push(`<p style="font-size:12.5px;color:var(--chalk-3);margin:0 0 10px;">Gauntlet week -- every team's score below is compared against the whole league, not just one opponent.</p>`);
+    owners.forEach(o=>{
+      const val = state.weeklyScores[wk]?.[o];
+      rows.push(scoreRow(o, null, val));
+    });
+  } else {
+    owners.forEach(o=>{
+      if(seen.has(o)) return;
+      const opp = SEASON_SCHEDULE[o][wk];
+      if(!opp){
+        rows.push(`<div class="div-team-row"><span class="dt-name">${nickOf(o)}</span><span style="color:var(--chalk-3);font-size:12px;">week unconfirmed &mdash; see the note above</span></div>`);
+        seen.add(o);
+        return;
+      }
+      seen.add(o); seen.add(opp);
+      const valO = state.weeklyScores[wk]?.[o];
+      const valOpp = state.weeklyScores[wk]?.[opp];
+      rows.push(`<div class="div-team-row" style="align-items:center;">
+        ${scoreInput(o, valO)}
+        <span style="color:var(--chalk-3);font-size:11px;padding:0 6px;">vs</span>
+        ${scoreInput(opp, valOpp)}
+      </div>`);
+    });
+  }
+  body.innerHTML = rows.join('');
+  body.querySelectorAll('input[data-score-owner]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const owner = inp.dataset.scoreOwner;
+      const v = inp.value === '' ? null : parseFloat(inp.value);
+      if(!state.weeklyScores[wk]) state.weeklyScores[wk] = {};
+      if(v==null) delete state.weeklyScores[wk][owner]; else state.weeklyScores[wk][owner] = v;
+      saveState();
+      _standingsCache = null;
+      renderWeekScoreBody();
+      if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
+    });
+  });
+}
+function scoreInput(owner, val){
+  return `<span style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <span class="dt-name" style="font-size:13px;">${nickOf(owner)}</span>
+    <input type="number" step="0.1" data-score-owner="${owner}" value="${val==null?'':val}" placeholder="&mdash;"
+      style="width:64px;background:var(--raised-2);border:1px solid var(--line);border-radius:6px;color:var(--chalk);padding:4px 6px;font:600 12.5px 'JetBrains Mono',monospace;text-align:right;">
+  </span>`;
+}
+function scoreRow(owner, _unused, val){
+  return `<div class="div-team-row">${scoreInput(owner, val)}</div>`;
+}
+
+/* ---------- STANDINGS ENGINE ---------- */
+let _standingsCache = null;
+function computeStandings(){
+  if(_standingsCache) return _standingsCache;
+  const owners = Object.keys(SEASON_SCHEDULE);
+  const rec = {}; owners.forEach(o=>rec[o] = { owner:o, w:0, l:0, t:0, pf:0, pa:0, gamesPlayed:0 });
+
+  for(let w=1; w<SEASON_WEEKS; w++){
+    const wk = String(w);
+    const seen = new Set();
+    owners.forEach(o=>{
+      if(seen.has(o)) return;
+      const opp = SEASON_SCHEDULE[o][wk];
+      if(!opp) return;
+      seen.add(o); seen.add(opp);
+      const so = state.weeklyScores[wk]?.[o], sp = state.weeklyScores[wk]?.[opp];
+      if(so==null || sp==null) return;
+      rec[o].pf += so; rec[o].pa += sp; rec[o].gamesPlayed++;
+      rec[opp].pf += sp; rec[opp].pa += so; rec[opp].gamesPlayed++;
+      if(so>sp){ rec[o].w++; rec[opp].l++; }
+      else if(sp>so){ rec[opp].w++; rec[o].l++; }
+      else { rec[o].t++; rec[opp].t++; }
+    });
+  }
+
+  // Week 14 gauntlet: only resolves once every team has a score in.
+  const wk14 = String(SEASON_WEEKS);
+  const gauntletScores = owners.map(o=>({o, s:state.weeklyScores[wk14]?.[o]}));
+  const gauntletComplete = gauntletScores.every(x=>x.s!=null);
+  if(gauntletComplete){
+    const sorted = [...gauntletScores].sort((a,b)=>b.s-a.s);
+    sorted.forEach((x,i)=>{
+      rec[x.o].pf += x.s; rec[x.o].gamesPlayed++;
+      if(i<6) rec[x.o].w++; else rec[x.o].l++;
+    });
+  }
+
+  const rows = Object.values(rec).map(r=>({
+    ...r, pct: r.gamesPlayed ? (r.w + r.t*0.5)/r.gamesPlayed : 0,
+    division: divisionOf(r.owner)
+  }));
+  const tiebreak = (a,b) => (b.pct-a.pct) || (b.pf-a.pf);
+  rows.sort(tiebreak);
+
+  const divisionWinners = new Set();
+  ZUB_DIVISIONS.forEach(d=>{
+    const best = [...rows].filter(r=>r.division===d.name).sort(tiebreak)[0];
+    if(best) divisionWinners.add(best.owner);
+  });
+  const wildcards = rows.filter(r=>!divisionWinners.has(r.owner)).slice(0,2).map(r=>r.owner);
+  const playoffSet = new Set([...divisionWinners, ...wildcards]);
+  const byeTeams = [...rows].filter(r=>playoffSet.has(r.owner)).sort((a,b)=>b.pf-a.pf).slice(0,2).map(r=>r.owner);
+
+  _standingsCache = { rows, divisionWinners, wildcards, playoffSet, byeTeams, gauntletComplete };
+  return _standingsCache;
+}
+
+function renderStandingsView(){
+  const host = document.getElementById('standingsBody');
+  if(!host) return;
+  const anyScores = Object.keys(state.weeklyScores||{}).length > 0;
+  if(!anyScores){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Standings</div>
+      <h2>No scores logged yet.</h2>
+      <p>Head to Schedule and start entering weekly results -- I'll build the standings, the playoff picture and the bye race from there.</p>
+    </div>`;
+    return;
+  }
+  const { rows, divisionWinners, wildcards, byeTeams, gauntletComplete } = computeStandings();
+
+  const rowHtml = rows.map((r,i)=>{
+    const tag = divisionWinners.has(r.owner) ? `<span class="grade-pill g-good" style="font-size:9px;padding:2px 6px;">DIV</span>`
+      : wildcards.includes(r.owner) ? `<span class="grade-pill g-mid" style="font-size:9px;padding:2px 6px;">WC</span>` : '';
+    const bye = byeTeams.includes(r.owner) ? `<span class="grade-pill g-good" style="font-size:9px;padding:2px 6px;">BYE</span>` : '';
+    return `<tr>
+      <td style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;">${i+1}</td>
+      <td>${tag} ${bye} <b style="color:var(--chalk);">${nickOf(r.owner)}</b> <span style="color:var(--chalk-3);font-size:10.5px;">${r.owner} &middot; ${r.division}</span></td>
+      <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;">${r.w}-${r.l}${r.t?'-'+r.t:''}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-2);">${r.pf.toFixed(1)}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-3);">${r.pa.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Standings</div>
+      <h2>The picture as of the scores you've entered.</h2>
+      <p>Sorted by winning percentage, then points scored. Head-to-head and points-against tiebreakers from the real rules aren't automated here yet -- close ties may need a manual look. ${gauntletComplete ? "Week 14's gauntlet is fully resolved below." : "Week 14 won't factor in until every team has a score logged that week."}</p>
+    </div>
+    <div class="chron-card">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+          <th style="text-align:left;padding-bottom:8px;">#</th><th style="text-align:left;">Team</th>
+          <th style="text-align:right;">Record</th><th style="text-align:right;">PF</th><th style="text-align:right;">PA</th>
+        </tr></thead>
+        <tbody>${rowHtml}</tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">DIV = leading its division right now &middot; WC = in the field as a wildcard &middot; BYE = leading the race for the Week 15 bye.</p>
+    </div>
   `;
 }
 
