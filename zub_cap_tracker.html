@@ -3389,7 +3389,8 @@ const SEED_TEAMS_JSON = JSON.stringify(SEED_TEAMS);
 const DEFAULT_BUILD_IDEAS = [
   { id: 1, title: 'Squad Plan budget split from real spend', note: 'Bake the room\'s actual position spend split (RB ~48%, WR/TE ~40%, QB ~6%, from League Intel) into the pre-draft budget-allocation tool as a starting reference.', status: 'idea' },
   { id: 2, title: 'Live Bid tab room-tendency badge', note: 'When nominating or searching an RB/WR during the live auction, show a small badge with what this room has historically paid vs. model in that player\'s price tier -- coaching at the exact decision point.', status: 'idea' },
-  { id: 3, title: 'Player card tendency annotation', note: 'Same room-tendency signal as the Bid tab hint, shown quietly on the player card for pre-draft browsing.', status: 'idea' }
+  { id: 3, title: 'Player card tendency annotation', note: 'Same room-tendency signal as the Bid tab hint, shown quietly on the player card for pre-draft browsing.', status: 'idea' },
+  { id: 4, title: 'Split TE out of the WR/TE position tag', note: 'DRAFT_POOL only tags WRTE, not TE separately, so "who likes tight ends" can\'t be isolated from the data right now. Would need a real position split (probably sourced from one of the parsed ranking files) to make that tendency trackable.', status: 'idea' }
 ];
 let state = { teams: JSON.parse(SEED_TEAMS_JSON), currentYear: 2026, draftPicks: [], seedVersion: 6,
   // your call, not the value ranking: Williams starts, Daniels is the backup
@@ -3402,7 +3403,12 @@ let state = { teams: JSON.parse(SEED_TEAMS_JSON), currentYear: 2026, draftPicks:
   // a running backlog of feature ideas for the tool itself, editable in
   // The Draft > Build Ideas tab. Seeded once with what came out of this
   // build session; from then on it's whatever gets added or checked off.
-  buildIdeas: DEFAULT_BUILD_IDEAS.map(x=>({...x})) };
+  buildIdeas: DEFAULT_BUILD_IDEAS.map(x=>({...x})),
+  // snapshots of each drafted season's final rosters, captured manually via
+  // "Archive this season" in League Intel -- this is what lets multi-year
+  // tendencies (repeat pickups, familiarity) get computed at all, since
+  // nothing else in state remembers a roster past the year it's overwritten.
+  seasonArchive: [] };
 let activeTeamIdx = null;
 let leagueGridPainted = false;
 
@@ -3440,6 +3446,7 @@ async function loadState(){
           if(!state.planManual) state.planManual = {};
           if(!state.weeklyScores) state.weeklyScores = {};
           if(!state.buildIdeas) state.buildIdeas = DEFAULT_BUILD_IDEAS.map(x=>({...x}));
+          if(!state.seasonArchive) state.seasonArchive = [];
         } else {
           // Rosters are stale. Take the corrected seed, keep everything the
           // user actually created on top of it.
@@ -3457,6 +3464,7 @@ async function loadState(){
             rosterRole: parsed.rosterRole || state.rosterRole,
             weeklyScores: parsed.weeklyScores || {},
             buildIdeas: parsed.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
+            seasonArchive: parsed.seasonArchive || [],
             planBaseline: null,
             seedVersion: SEED_VERSION
           };
@@ -3489,6 +3497,7 @@ function reseedRosters(){
     rosterRole: state.rosterRole || { 'Caleb Williams':'start', 'Jayden Daniels':'bench' },
     weeklyScores: state.weeklyScores || {},
     buildIdeas: state.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
+    seasonArchive: state.seasonArchive || [],
     planBaseline: null,
     seedVersion: SEED_VERSION
   };
@@ -3550,6 +3559,7 @@ function savePayload(){
     rosterRole: state.rosterRole || {},
     weeklyScores: state.weeklyScores || {},
     buildIdeas: state.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
+    seasonArchive: state.seasonArchive || [],
     planBaseline: state.planBaseline || null,
     seedVersion: state.seedVersion
   };
@@ -5291,6 +5301,144 @@ function renderLeagueIntel(){
   `;
 }
 
+/* ---------- ROSTER CONSTRUCTION HABITS (The Draft > Recap) ----------
+   Unlike League Intel above (live-auction $ vs market), this looks at the
+   whole roster -- keepers included -- since carrying 3 QBs or handcuffing
+   your own RB1 is a roster-shape habit, not a live-bidding one. Real signal
+   off a single season; gets more confident once more seasons stack up. */
+function nflTeamOf(name){ const dp = DRAFT_POOL.find(x=>x.name===name); return dp ? dp.nfl : null; }
+function computeRosterHabits(){
+  const reports = allTeamReports();
+  const rows = reports.map(r=>{
+    const all = [...r.starters, ...r.bench];
+    const qbCount = all.filter(p=>p.pos==='QB').length;
+    const rbCount = all.filter(p=>p.pos==='RB').length;
+    const wrCount = all.filter(p=>p.pos==='WRTE').length;
+    const dstPkSpend = all.filter(p=>(p.pos==='DST'||p.pos==='PK') && !p.keeper).reduce((s,p)=>s+p.price,0);
+    const rbByTeam = {};
+    all.filter(p=>p.pos==='RB').forEach(p=>{
+      const nfl = nflTeamOf(p.name);
+      if(nfl) (rbByTeam[nfl] ||= []).push(p.name);
+    });
+    const handcuffs = Object.entries(rbByTeam).filter(([,names])=>names.length>=2).map(([nfl,names])=>({nfl,names}));
+    return { owner:r.owner, team:r.team, qbCount, rbCount, wrCount, dstPkSpend, handcuffs };
+  });
+  const leagueAvgDstPk = +(rows.reduce((s,r)=>s+r.dstPkSpend,0)/rows.length).toFixed(1);
+  return { rows, leagueAvgDstPk };
+}
+function renderRosterHabits(){
+  const host = document.getElementById('rosterHabitsBody');
+  if(!host) return;
+  const { rows, leagueAvgDstPk } = computeRosterHabits();
+  if(!rows.length){ host.innerHTML = ''; return; }
+
+  const tableRows = rows.map(r => {
+    const qbFlag = r.qbCount>=3 ? `<span class="grade-pill g-mid" style="font-size:9px;padding:2px 6px;">${r.qbCount} QBs</span>` : r.qbCount;
+    const dstDelta = r.dstPkSpend - leagueAvgDstPk;
+    const dstColor = dstDelta > 2 ? 'var(--coral)' : dstDelta < -2 ? 'var(--jade)' : 'var(--chalk-3)';
+    const handcuffTxt = r.handcuffs.length
+      ? r.handcuffs.map(h=>`${h.names.join(' + ')} (${h.nfl})`).join('; ')
+      : '&ndash;';
+    return `<tr>
+      <td><b style="color:var(--chalk);">${nickOf(r.owner)}</b><div style="color:var(--chalk-3);font-size:10.5px;">${r.owner}</div></td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;">${qbFlag}</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;">${r.rbCount} RB / ${r.wrCount} WR</td>
+      <td style="text-align:right;font-family:'JetBrains Mono',monospace;color:${dstColor};">$${r.dstPkSpend}</td>
+      <td style="font-size:11.5px;color:var(--chalk-3);">${handcuffTxt}</td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-card" style="margin-top:14px;">
+      <div class="cc-label">Roster construction habits</div>
+      <p style="margin-bottom:14px;">Whole roster, keepers included -- this is about roster shape and philosophy, not what got bid live. League average DST+PK spend is $${leagueAvgDstPk}; anyone well above that is paying real dollars for the thinnest-value positions on the board.</p>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:600px;">
+          <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+            <th style="text-align:left;padding-bottom:6px;">Owner</th><th style="text-align:right;">QBs held</th><th style="text-align:right;">RB/WR split</th><th style="text-align:right;">DST+PK $</th><th style="text-align:left;">RB handcuff pairs (same NFL team)</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- MULTI-YEAR FAMILIARITY (The Draft > Recap) ----------
+   Nothing else in state remembers a roster past the year it gets
+   overwritten, so this only works once "Archive this season" has been
+   used at least twice. Dormant (and says so) until then -- no faking
+   trend data off a single draft. */
+function archiveCurrentSeason(){
+  if(!state.seasonArchive) state.seasonArchive = [];
+  const year = state.currentYear;
+  if(state.seasonArchive.some(s=>s.year===year)){
+    if(!confirm(`${year} is already archived. Overwrite it with the current roster?`)) return;
+    state.seasonArchive = state.seasonArchive.filter(s=>s.year!==year);
+  }
+  const teams = state.teams.map((t,i)=>{
+    const { held } = teamRosterSlots(i);
+    return { owner: t.owner, team: t.team||t.owner, players: held.map(p=>({name:p.name, pos:p.pos, keeper:!!p.keeper})) };
+  });
+  state.seasonArchive.push({ year, archivedAt: new Date().toISOString(), teams });
+  saveState();
+  renderFamiliarity();
+}
+function computeFamiliarityIntel(){
+  const archive = state.seasonArchive || [];
+  if(archive.length < 2) return { ready:false, years: archive.map(a=>a.year) };
+  const byOwner = {};
+  archive.forEach(season => {
+    season.teams.forEach(t => {
+      const d = byOwner[t.owner] ||= {};
+      t.players.forEach(p => { (d[p.name] ||= []).push(season.year); });
+    });
+  });
+  const recurrences = [];
+  Object.entries(byOwner).forEach(([owner, players]) => {
+    Object.entries(players).forEach(([name, years]) => {
+      years.sort((a,b)=>a-b);
+      let hasGap = false;
+      for(let i=1;i<years.length;i++){ if(years[i]-years[i-1] > 1) hasGap = true; }
+      if(hasGap) recurrences.push({ owner, name, years: [...years] });
+    });
+  });
+  return { ready:true, years: archive.map(a=>a.year), recurrences };
+}
+function renderFamiliarity(){
+  const host = document.getElementById('familiarityBody');
+  if(!host) return;
+  const intel = computeFamiliarityIntel();
+  const archivedYears = (state.seasonArchive||[]).map(a=>a.year).sort();
+
+  if(!intel.ready){
+    host.innerHTML = `
+      <div class="chron-card" style="margin-top:14px;">
+        <div class="cc-label">Multi-year familiarity</div>
+        <p style="margin-bottom:12px;">Whether owners tend to re-acquire players they've rostered before (regardless of contract) needs at least two archived seasons to say anything real -- right now there ${archivedYears.length===1?`is 1 (${archivedYears[0]})`:'are 0'}. Archive this season once it's final, and again next year, and this fills in on its own.</p>
+        <button class="primary" id="archiveSeasonBtn">Archive ${state.currentYear} to history</button>
+      </div>
+    `;
+  } else {
+    const rows = intel.recurrences.length
+      ? intel.recurrences.map(r => `<tr><td><b style="color:var(--chalk);">${nickOf(r.owner)}</b></td><td>${r.name}</td><td style="text-align:right;color:var(--chalk-3);font-family:'JetBrains Mono',monospace;">${r.years.join(', ')}</td></tr>`).join('')
+      : `<tr><td colspan="3" style="color:var(--chalk-3);">No repeat pickups yet across ${intel.years.join(', ')}.</td></tr>`;
+    host.innerHTML = `
+      <div class="chron-card" style="margin-top:14px;">
+        <div class="cc-label">Multi-year familiarity &middot; ${intel.years.join(', ')}</div>
+        <p style="margin-bottom:12px;">Players an owner let go, then rostered again later -- the clearest sign of a familiarity pick over a pure value call.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+          <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;"><th style="text-align:left;padding-bottom:6px;">Owner</th><th style="text-align:left;">Player</th><th style="text-align:right;">Years held</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <button class="primary" id="archiveSeasonBtn" style="margin-top:14px;">Archive ${state.currentYear} to history</button>
+      </div>
+    `;
+  }
+  const btn = document.getElementById('archiveSeasonBtn');
+  if(btn) btn.addEventListener('click', archiveCurrentSeason);
+}
+
 /* ---------- CHRONICLE (Home) ---------- */
 function renderChronicle(){
   const host = document.getElementById('chronicleBody');
@@ -5414,8 +5562,12 @@ function renderRecap(){
     </div>
     <div class="chron-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));">${cards}</div>
     <div id="leagueIntelBody"></div>
+    <div id="rosterHabitsBody"></div>
+    <div id="familiarityBody"></div>
   `;
   renderLeagueIntel();
+  renderRosterHabits();
+  renderFamiliarity();
 }
 
 /* ---------- BUILD IDEAS (The Draft > Build Ideas) ----------
