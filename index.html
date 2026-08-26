@@ -5279,7 +5279,7 @@ function renderScheduleView(){
     <div class="chron-hero">
       <div class="chron-kicker">League &middot; Format</div>
       <h2>Four divisions. Fourteen weeks. One very strange week 14.</h2>
-      <p>Two games against each of your two division rivals, one against everybody else. All 4 division winners make the 6-team playoff field automatically; the best remaining record and the most remaining points fill the last two wildcard spots. Whoever scores the most total points over the regular season gets the Week 15 bye, seed be damned.</p>
+      <p>Two games against each of your two division rivals, one against everybody else. All 4 division winners make the 6-team playoff field automatically; the best remaining record and the most remaining points fill the last two wildcard spots. Getting in is about record -- but once the field is set, the bracket reseeds all 6 purely by total points scored on the year. Seeds 1 and 2 by that points ranking get the Week 15 bye.</p>
       <p><b>The Week 14 gauntlet:</b> every team's "opponent" that week is the entire league. Score top-6 leaguewide and I'm crediting you a win no matter what your actual matchup says on paper; land in the bottom 6 and it's a loss regardless. It's the last week before the picture locks, and it has ended clean playoff bids before.</p>
     </div>
     <div class="div-grid" style="margin-bottom:24px;">${divs}</div>
@@ -5429,12 +5429,112 @@ function computeStandings(){
     const best = [...rows].filter(r=>r.division===d.name).sort(tiebreak)[0];
     if(best) divisionWinners.add(best.owner);
   });
+  // Wildcards qualify by record (best remaining record, points as tiebreak),
+  // but once the 6-team field is set, bracket SEEDING is a separate ranking
+  // by total points scored across the whole 6 -- confirmed directly against
+  // the real rules doc. Seeds 1 & 2 by that points ranking get the Week 15 bye.
   const wildcards = rows.filter(r=>!divisionWinners.has(r.owner)).slice(0,2).map(r=>r.owner);
   const playoffSet = new Set([...divisionWinners, ...wildcards]);
-  const byeTeams = [...rows].filter(r=>playoffSet.has(r.owner)).sort((a,b)=>b.pf-a.pf).slice(0,2).map(r=>r.owner);
+  const seeds = [...rows].filter(r=>playoffSet.has(r.owner)).sort((a,b)=>b.pf-a.pf).map(r=>r.owner);
+  const byeTeams = seeds.slice(0,2);
 
-  _standingsCache = { rows, divisionWinners, wildcards, playoffSet, byeTeams, gauntletComplete, h2h, hasUnresolvedTie };
+  _standingsCache = { rows, divisionWinners, wildcards, playoffSet, seeds, byeTeams, gauntletComplete, h2h, hasUnresolvedTie };
   return _standingsCache;
+}
+
+/* Bracket confirmed directly against the real rules doc: Week 15 is seed 4
+   vs 5 and seed 3 vs 6 (1 & 2 bye); Week 16 is 1 vs the 4/5 winner, 2 vs the
+   3/6 winner, plus a consolation game between the two Week 15 losers; Week
+   17 is the Championship (Week 16 winners) and 3rd Place (Week 16 losers).
+   The 5th-place game isn't spelled out as explicitly as the other two --
+   it's inferred here as the Week 16 consolation winner vs loser playing once
+   more, which is the only structure that uses every remaining team exactly
+   once. Flagged in the UI in case that inference is wrong. */
+function playoffBracket(){
+  const { seeds } = computeStandings();
+  if(!seeds || seeds.length < 6) return null;
+  const [s1,s2,s3,s4,s5,s6] = seeds;
+  const score = (wk,o) => state.weeklyScores[wk]?.[o];
+  const decide = (wk,a,b) => {
+    const sa = score(wk,a), sb = score(wk,b);
+    if(sa==null || sb==null) return { week:wk, a, b, sa, sb, winner:null, loser:null, tie:false };
+    if(sa===sb) return { week:wk, a, b, sa, sb, winner:null, loser:null, tie:true };
+    return sa>sb ? {week:wk,a,b,sa,sb,winner:a,loser:b,tie:false} : {week:wk,a,b,sa,sb,winner:b,loser:a,tie:false};
+  };
+  const wk15g1 = decide('15', s4, s5);
+  const wk15g2 = decide('15', s3, s6);
+  const wk16g1 = wk15g1.winner ? decide('16', s1, wk15g1.winner) : null;
+  const wk16g2 = wk15g2.winner ? decide('16', s2, wk15g2.winner) : null;
+  const wk16g3 = (wk15g1.loser && wk15g2.loser) ? decide('16', wk15g1.loser, wk15g2.loser) : null;
+  const wk17champ = (wk16g1?.winner && wk16g2?.winner) ? decide('17', wk16g1.winner, wk16g2.winner) : null;
+  const wk173rd = (wk16g1?.loser && wk16g2?.loser) ? decide('17', wk16g1.loser, wk16g2.loser) : null;
+  const wk175th = (wk16g3?.winner && wk16g3?.loser) ? decide('17', wk16g3.winner, wk16g3.loser) : null;
+  return { seeds, wk15g1, wk15g2, wk16g1, wk16g2, wk16g3, wk17champ, wk173rd, wk175th };
+}
+function playoffScoreInput(week, owner, val){
+  return `<span style="flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <span class="dt-name" style="font-size:13px;">${nickOf(owner)}</span>
+    <input type="number" step="0.1" data-score-owner="${owner}" data-score-week="${week}" value="${val==null?'':val}" placeholder="&mdash;"
+      style="width:64px;background:var(--raised-2);border:1px solid var(--line);border-radius:6px;color:var(--chalk);padding:4px 6px;font:600 12.5px 'JetBrains Mono',monospace;text-align:right;">
+  </span>`;
+}
+function playoffGameRow(label, game){
+  if(!game){
+    return `<div class="div-team-row"><span class="dt-name">${label}</span><span style="color:var(--chalk-3);font-size:12px;">waiting on the earlier round</span></div>`;
+  }
+  const winTag = (o) => game.winner===o ? ` <span style="color:var(--jade);font-size:9.5px;">&#9679; WINS</span>` : '';
+  return `<div class="chron-card" style="padding:12px;margin-bottom:8px;">
+    <div style="font-size:10.5px;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">${label}</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      ${playoffScoreInput(game.week, game.a, game.sa)}${winTag(game.a)}
+      <span style="color:var(--chalk-3);font-size:11px;">vs</span>
+      ${playoffScoreInput(game.week, game.b, game.sb)}${winTag(game.b)}
+    </div>
+    ${game.tie ? `<p style="font-size:11px;color:var(--coral);margin-top:6px;">Tied on team total -- the real tiebreaker needs bench points, then starting-roster TDs, then starting QB points, then a coin flip. That's not something I can resolve from team totals alone, so this one needs a manual call.</p>` : ''}
+  </div>`;
+}
+function renderPlayoffPicture(){
+  const host = document.getElementById('playoffPictureBody');
+  if(!host) return;
+  const b = playoffBracket();
+  if(!b){ host.innerHTML = ''; return; }
+  const { seeds, wk15g1, wk15g2, wk16g1, wk16g2, wk16g3, wk17champ, wk173rd, wk175th } = b;
+  const { rows } = computeStandings();
+  const seedRows = seeds.map((o,i)=>{
+    const pf = rows.find(r=>r.owner===o)?.pf ?? 0;
+    const byeTag = i<2 ? `<span class="grade-pill g-good" style="font-size:9px;padding:2px 6px;">BYE</span>` : '';
+    return `<div class="div-team-row"><span><b style="color:var(--chalk-3);font:700 11px 'JetBrains Mono',monospace;">#${i+1}</b> <span class="dt-name">${nickOf(o)}</span> ${byeTag}</span><span style="color:var(--chalk-3);font-size:11px;">${pf.toFixed(1)} pts</span></div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-card">
+      <div class="cc-label">Playoff Picture &middot; seeded by total points scored</div>
+      <p style="margin-bottom:12px;">If the season ended today, this is the 6-team field and the seed order -- seeds 1 and 2 get the Week 15 bye. Enter each round's scores as they happen and the next round fills itself in.</p>
+      <div style="margin-bottom:16px;">${seedRows}</div>
+      <h4 style="margin:0 0 8px;font-size:12px;color:var(--chalk-2);">Week 15</h4>
+      ${playoffGameRow('4 seed vs 5 seed', wk15g1)}
+      ${playoffGameRow('3 seed vs 6 seed', wk15g2)}
+      <h4 style="margin:14px 0 8px;font-size:12px;color:var(--chalk-2);">Week 16</h4>
+      ${playoffGameRow('1 seed vs winner of 4/5', wk16g1)}
+      ${playoffGameRow('2 seed vs winner of 3/6', wk16g2)}
+      ${playoffGameRow('Consolation: loser of 4v5 vs loser of 3v6', wk16g3)}
+      <h4 style="margin:14px 0 8px;font-size:12px;color:var(--chalk-2);">Week 17</h4>
+      ${playoffGameRow('Championship', wk17champ)}
+      ${playoffGameRow('3rd place', wk173rd)}
+      ${playoffGameRow('5th place (inferred, see note below)', wk175th)}
+      <p style="font-size:11px;color:var(--chalk-3);margin-top:12px;">The 5th place matchup isn't spelled out as explicitly as Championship and 3rd Place -- I'm inferring it's the Week 16 consolation winner and loser playing once more. Flag it if that's not how it actually works.</p>
+    </div>
+  `;
+  host.querySelectorAll('input[data-score-owner]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const owner = inp.dataset.scoreOwner, wk = inp.dataset.scoreWeek;
+      const v = inp.value === '' ? null : parseFloat(inp.value);
+      if(!state.weeklyScores[wk]) state.weeklyScores[wk] = {};
+      if(v==null) delete state.weeklyScores[wk][owner]; else state.weeklyScores[wk][owner] = v;
+      saveState();
+      renderPlayoffPicture();
+    });
+  });
 }
 
 function renderStandingsView(){
@@ -5449,15 +5549,16 @@ function renderStandingsView(){
     </div>`;
     return;
   }
-  const { rows, divisionWinners, wildcards, byeTeams, gauntletComplete, hasUnresolvedTie } = computeStandings();
+  const { rows, divisionWinners, wildcards, seeds, gauntletComplete, hasUnresolvedTie } = computeStandings();
 
   const rowHtml = rows.map((r,i)=>{
     const tag = divisionWinners.has(r.owner) ? `<span class="grade-pill g-good" style="font-size:9px;padding:2px 6px;">DIV</span>`
       : wildcards.includes(r.owner) ? `<span class="grade-pill g-mid" style="font-size:9px;padding:2px 6px;">WC</span>` : '';
-    const bye = byeTeams.includes(r.owner) ? `<span class="grade-pill g-good" style="font-size:9px;padding:2px 6px;">BYE</span>` : '';
+    const seedN = seeds.indexOf(r.owner) + 1;
+    const seedTag = seedN>0 ? `<span class="grade-pill ${seedN<=2?'g-good':'g-mid'}" style="font-size:9px;padding:2px 6px;">SEED ${seedN}${seedN<=2?' &middot; BYE':''}</span>` : '';
     return `<tr>
       <td style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;">${i+1}</td>
-      <td>${tag} ${bye} <b style="color:var(--chalk);">${nickOf(r.owner)}</b> <span style="color:var(--chalk-3);font-size:10.5px;">${r.owner} &middot; ${r.division}</span></td>
+      <td>${tag} ${seedTag} <b style="color:var(--chalk);">${nickOf(r.owner)}</b> <span style="color:var(--chalk-3);font-size:10.5px;">${r.owner} &middot; ${r.division}</span></td>
       <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;">${r.w}-${r.l}${r.t?'-'+r.t:''}</td>
       <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-2);">${r.pf.toFixed(1)}</td>
       <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-3);">${r.pa.toFixed(1)}</td>
@@ -5478,9 +5579,11 @@ function renderStandingsView(){
         </tr></thead>
         <tbody>${rowHtml}</tbody>
       </table>
-      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">DIV = leading its division right now &middot; WC = in the field as a wildcard &middot; BYE = leading the race for the Week 15 bye.</p>
+      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">DIV = leading its division right now &middot; WC = in the field as a wildcard. SEED is a separate ranking from this record-sorted table -- it's the 6 playoff teams reordered by total points scored, which is how the actual bracket seeds.</p>
     </div>
+    <div id="playoffPictureBody"></div>
   `;
+  renderPlayoffPicture();
 }
 
 /* ---------- RULES (League > Rules) ---------- */
