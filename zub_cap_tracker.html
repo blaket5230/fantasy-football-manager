@@ -1983,6 +1983,7 @@
     <button data-view="draft" data-mode="draft" hidden>Draft Day Archive</button>
     <button data-view="pool" data-mode="draft" hidden>Player Pool</button>
     <button data-view="plan" data-mode="draft" hidden>Squad Plan</button>
+    <button data-view="ideas" data-mode="draft" hidden>Build Ideas</button>
     <span class="tab-indicator" id="tabIndicator"></span>
   </nav>
 
@@ -2014,6 +2015,11 @@
   <!-- DRAFT RECAP VIEW -->
   <div class="view" id="view-recap">
     <div id="recapBody"></div>
+  </div>
+
+  <!-- BUILD IDEAS VIEW -->
+  <div class="view" id="view-ideas">
+    <div id="ideasBody"></div>
   </div>
 
   <!-- TEAM DETAIL VIEW -->
@@ -3380,6 +3386,11 @@ function renderLeagueModal(){
    compares against it to decide whether roster edits need persisting, and
    re-seeding restores from it. The live state always gets its own deep copy. */
 const SEED_TEAMS_JSON = JSON.stringify(SEED_TEAMS);
+const DEFAULT_BUILD_IDEAS = [
+  { id: 1, title: 'Squad Plan budget split from real spend', note: 'Bake the room\'s actual position spend split (RB ~48%, WR/TE ~40%, QB ~6%, from League Intel) into the pre-draft budget-allocation tool as a starting reference.', status: 'idea' },
+  { id: 2, title: 'Live Bid tab room-tendency badge', note: 'When nominating or searching an RB/WR during the live auction, show a small badge with what this room has historically paid vs. model in that player\'s price tier -- coaching at the exact decision point.', status: 'idea' },
+  { id: 3, title: 'Player card tendency annotation', note: 'Same room-tendency signal as the Bid tab hint, shown quietly on the player card for pre-draft browsing.', status: 'idea' }
+];
 let state = { teams: JSON.parse(SEED_TEAMS_JSON), currentYear: 2026, draftPicks: [], seedVersion: 6,
   // your call, not the value ranking: Williams starts, Daniels is the backup
   rosterRole: { 'Caleb Williams':'start', 'Jayden Daniels':'bench' },
@@ -3387,7 +3398,11 @@ let state = { teams: JSON.parse(SEED_TEAMS_JSON), currentYear: 2026, draftPicks:
   // Nothing pulls these in automatically -- there's no live score feed --
   // so this is however far the standings can ever be ahead of what's
   // actually been typed in.
-  weeklyScores: {} };
+  weeklyScores: {},
+  // a running backlog of feature ideas for the tool itself, editable in
+  // The Draft > Build Ideas tab. Seeded once with what came out of this
+  // build session; from then on it's whatever gets added or checked off.
+  buildIdeas: DEFAULT_BUILD_IDEAS.map(x=>({...x})) };
 let activeTeamIdx = null;
 let leagueGridPainted = false;
 
@@ -3424,6 +3439,7 @@ async function loadState(){
           if(!state.slotTargets) state.slotTargets = {};
           if(!state.planManual) state.planManual = {};
           if(!state.weeklyScores) state.weeklyScores = {};
+          if(!state.buildIdeas) state.buildIdeas = DEFAULT_BUILD_IDEAS.map(x=>({...x}));
         } else {
           // Rosters are stale. Take the corrected seed, keep everything the
           // user actually created on top of it.
@@ -3440,6 +3456,7 @@ async function loadState(){
             myReads: parsed.myReads || {},
             rosterRole: parsed.rosterRole || state.rosterRole,
             weeklyScores: parsed.weeklyScores || {},
+            buildIdeas: parsed.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
             planBaseline: null,
             seedVersion: SEED_VERSION
           };
@@ -3471,6 +3488,7 @@ function reseedRosters(){
     planManual: state.planManual || {},
     rosterRole: state.rosterRole || { 'Caleb Williams':'start', 'Jayden Daniels':'bench' },
     weeklyScores: state.weeklyScores || {},
+    buildIdeas: state.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
     planBaseline: null,
     seedVersion: SEED_VERSION
   };
@@ -3531,6 +3549,7 @@ function savePayload(){
     myReads: state.myReads || {},
     rosterRole: state.rosterRole || {},
     weeklyScores: state.weeklyScores || {},
+    buildIdeas: state.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
     planBaseline: state.planBaseline || null,
     seedVersion: state.seedVersion
   };
@@ -3682,6 +3701,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='rules') renderRulesView();
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='recap') renderRecap();
+    if(btn.dataset.view==='ideas') renderIdeasView();
   });
 });
 
@@ -5396,6 +5416,77 @@ function renderRecap(){
     <div id="leagueIntelBody"></div>
   `;
   renderLeagueIntel();
+}
+
+/* ---------- BUILD IDEAS (The Draft > Build Ideas) ----------
+   A living backlog, editable in the tool and stored in state (not the
+   codebase), so ideas don't only live in a chat transcript that gets
+   forgotten by next August. */
+function ideaStatusLabel(s){ return s==='shipped' ? 'Shipped' : s==='planned' ? 'Planned' : 'Idea'; }
+function ideaStatusTier(s){ return s==='shipped' ? 'g-good' : s==='planned' ? 'g-mid' : 'g-low'; }
+function ideaNextStatus(s){ return s==='idea' ? 'planned' : s==='planned' ? 'shipped' : 'idea'; }
+function renderIdeasView(){
+  const host = document.getElementById('ideasBody');
+  if(!host) return;
+  const ideas = state.buildIdeas || [];
+  const order = { idea:0, planned:1, shipped:2 };
+  const sorted = [...ideas].sort((a,b)=>(order[a.status]??0)-(order[b.status]??0));
+
+  const rows = sorted.map(idea => `
+    <div class="chron-card" style="padding:14px 16px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div style="flex:1;">
+          <div class="cc-title" style="font-size:15px;">${idea.title}</div>
+          ${idea.note ? `<p style="font-size:12.5px;color:var(--chalk-3);margin:6px 0 0;line-height:1.5;">${idea.note}</p>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
+          <span class="grade-pill ${ideaStatusTier(idea.status)} idea-status" data-idea-id="${idea.id}" style="cursor:pointer;font-size:10px;padding:3px 8px;" title="Click to advance status">${ideaStatusLabel(idea.status)}</span>
+          <span class="idea-delete" data-idea-id="${idea.id}" style="cursor:pointer;color:var(--chalk-3);font-size:11px;">Remove</span>
+        </div>
+      </div>
+    </div>`).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">The Draft &middot; Build Ideas</div>
+      <h2>The backlog for next year's draft tool, kept where you'll actually see it again.</h2>
+      <p>Add whatever comes to mind during the season -- click a status pill to cycle it Idea &rarr; Planned &rarr; Shipped. This lives in your saved state, not the codebase, so it's yours to edit freely.</p>
+    </div>
+    <div class="chron-card" style="margin-bottom:20px;">
+      <div class="cc-label">Add an idea</div>
+      <input id="ideaTitleInput" type="text" placeholder="Idea title" style="width:100%;background:var(--raised-2);border:1px solid var(--line);border-radius:6px;color:var(--chalk);padding:8px 10px;font-size:13px;margin-bottom:8px;">
+      <textarea id="ideaNoteInput" placeholder="Notes (optional)" rows="2" style="width:100%;background:var(--raised-2);border:1px solid var(--line);border-radius:6px;color:var(--chalk);padding:8px 10px;font-size:12.5px;margin-bottom:8px;resize:vertical;font-family:inherit;"></textarea>
+      <button class="primary" id="ideaAddBtn">Add idea</button>
+    </div>
+    ${rows || `<p style="color:var(--chalk-3);">Nothing on the backlog yet. Add the first one above.</p>`}
+  `;
+
+  document.getElementById('ideaAddBtn').addEventListener('click', ()=>{
+    const titleEl = document.getElementById('ideaTitleInput');
+    const noteEl = document.getElementById('ideaNoteInput');
+    const title = titleEl.value.trim();
+    if(!title) return;
+    const note = noteEl.value.trim();
+    if(!state.buildIdeas) state.buildIdeas = [];
+    state.buildIdeas.push({ id: Date.now(), title, note, status: 'idea' });
+    saveState();
+    renderIdeasView();
+  });
+  host.querySelectorAll('.idea-status').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = Number(el.dataset.ideaId);
+      const idea = (state.buildIdeas||[]).find(x=>x.id===id);
+      if(idea){ idea.status = ideaNextStatus(idea.status); saveState(); renderIdeasView(); }
+    });
+  });
+  host.querySelectorAll('.idea-delete').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = Number(el.dataset.ideaId);
+      state.buildIdeas = (state.buildIdeas||[]).filter(x=>x.id!==id);
+      saveState();
+      renderIdeasView();
+    });
+  });
 }
 
 /* ---------- SCHEDULE & DIVISIONS (League > Schedule) ---------- */
