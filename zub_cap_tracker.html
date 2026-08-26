@@ -5263,11 +5263,12 @@ const ZUB_DIVISIONS = [
 function divisionOf(owner){ return ZUB_DIVISIONS.find(d=>d.teams.includes(owner))?.name || null; }
 function nickOf(owner){ const i=teamIdxOf(owner); return i>=0 ? (state.teams[i].team||owner) : owner; }
 
-/* Pulled straight off the real CBS schedule grid. Every week checked out
-   internally consistent except week 3, where the transcription put JS Bull
-   opposite two different teams at once and left Ryan Monigan with no
-   opponent at all -- rather than guess, those four teams' week 3 is left
-   null. Confirm it directly if it matters before relying on it. */
+/* Pulled straight off the real CBS schedule grid, cross-checked screenshot
+   by screenshot against the actual site rather than a first-pass
+   transcription -- every week is fully populated now, including week 3
+   (LickaMikeDitka/Jon Thorn vs texas SUCKS/JS Bull, The Big Apple/Ryan
+   Monigan vs PackNiners/Scott Bull), which an earlier pass had gotten
+   tangled and left blank for those four teams. */
 const SEASON_SCHEDULE = {
   "Justin McDonald": {"1":"Blake Taylor", "2":"Brett Booker", "3":"Brandon Hill", "4":"PJ Humphreys", "5":"Caleb DeWoody", "6":"JS Bull", "7":"Travis and Wayne Banks", "8":"Tom McDonald", "9":"Scott Bull", "10":"Ryan Monigan", "11":"Jon Thorn", "12":"Blake Taylor", "13":"Brett Booker", "14":"Blake Taylor"},
   "Blake Taylor": {"1":"Justin McDonald", "2":"PJ Humphreys", "3":"Brett Booker", "4":"Caleb DeWoody", "5":"Brandon Hill", "6":"Tom McDonald", "7":"JS Bull", "8":"Travis and Wayne Banks", "9":"Jon Thorn", "10":"Scott Bull", "11":"Brett Booker", "12":"Justin McDonald", "13":"Ryan Monigan", "14":"Justin McDonald"},
@@ -5277,10 +5278,10 @@ const SEASON_SCHEDULE = {
   "Brandon Hill": {"1":"PJ Humphreys", "2":"Caleb DeWoody", "3":"Justin McDonald", "4":"Brett Booker", "5":"Blake Taylor", "6":"Jon Thorn", "7":"Scott Bull", "8":"Ryan Monigan", "9":"Tom McDonald", "10":"Travis and Wayne Banks", "11":"JS Bull", "12":"PJ Humphreys", "13":"Caleb DeWoody", "14":"PJ Humphreys"},
   "Travis and Wayne Banks": {"1":"Scott Bull", "2":"JS Bull", "3":"Tom McDonald", "4":"Jon Thorn", "5":"Ryan Monigan", "6":"Brett Booker", "7":"Justin McDonald", "8":"Blake Taylor", "9":"PJ Humphreys", "10":"Brandon Hill", "11":"Tom McDonald", "12":"Caleb DeWoody", "13":"JS Bull", "14":"Scott Bull"},
   "Tom McDonald": {"1":"JS Bull", "2":"Ryan Monigan", "3":"Travis and Wayne Banks", "4":"Scott Bull", "5":"Jon Thorn", "6":"Blake Taylor", "7":"Brett Booker", "8":"Justin McDonald", "9":"Brandon Hill", "10":"Caleb DeWoody", "11":"Travis and Wayne Banks", "12":"JS Bull", "13":"PJ Humphreys", "14":"JS Bull"},
-  "JS Bull": {"1":"Tom McDonald", "2":"Travis and Wayne Banks", "3":null, "4":"Ryan Monigan", "5":"Scott Bull", "6":"Justin McDonald", "7":"Blake Taylor", "8":"Brett Booker", "9":"Caleb DeWoody", "10":"PJ Humphreys", "11":"Brandon Hill", "12":"Tom McDonald", "13":"Travis and Wayne Banks", "14":"Tom McDonald"},
-  "Ryan Monigan": {"1":"Jon Thorn", "2":"Tom McDonald", "3":null, "4":"JS Bull", "5":"Travis and Wayne Banks", "6":"PJ Humphreys", "7":"Caleb DeWoody", "8":"Brandon Hill", "9":"Brett Booker", "10":"Justin McDonald", "11":"Scott Bull", "12":"Jon Thorn", "13":"Blake Taylor", "14":"Jon Thorn"},
-  "Jon Thorn": {"1":"Ryan Monigan", "2":"Scott Bull", "3":null, "4":"Travis and Wayne Banks", "5":"Tom McDonald", "6":"Brandon Hill", "7":"PJ Humphreys", "8":"Caleb DeWoody", "9":"Blake Taylor", "10":"Brett Booker", "11":"Justin McDonald", "12":"Ryan Monigan", "13":"Scott Bull", "14":"Ryan Monigan"},
-  "Scott Bull": {"1":"Travis and Wayne Banks", "2":"Jon Thorn", "3":null, "4":"Tom McDonald", "5":"JS Bull", "6":"Caleb DeWoody", "7":"Brandon Hill", "8":"PJ Humphreys", "9":"Justin McDonald", "10":"Blake Taylor", "11":"Ryan Monigan", "12":"Brett Booker", "13":"Jon Thorn", "14":"Travis and Wayne Banks"}
+  "JS Bull": {"1":"Tom McDonald", "2":"Travis and Wayne Banks", "3":"Jon Thorn", "4":"Ryan Monigan", "5":"Scott Bull", "6":"Justin McDonald", "7":"Blake Taylor", "8":"Brett Booker", "9":"Caleb DeWoody", "10":"PJ Humphreys", "11":"Brandon Hill", "12":"Tom McDonald", "13":"Travis and Wayne Banks", "14":"Tom McDonald"},
+  "Ryan Monigan": {"1":"Jon Thorn", "2":"Tom McDonald", "3":"Scott Bull", "4":"JS Bull", "5":"Travis and Wayne Banks", "6":"PJ Humphreys", "7":"Caleb DeWoody", "8":"Brandon Hill", "9":"Brett Booker", "10":"Justin McDonald", "11":"Scott Bull", "12":"Jon Thorn", "13":"Blake Taylor", "14":"Jon Thorn"},
+  "Jon Thorn": {"1":"Ryan Monigan", "2":"Scott Bull", "3":"JS Bull", "4":"Travis and Wayne Banks", "5":"Tom McDonald", "6":"Brandon Hill", "7":"PJ Humphreys", "8":"Caleb DeWoody", "9":"Blake Taylor", "10":"Brett Booker", "11":"Justin McDonald", "12":"Ryan Monigan", "13":"Scott Bull", "14":"Ryan Monigan"},
+  "Scott Bull": {"1":"Travis and Wayne Banks", "2":"Jon Thorn", "3":"Ryan Monigan", "4":"Tom McDonald", "5":"JS Bull", "6":"Caleb DeWoody", "7":"Brandon Hill", "8":"PJ Humphreys", "9":"Justin McDonald", "10":"Blake Taylor", "11":"Ryan Monigan", "12":"Brett Booker", "13":"Jon Thorn", "14":"Travis and Wayne Banks"}
 };
 const SEASON_WEEKS = 14;
 
