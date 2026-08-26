@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZUB Cap Ledger</title>
+<title>ZUB League Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -103,11 +103,12 @@
      draft view specifically; that compact style is just .mode's normal
      style now that the nav lives inline in the header everywhere, so there
      is nothing left to override for this view alone. */
-  /* nav.tabs still exists and is still driven by JS (putOnTheClock() clicks
-     it programmatically to switch views) -- display:none only hides the box,
-     .click() still works on a hidden element, so this is safe. It would only
-     ever show one button ("Draft Day") while this view is active anyway. */
-  .wrap:has(#view-draft.active) nav.tabs{display:none;}
+  /* Used to hide nav.tabs entirely here, back when Draft Day was a
+     full-screen live-bidding takeover and its tab bar only ever showed the
+     one active button anyway. Now that Draft Day sits alongside Recap,
+     Player Pool and Squad Plan as siblings under The Draft, hiding the bar
+     would trap navigation -- there'd be no way back to the others without
+     leaving the mode entirely. Removed; the tab bar just stays visible. */
   .wrap:has(#view-draft.active) .draft-layout .panel{padding:14px 18px;}
   .wrap:has(#view-draft.active) .sub-tabs{margin:0 0 8px;}
   .wrap:has(#view-draft.active) .sub-tab{padding:6px 12px;font-size:12.5px;}
@@ -1827,6 +1828,74 @@
       transition-duration:.01ms !important;
     }
   }
+
+  /* ---------- Chronicle / Recap / Schedule / Rules ---------- */
+  .chron-hero{
+    background:linear-gradient(160deg, var(--raised) 0%, var(--surface) 100%);
+    border:1px solid var(--line); border-radius:var(--r-panel); padding:28px 30px; margin-bottom:20px;
+  }
+  .chron-kicker{ font:600 11px/1 'JetBrains Mono',monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin-bottom:10px; }
+  .chron-hero h2{ font-size:26px; margin:0 0 12px; color:var(--chalk); font-weight:700; }
+  .chron-hero p{ font-size:14.5px; line-height:1.65; color:var(--chalk-2); margin:0 0 10px; max-width:74ch; }
+  .chron-hero p:last-child{ margin-bottom:0; }
+  .chron-hero p b{ color:var(--chalk); }
+
+  .chron-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; margin-bottom:20px; }
+  .chron-card{ background:var(--raised); border:1px solid var(--line); border-radius:var(--r-panel); padding:16px 18px; }
+  .chron-card .cc-label{ font:600 10px/1 'JetBrains Mono',monospace; letter-spacing:.1em; text-transform:uppercase; color:var(--chalk-3); margin-bottom:8px; }
+  .chron-card .cc-title{ font-size:16px; font-weight:700; color:var(--chalk); margin-bottom:4px; }
+  .chron-card .cc-sub{ font:500 11.5px 'JetBrains Mono',monospace; color:var(--chalk-3); margin-bottom:8px; }
+  .chron-card p{ font-size:13px; line-height:1.55; color:var(--chalk-2); margin:0; }
+
+  .grade-pill{
+    display:inline-flex; align-items:center; justify-content:center; min-width:38px;
+    font:700 12px/1 'JetBrains Mono',monospace; padding:4px 8px; border-radius:6px; border:1px solid transparent;
+  }
+  .grade-pill.g-good{ color:var(--jade); background:color-mix(in srgb, var(--jade) 16%, transparent); border-color:color-mix(in srgb, var(--jade) 38%, transparent); }
+  .grade-pill.g-mid{ color:var(--gold); background:color-mix(in srgb, var(--gold) 16%, transparent); border-color:color-mix(in srgb, var(--gold) 38%, transparent); }
+  .grade-pill.g-low{ color:var(--coral); background:color-mix(in srgb, var(--coral) 16%, transparent); border-color:color-mix(in srgb, var(--coral) 38%, transparent); }
+
+  .power-list{ display:flex; flex-direction:column; }
+  .power-row{ display:grid; grid-template-columns:26px 46px 1fr auto; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid var(--line-soft); }
+  .power-row:last-child{ border-bottom:none; }
+  .power-row.pr-me{ background:color-mix(in srgb, var(--gold) 7%, transparent); border-radius:8px; }
+  .power-row .pr-n{ font:600 13px 'JetBrains Mono',monospace; color:var(--chalk-3); }
+  .power-row .pr-name{ font-size:14px; font-weight:600; color:var(--chalk); }
+  .power-row .pr-owner{ font:500 10.5px 'JetBrains Mono',monospace; color:var(--chalk-3); display:block; }
+  .power-row .pr-pts{ font:600 12.5px 'JetBrains Mono',monospace; color:var(--chalk-2); text-align:right; }
+
+  .news-cols{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .news-col h4{ font:600 11px/1 'JetBrains Mono',monospace; letter-spacing:.1em; text-transform:uppercase; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .news-col.nc-down h4{ color:var(--coral); }
+  .news-col.nc-up h4{ color:var(--jade); }
+  .news-item{ padding:9px 0; border-bottom:1px solid var(--line-soft); }
+  .news-item:last-child{ border-bottom:none; }
+  .news-item .ni-top{ display:flex; justify-content:space-between; gap:8px; font-size:13.5px; }
+  .news-item .ni-name{ font-weight:700; color:var(--chalk); }
+  .news-item .ni-team{ font:500 10px 'JetBrains Mono',monospace; color:var(--chalk-3); white-space:nowrap; }
+  .news-item .ni-head{ font-size:12.5px; color:var(--chalk-2); margin-top:2px; line-height:1.45; }
+
+  .div-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+  .div-card{ background:var(--raised); border:1px solid var(--line); border-radius:var(--r-panel); padding:16px 18px; }
+  .div-card h4{ margin:0 0 10px; font-size:15px; color:var(--chalk); }
+  .div-team-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--line-soft); font-size:13.5px; }
+  .div-team-row:first-of-type{ border-top:none; }
+  .div-team-row .dt-name{ font-weight:600; color:var(--chalk); }
+  .div-team-row .dt-owner{ display:block; font:500 10px 'JetBrains Mono',monospace; color:var(--chalk-3); }
+
+  .rules-toc{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px; }
+  .rules-toc a{ font:600 11.5px 'JetBrains Mono',monospace; color:var(--peri); text-decoration:none; background:var(--raised); border:1px solid var(--line); border-radius:var(--r-pill); padding:6px 12px; }
+  .rules-toc a:hover{ border-color:var(--peri); }
+  .rules-sec{ margin-bottom:28px; scroll-margin-top:20px; }
+  .rules-sec h4{ font-size:17px; color:var(--gold); margin:0 0 10px; }
+  .rules-sec p, .rules-sec li{ font-size:13.5px; line-height:1.65; color:var(--chalk-2); }
+  .rules-sec ul{ margin:6px 0; padding-left:20px; }
+  .rules-sec table{ width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
+  .rules-sec table td, .rules-sec table th{ padding:6px 10px; border-bottom:1px solid var(--line-soft); text-align:left; }
+
+  @media (max-width:760px){
+    .news-cols{ grid-template-columns:1fr; }
+  }
 </style>
 </head>
 <body>
@@ -1840,7 +1909,7 @@
           <span class="sport-dot"></span><span id="leagueSwitchLabel">ZUB Dynasty</span><span class="chev">&#9662;</span>
         </button>
       </div>
-      <h1>ZUB Cap Ledger</h1>
+      <h1>ZUB League Manager</h1>
     </div>
 
     <!-- Nine equal tabs told you nothing about what any of them were for or
@@ -1851,26 +1920,33 @@
          column of a three-column grid -- see header's own CSS comment for
          why that's what actually keeps it centered on the page. -->
     <nav class="modes" id="modeNav">
-      <button class="mode active" data-mode="league">
+      <button class="mode active" data-mode="home">
         <span class="mode-top">
-          <svg viewBox="0 0 20 20" class="mode-ic"><circle cx="10" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 17c0-3.4 2.9-5.4 6.5-5.4s6.5 2 6.5 5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 20 20" class="mode-ic"><path d="M4 9v7.5h12V9M2.5 10L10 3l7.5 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="mode-name">Home</span>
+        </span>
+        <span class="mode-sub">The Chronicle</span>
+      </button>
+      <button class="mode" data-mode="leaguehub">
+        <span class="mode-top">
+          <svg viewBox="0 0 20 20" class="mode-ic"><rect x="3" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="3" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="11" width="6" height="6" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
           <span class="mode-name">League</span>
         </span>
-        <span class="mode-sub">Rosters, contracts, trades</span>
+        <span class="mode-sub">Standings, schedule, rules</span>
       </button>
-      <button class="mode" data-mode="prep">
+      <button class="mode" data-mode="league">
         <span class="mode-top">
-          <svg viewBox="0 0 20 20" class="mode-ic"><rect x="4" y="3" width="12" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 8h5M7.5 11.5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-          <span class="mode-name">Prep</span>
+          <svg viewBox="0 0 20 20" class="mode-ic"><circle cx="10" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 17c0-3.4 2.9-5.4 6.5-5.4s6.5 2 6.5 5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span class="mode-name">My Team</span>
         </span>
-        <span class="mode-sub">Rate players, build your plan</span>
+        <span class="mode-sub">Roster, contracts, trades</span>
       </button>
       <button class="mode" data-mode="draft">
         <span class="mode-top">
           <svg viewBox="0 0 20 20" class="mode-ic"><path d="M3 17h7M12 2.6l5 5M14.4 5L8.6 10.8M9.2 5.6l4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-          <span class="mode-name">Draft Day</span>
+          <span class="mode-name">The Draft</span>
         </span>
-        <span class="mode-sub">Live bidding</span>
+        <span class="mode-sub">Recap &amp; next year's prep</span>
       </button>
     </nav>
 
@@ -1890,23 +1966,48 @@
        REGISTRY section for the switch. -->
   <div id="appBody">
   <nav class="tabs" id="tabNav">
-    <button data-view="league" data-mode="league" class="active">Rosters</button>
-    <button data-view="trade" data-mode="league">Trade Analyzer</button>
-    <button data-view="finder" data-mode="league">Trade Finder</button>
-    <button data-view="contract" data-mode="league">Contract Calculator</button>
-    <button data-view="drop" data-mode="league">Drop Penalty</button>
-    <button data-view="lineup" data-mode="league">Lineup Coach</button>
+    <button data-view="chronicle" data-mode="home" class="active">The Chronicle</button>
 
-    <button data-view="pool" data-mode="prep" hidden>Player Pool</button>
-    <button data-view="plan" data-mode="prep" hidden>Squad Plan</button>
+    <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
+    <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
+    <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
 
-    <button data-view="draft" data-mode="draft" hidden>Draft Day</button>
+    <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
+    <button data-view="finder" data-mode="league" hidden>Trade Finder</button>
+    <button data-view="contract" data-mode="league" hidden>Contract Calculator</button>
+    <button data-view="drop" data-mode="league" hidden>Drop Penalty</button>
+    <button data-view="lineup" data-mode="league" hidden>Lineup Coach</button>
+
+    <button data-view="recap" data-mode="draft" hidden>Draft Recap</button>
+    <button data-view="draft" data-mode="draft" hidden>Draft Day Archive</button>
+    <button data-view="pool" data-mode="draft" hidden>Player Pool</button>
+    <button data-view="plan" data-mode="draft" hidden>Squad Plan</button>
     <span class="tab-indicator" id="tabIndicator"></span>
   </nav>
 
+  <!-- HOME / CHRONICLE VIEW -->
+  <div class="view active" id="view-chronicle">
+    <div id="chronicleBody"></div>
+  </div>
+
   <!-- LEAGUE VIEW -->
-  <div class="view active" id="view-league">
+  <div class="view" id="view-league">
     <div class="league-grid" id="leagueGrid"></div>
+  </div>
+
+  <!-- SCHEDULE & DIVISIONS VIEW -->
+  <div class="view" id="view-schedule">
+    <div id="scheduleBody"></div>
+  </div>
+
+  <!-- RULES VIEW -->
+  <div class="view" id="view-rules">
+    <div id="rulesBody"></div>
+  </div>
+
+  <!-- DRAFT RECAP VIEW -->
+  <div class="view" id="view-recap">
+    <div id="recapBody"></div>
   </div>
 
   <!-- TEAM DETAIL VIEW -->
@@ -2354,7 +2455,7 @@ const SEED_TEAMS = [
   {owner:"Brandon Hill", team:"King of the Hill", players:[
     
   ]},
-  {owner:"Caleb DeWoody", team:"(unnamed)", players:[
+  {owner:"Caleb DeWoody", team:"DeWood", players:[
     
   ]},
   {owner:"Jon Thorn", team:"LickaMikeDitka", players:[
@@ -3514,8 +3615,8 @@ function contractedYears(p){
 /* Switching mode shows only that mode's tools and lands you on the first one.
    The tabs still do the real work; the mode just decides which are on offer,
    so you are never scanning past six things you cannot use right now. */
-const MODE_DEFAULT = { league:'league', prep:'pool', draft:'draft' };
-let currentMode = 'league';
+const MODE_DEFAULT = { home:'chronicle', leaguehub:'league', league:'trade', draft:'recap' };
+let currentMode = 'home';
 
 function showMode(mode){
   currentMode = mode;
@@ -3561,6 +3662,10 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     // Data-heavy views want the whole monitor; the calculators read better narrow.
     if(btn.dataset.view==='pool') renderPoolView();
     if(btn.dataset.view==='plan') renderPlanView();
+    if(btn.dataset.view==='chronicle') renderChronicle();
+    if(btn.dataset.view==='schedule') renderScheduleView();
+    if(btn.dataset.view==='rules') renderRulesView();
+    if(btn.dataset.view==='recap') renderRecap();
   });
 });
 
@@ -4923,6 +5028,272 @@ function teamRosterSlots(i){
   return { held, deadN, starters, benchSlots, overflow };
 }
 
+/* ---------- CHRONICLE / REPORT CARD ENGINE ----------
+   Same grading model validated by hand this draft night, now computed live
+   off real state instead of a transcribed screenshot: roster strength from
+   projected points (keepers count, since a keeper is a real asset on the
+   real team), and a value grade built ONLY from what was actually bid in
+   the live auction -- kept players are carved out of that half entirely so
+   a good keeper call from a past season is never mistaken for this year's
+   draft skill. Recomputes whenever a pick or a year changes; cheap enough
+   (12 teams, 18 players each) not to need a real cache. */
+function marketPriceFor(p){
+  const dp = DRAFT_POOL.find(x=>x.name===p.name);
+  if(!dp) return null;
+  return suggestedDollar(dp.mv, dp.pos, dp.name);
+}
+function ppgForHeld(p){ return projectedPpg({ pos:p.pos, name:p.name }); }
+
+function computeTeamReport(i){
+  const t = state.teams[i];
+  const { held, starters, benchSlots, overflow } = teamRosterSlots(i);
+  const bench = [...Object.values(benchSlots), ...overflow].filter(Boolean);
+  const starterList = SLOTS.map(slot=>starters[slot.key]).filter(Boolean);
+
+  const starterProjPts = +(starterList.reduce((s,p)=>s+ppgForHeld(p)*17,0)).toFixed(1);
+
+  function surplusOf(list, isKeeper){
+    return list.filter(p=>!!p.keeper===isKeeper).reduce((s,p)=>{
+      const m = marketPriceFor(p);
+      return s + (m!=null ? m-p.price : 0);
+    },0);
+  }
+  const draftStarterSurplus = surplusOf(starterList, false);
+  const draftBenchSurplus = surplusOf(bench, false);
+  const draftValue = +(draftStarterSurplus*0.7 + draftBenchSurplus*0.3).toFixed(1);
+
+  const keeperList = [...starterList, ...bench].filter(p=>p.keeper);
+  const keeperValue = +keeperList.reduce((s,p)=>{
+    const m = marketPriceFor(p); return s + (m!=null ? m-p.price : 0);
+  },0).toFixed(1);
+
+  const priced = [...starterList, ...bench].filter(p=>!p.keeper && marketPriceFor(p)!=null)
+    .map(p=>({...p, delta: marketPriceFor(p)-p.price}));
+  priced.sort((a,b)=>b.delta-a.delta);
+
+  return {
+    idx:i, owner:t.owner, team:t.team||t.owner,
+    starterProjPts, draftValue, keeperValue, keeperCount:keeperList.length,
+    starters: starterList, bench,
+    steal: priced[0]||null, reach: priced[priced.length-1]||null
+  };
+}
+
+let _reportsCache = null, _reportsKey = '';
+function allTeamReports(){
+  const key = (state.draftPicks||[]).length + ':' + state.currentYear + ':' + state.teams.length;
+  if(_reportsCache && _reportsKey===key) return _reportsCache;
+  const reports = state.teams.map((t,i)=>computeTeamReport(i));
+  function zFn(field){
+    const vals = reports.map(r=>r[field]);
+    const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const sd = Math.sqrt(vals.reduce((a,b)=>a+(b-mean)**2,0)/vals.length);
+    return v => sd ? (v-mean)/sd : 0;
+  }
+  const zp = zFn('starterProjPts'), zv = zFn('draftValue');
+  reports.forEach(r => r.composite = zp(r.starterProjPts)*0.6 + zv(r.draftValue)*0.4);
+  const byPts = [...reports].sort((a,b)=>b.starterProjPts-a.starterProjPts);
+  byPts.forEach((r,i)=>r.rankPts=i+1);
+  reports.sort((a,b)=>b.composite-a.composite);
+  reports.forEach((r,i)=>r.rank=i+1);
+  function gradeOf(z){
+    if(z>1.1) return 'A+'; if(z>0.7) return 'A'; if(z>0.35) return 'A-';
+    if(z>0.1) return 'B+'; if(z>-0.1) return 'B'; if(z>-0.35) return 'B-';
+    if(z>-0.7) return 'C+'; if(z>-1.1) return 'C'; return 'C-';
+  }
+  reports.forEach(r => r.grade = gradeOf(r.composite));
+  _reportsCache = reports; _reportsKey = key;
+  return reports;
+}
+function gradeTier(g){ return g[0]==='A' ? 'g-good' : g[0]==='B' ? 'g-mid' : 'g-low'; }
+
+/* ---------- CHRONICLE (Home) ---------- */
+function renderChronicle(){
+  const host = document.getElementById('chronicleBody');
+  if(!host) return;
+  const reports = allTeamReports();
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+  const mine = reports.find(r=>r.idx===myIdx);
+  const filled = state.teams.every((t,i)=>teamRosterSlots(i).held.length>=18);
+
+  if(!filled){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">The Chronicle</div>
+      <h2>I'm still watching the board fill in.</h2>
+      <p>Not every roster is at 18 yet, so I'm not going to hand out grades on an unfinished picture. Come back once the auction's done and I'll have plenty to say.</p>
+    </div>`;
+    return;
+  }
+
+  const topTeam = reports[0];
+  const stealAll = reports.map(r=>r.steal).filter(Boolean).sort((a,b)=>b.delta-a.delta)[0];
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">The Chronicle</div>
+      <h2>${mine ? `You're sitting at ${mine.grade}, ${mine.rank===1?'best in the league':`ranked #${mine.rank} of ${reports.length}`}.` : `The league is drafted. Here's where things stand.`}</h2>
+      <p>${mine ? `<b>${mine.team}</b> projects for <b>${mine.starterProjPts.toFixed(0)} points</b> out of your starting eight, ranked <b>#${mine.rankPts}</b> in the league on raw strength.
+        ${mine.keeperCount ? `Your ${mine.keeperCount} keeper${mine.keeperCount===1?'':'s'} moved the needle by <b>${mine.keeperValue>=0?'+':''}$${mine.keeperValue}</b> against market.` : `You carried no keepers into this one -- your grade is 100% tonight's bidding.`}
+        Tonight's live auction alone came in at <b>${mine.draftValue>=0?'+':''}$${mine.draftValue}</b> against what the room said everyone was worth.` : ''}
+      </p>
+      <p><b>${topTeam.team}</b> (${topTeam.owner}) is the team to beat right now, grading out at ${topTeam.grade}. I'll keep this page updated as trades, waivers and the season itself reshape the picture.</p>
+    </div>
+
+    <div class="chron-grid">
+      <div class="chron-card">
+        <div class="cc-label">Biggest steal, league-wide</div>
+        ${stealAll ? `<div class="cc-title">${stealAll.name}</div><div class="cc-sub">${reports.find(r=>r.steal===stealAll).team} &middot; paid $${stealAll.price}, worth $${stealAll.price+stealAll.delta}</div><p>+$${stealAll.delta} under market. Nobody else in the room got that kind of production for that kind of money.</p>` : `<p>Nothing to report yet.</p>`}
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Strongest projected lineup</div>
+        <div class="cc-title">${[...reports].sort((a,b)=>b.starterProjPts-a.starterProjPts)[0].team}</div>
+        <div class="cc-sub">${[...reports].sort((a,b)=>b.starterProjPts-a.starterProjPts)[0].starterProjPts.toFixed(0)} proj. pts</div>
+        <p>The most talent-dense eight in the league, on paper, before a single snap.</p>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Full breakdown</div>
+        <div class="cc-title">The Draft &rarr; Recap</div>
+        <div class="cc-sub">all 12 grades, steals, reaches</div>
+        <p>Every roster, every keeper call, every overpay -- broken all the way down.</p>
+      </div>
+    </div>
+
+    <div class="chron-grid" style="grid-template-columns:1fr;">
+      <div class="chron-card">
+        <div class="cc-label">Power rankings</div>
+        <div class="power-list">
+          ${reports.map(r=>`
+            <div class="power-row${r.idx===myIdx?' pr-me':''}">
+              <div class="pr-n">${r.rank}</div>
+              <div><span class="grade-pill ${gradeTier(r.grade)}">${r.grade}</span></div>
+              <div><span class="pr-name">${r.team}</span><span class="pr-owner">${r.owner}</span></div>
+              <div class="pr-pts">${r.starterProjPts.toFixed(0)} pts</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------- DRAFT RECAP (The Draft > Recap) ---------- */
+function renderRecap(){
+  const host = document.getElementById('recapBody');
+  if(!host) return;
+  const reports = allTeamReports();
+  const myIdx = teamIdxOf(MY_TEAM_OWNER);
+
+  const cards = reports.map(r=>{
+    const starterRows = r.starters.map(p=>{
+      const m = marketPriceFor(p);
+      const delta = m!=null && !p.keeper ? m-p.price : null;
+      const deltaTxt = p.keeper ? `<span style="color:var(--peri);font:600 10px 'JetBrains Mono',monospace;">KEEPER</span>`
+        : (delta==null ? '&ndash;' : `<span style="color:${delta>0?'var(--jade)':delta<0?'var(--coral)':'var(--chalk-3)'}">${delta>0?'+':''}$${delta}</span>`);
+      return `<tr><td style="color:var(--chalk-3);font:500 11px 'JetBrains Mono',monospace;">${p.pos}</td><td>${p.name}</td><td style="text-align:right;font-family:'JetBrains Mono',monospace;">$${p.price}</td><td style="text-align:right;">${deltaTxt}</td></tr>`;
+    }).join('');
+    const benchStr = r.bench.map(p=>`${p.name}${p.keeper?' (K)':''} $${p.price}`).join(', ');
+    return `<div class="chron-card" style="${r.idx===myIdx?'border-color:var(--gold);':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+        <div><div class="cc-title">${r.team}${r.idx===myIdx?' &#9733;':''}</div><div class="cc-sub">${r.owner} &middot; rank #${r.rank}</div></div>
+        <span class="grade-pill ${gradeTier(r.grade)}" style="font-size:14px;padding:6px 10px;">${r.grade}</span>
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:10px;font:600 12px 'JetBrains Mono',monospace;">
+        <div><div style="color:var(--chalk-3);font-size:9.5px;">PROJ PTS</div>${r.starterProjPts.toFixed(0)}</div>
+        <div><div style="color:var(--chalk-3);font-size:9.5px;">DRAFT $</div><span style="color:${r.draftValue>=0?'var(--jade)':'var(--coral)'}">${r.draftValue>=0?'+':''}$${r.draftValue}</span></div>
+        <div><div style="color:var(--chalk-3);font-size:9.5px;">KEEPER $</div>${r.keeperCount?`<span style="color:${r.keeperValue>=0?'var(--jade)':'var(--coral)'}">${r.keeperValue>=0?'+':''}$${r.keeperValue}</span>`:'&ndash;'}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px;">${starterRows}</table>
+      <div style="font-size:11.5px;color:var(--chalk-3);line-height:1.6;">Bench: ${benchStr}</div>
+    </div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">The Draft &middot; Recap</div>
+      <h2>Everyone's final grade, broken all the way down.</h2>
+      <p>60% starting-lineup strength, 40% value bought in the live auction -- keepers carved out of the value half so a good keeper call from a past season never gets mistaken for this year's draft skill. Starters are the true best-eight, not whoever happened to fall into a slot on nomination order.</p>
+    </div>
+    <div class="chron-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));">${cards}</div>
+  `;
+}
+
+/* ---------- SCHEDULE & DIVISIONS (League > Schedule) ---------- */
+const ZUB_DIVISIONS = [
+  {name:"North", teams:["Travis and Wayne Banks","JS Bull","Tom McDonald"]},
+  {name:"East", teams:["PJ Humphreys","Brandon Hill","Caleb DeWoody"]},
+  {name:"South", teams:["Justin McDonald","Brett Booker","Blake Taylor"]},
+  {name:"West", teams:["Jon Thorn","Scott Bull","Ryan Monigan"]}
+];
+function renderScheduleView(){
+  const host = document.getElementById('scheduleBody');
+  if(!host) return;
+  const nameOf = owner => { const i=teamIdxOf(owner); return i>=0 ? (state.teams[i].team||owner) : owner; };
+  const divs = ZUB_DIVISIONS.map(d=>{
+    const rows = d.teams.map(o=>`<div class="div-team-row"><span><span class="dt-name">${nameOf(o)}</span><span class="dt-owner">${o}</span></span></div>`).join('');
+    return `<div class="div-card"><h4>${d.name} Division</h4>${rows}</div>`;
+  }).join('');
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Format</div>
+      <h2>Four divisions. Fourteen weeks. One very strange week 14.</h2>
+      <p>Two games against each of your two division rivals, one against everybody else. All 4 division winners make the 6-team playoff field automatically; the best remaining record and the most remaining points fill the last two wildcard spots. Whoever scores the most total points over the regular season gets the Week 15 bye, seed be damned.</p>
+      <p><b>The Week 14 gauntlet:</b> every team's "opponent" that week is the entire league. Score top-6 leaguewide and I'm crediting you a win no matter what your actual matchup says on paper; land in the bottom 6 and it's a loss regardless. It's the last week before the picture locks, and it has ended clean playoff bids before.</p>
+    </div>
+    <div class="div-grid">${divs}</div>
+  `;
+}
+
+/* ---------- RULES (League > Rules) ---------- */
+function renderRulesView(){
+  const host = document.getElementById('rulesBody');
+  if(!host) return;
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Rules</div>
+      <h2>The stuff people actually argue about.</h2>
+      <p>Full rules live in the league PDF; this is the quick-reference for what comes up mid-season.</p>
+    </div>
+    <div class="rules-toc">
+      <a href="#rulesContracts">Contracts</a>
+      <a href="#rulesWaivers">Waivers &amp; free agency</a>
+      <a href="#rulesTrades">Trades</a>
+      <a href="#rulesPlayoffs">Playoffs</a>
+      <a href="#rulesTiebreakers">Tiebreakers</a>
+    </div>
+
+    <div class="rules-sec" id="rulesContracts">
+      <h4>Contracts</h4>
+      <p>1&ndash;5 years, your choice, set after the draft. Every year past Year 1 escalates off the <b>original</b> auction price, not the prior year's number:</p>
+      <table><tr><td>Year 1</td><td>Auction value</td></tr><tr><td>Year 2</td><td>120% + $1</td></tr><tr><td>Year 3</td><td>140% + $1</td></tr><tr><td>Year 4</td><td>160% + $1</td></tr><tr><td>Year 5</td><td>180% + $1</td></tr></table>
+      <p>All fractions round up. Dropping a player before his contract ends leaves a signing-bonus penalty of 10% of the contract value in each remaining year, rounded up.</p>
+    </div>
+
+    <div class="rules-sec" id="rulesWaivers">
+      <h4>Waivers &amp; free agency</h4>
+      <p>Tuesday blind bids go to <b>waiverwire@jsbull.com</b> by 4pm CT &mdash; highest total contract value wins, earliest bid breaks ties. Wednesday 12pm CT the website opens for open free agency, one-year-$1 contracts only, not eligible for multi-year deals. Never add a player on the website before Wednesday noon &mdash; it gets released and you're locked out until Thursday noon. Multi-year FA contracts stop being offered after the Week 11 Tuesday deadline; everything after that is 1-year only.</p>
+    </div>
+
+    <div class="rules-sec" id="rulesTrades">
+      <h4>Trades</h4>
+      <p>Open from the Super Bowl through August 1st, then again post-draft through kickoff of Week 11. $5 real-money fee per player received. A player just drafted but not yet signed to a contract can't be traded. Traded-back players keep the higher of their current or previous contract value, penalty waived either way.</p>
+    </div>
+
+    <div class="rules-sec" id="rulesPlayoffs">
+      <h4>Playoffs</h4>
+      <p>6 teams: all 4 division winners, plus the best remaining record and the most remaining points as wildcards. Top 2 scorers get a Week 15 bye.</p>
+      <table>
+        <tr><td>Week 15</td><td>Bye: 1 &amp; 2 seed &middot; Game: 4v5 &middot; Game: 3v6</td></tr>
+        <tr><td>Week 16</td><td>1 seed vs winner 4/5 &middot; 2 seed vs winner 3/6 &middot; consolation: losers of 15</td></tr>
+        <tr><td>Week 17</td><td>Championship &middot; 3rd place &middot; bye-losers consolation</td></tr>
+      </table>
+    </div>
+
+    <div class="rules-sec" id="rulesTiebreakers">
+      <h4>Tiebreakers</h4>
+      <p>Season-long ties: winning percentage &rarr; most points scored &rarr; head-to-head &rarr; most points allowed &rarr; coin flip. Playoff-game ties: bench points &rarr; starting-roster touchdowns &rarr; starting QB points &rarr; coin flip.</p>
+    </div>
+  `;
+}
+
 // Cards view (each team's own full roster stacked vertically) vs. Board
 // view (one wide table, a team per column, so the whole snake draft reads
 // as a single grid) -- same underlying teamRosterSlots() data either way.
@@ -5856,6 +6227,8 @@ function logCurrentPick(){
   saveState();
   renderDraftView();
   renderLeagueGrid();
+  _reportsCache = null;
+  if(document.getElementById('view-chronicle').classList.contains('active')) renderChronicle();
 }
 
 function nextBestAtPosition(pos, excludeName){
@@ -6100,14 +6473,14 @@ function renderDraftHistory(){
     sel.addEventListener('change', ()=>{
       pushUndo('reassigning '+pick.name);
       pick.teamIdx = Number(sel.value);
-      saveState(); renderDraftView(); renderLeagueGrid();
+      saveState(); renderDraftView(); renderLeagueGrid(); _reportsCache = null; if(document.getElementById('view-chronicle').classList.contains('active')) renderChronicle();
     });
   });
   document.querySelectorAll('.pick-price-input').forEach(inp=>{
     inp.addEventListener('change', ()=>{
       const pick = picks.find(p=>p.id===Number(inp.dataset.pickId));
       const v = parseInt(inp.value,10);
-      if(v && v>0){ pushUndo('repricing '+pick.name); pick.price = v; saveState(); renderDraftView(); renderLeagueGrid(); }
+      if(v && v>0){ pushUndo('repricing '+pick.name); pick.price = v; saveState(); renderDraftView(); renderLeagueGrid(); _reportsCache = null; if(document.getElementById('view-chronicle').classList.contains('active')) renderChronicle(); }
     });
   });
   document.querySelectorAll('[data-remove-pick]').forEach(btn=>{
@@ -6116,7 +6489,7 @@ function renderDraftHistory(){
       const gone = state.draftPicks.find(p=>p.id===id);
       pushUndo('removing '+(gone?gone.name:'a pick'));
       state.draftPicks = state.draftPicks.filter(p=>p.id!==id);
-      saveState(); renderDraftView(); renderLeagueGrid();
+      saveState(); renderDraftView(); renderLeagueGrid(); _reportsCache = null; if(document.getElementById('view-chronicle').classList.contains('active')) renderChronicle();
     });
   });
 }
@@ -7979,10 +8352,51 @@ function groupRankFor(p){
   return _groupRankCache[p.pos][p.name];
 }
 
+const _fullGroupRankCache = {};
+/* Same blend as groupRankFor, but never excludes keepers. groupRankFor's
+   keeper exclusion is correct for auction-value ranking -- a kept player
+   isn't part of tonight's live market, so he shouldn't occupy a rank slot
+   ahead of someone actually up for bid. But projectedPpg() (below) uses
+   this same rank to answer a different question -- how good IS this guy,
+   full stop -- and for that question excluding keepers is simply wrong: it
+   silently floors every keeper's scoring projection to the bottom of the
+   position's curve regardless of how good he actually is. Found via a real
+   case: Puka Nacua, a kept player, projecting near replacement level. */
+function fullGroupRankFor(p){
+  if(!_fullGroupRankCache[p.pos]){
+    const peers = DRAFT_POOL.filter(x=>x.pos===p.pos);
+    const byPrice = peers.slice().sort((a,b)=>b.mv-a.mv);
+    const priceRank = {}; byPrice.forEach((x,i)=>{ priceRank[x.name]=i; });
+    const ordinalMaps = AGGREGATE_SOURCES.map(([,dir,asOf,getRaw])=>{
+      const withRaw = peers.map(x=>({name:x.name, raw:getRaw(x.name)})).filter(x=>x.raw!=null);
+      withRaw.sort((a,b)=> dir===1 ? a.raw-b.raw : b.raw-a.raw);
+      const m = {}; withRaw.forEach((x,i)=>{ m[x.name]=i; });
+      return { m, w: recencyWeight(asOf) };
+    });
+    const scored = peers.map(x=>{
+      let wsum = 0, total = 0, n = 0;
+      ordinalMaps.forEach(({m,w})=>{
+        const ord = m[x.name];
+        if(ord === undefined) return;
+        wsum += ord*w; total += w; n++;
+      });
+      return { name:x.name, blend: n ? wsum/total : null, n };
+    });
+    const ranked = scored.filter(x=>x.blend!==null)
+      .sort((a,b)=> (a.blend-b.blend) || (b.n-a.n));
+    const unranked = scored.filter(x=>x.blend===null)
+      .sort((a,b)=>priceRank[a.name]-priceRank[b.name]);
+    const order = {};
+    [...ranked, ...unranked].forEach((x,i)=>{ order[x.name]=i; });
+    _fullGroupRankCache[p.pos] = order;
+  }
+  return _fullGroupRankCache[p.pos][p.name];
+}
+
 function projectedPpg(p){
   const curve = ppgCurveFor(p.pos);
   if(!curve.length) return replacementLevel(p.pos);
-  const rank = groupRankFor(p);
+  const rank = fullGroupRankFor(p);
   const i = Math.min(curve.length-1, Math.max(0, rank ?? curve.length-1));
   return curve[i];
 }
@@ -14844,6 +15258,7 @@ function render(){
   bindModes();
   bindTips();
   populateYearSelect();
+  renderChronicle();
   renderLeagueGrid();
   renderStatusStrip();
   moveTabIndicator();
