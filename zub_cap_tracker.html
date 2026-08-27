@@ -1979,6 +1979,7 @@
     <button data-view="contract" data-mode="league" hidden>Contract Calculator</button>
     <button data-view="drop" data-mode="league" hidden>Drop Penalty</button>
     <button data-view="lineup" data-mode="league" hidden>Lineup Coach</button>
+    <button data-view="import" data-mode="league" hidden>Import Rankings</button>
 
     <button data-view="recap" data-mode="draft" hidden>Draft Recap</button>
     <button data-view="draft" data-mode="draft" hidden>Draft Day Archive</button>
@@ -2006,6 +2007,11 @@
   <!-- TRANSACTION LOG VIEW -->
   <div class="view" id="view-transactions">
     <div id="transactionsBody"></div>
+  </div>
+
+  <!-- IMPORT RANKINGS VIEW -->
+  <div class="view" id="view-import">
+    <div id="importBody"></div>
   </div>
 
   <!-- SCHEDULE & DIVISIONS VIEW -->
@@ -3406,6 +3412,9 @@ let state = { teams: JSON.parse(SEED_TEAMS_JSON), currentYear: 2026, draftPicks:
   // so this is however far the standings can ever be ahead of what's
   // actually been typed in.
   weeklyScores: {},
+  // real rankings/projections imported from FantasyPros CSV exports -- see
+  // the FANTASYPROS IMPORT section. Empty until something's been uploaded.
+  fantasyPros: { weekly: {}, waiver: {} },
   // a running backlog of feature ideas for the tool itself, editable in
   // The Draft > Build Ideas tab. Seeded once with what came out of this
   // build session; from then on it's whatever gets added or checked off.
@@ -3451,6 +3460,7 @@ async function loadState(){
           if(!state.slotTargets) state.slotTargets = {};
           if(!state.planManual) state.planManual = {};
           if(!state.weeklyScores) state.weeklyScores = {};
+          if(!state.fantasyPros) state.fantasyPros = { weekly: {}, waiver: {} };
           if(!state.buildIdeas) state.buildIdeas = DEFAULT_BUILD_IDEAS.map(x=>({...x}));
           if(!state.seasonArchive) state.seasonArchive = [];
         } else {
@@ -3469,6 +3479,7 @@ async function loadState(){
             myReads: parsed.myReads || {},
             rosterRole: parsed.rosterRole || state.rosterRole,
             weeklyScores: parsed.weeklyScores || {},
+            fantasyPros: parsed.fantasyPros || { weekly: {}, waiver: {} },
             buildIdeas: parsed.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
             seasonArchive: parsed.seasonArchive || [],
             planBaseline: null,
@@ -3502,6 +3513,7 @@ function reseedRosters(){
     planManual: state.planManual || {},
     rosterRole: state.rosterRole || { 'Caleb Williams':'start', 'Jayden Daniels':'bench' },
     weeklyScores: state.weeklyScores || {},
+    fantasyPros: state.fantasyPros || { weekly: {}, waiver: {} },
     buildIdeas: state.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
     seasonArchive: state.seasonArchive || [],
     planBaseline: null,
@@ -3564,6 +3576,7 @@ function savePayload(){
     myReads: state.myReads || {},
     rosterRole: state.rosterRole || {},
     weeklyScores: state.weeklyScores || {},
+    fantasyPros: state.fantasyPros || { weekly: {}, waiver: {} },
     buildIdeas: state.buildIdeas || DEFAULT_BUILD_IDEAS.map(x=>({...x})),
     seasonArchive: state.seasonArchive || [],
     planBaseline: state.planBaseline || null,
@@ -3709,6 +3722,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='finder') renderFinderView();
     if(btn.dataset.view==='draft') renderDraftView();
     if(btn.dataset.view==='lineup') renderLineupView();
+    if(btn.dataset.view==='import') renderImportView();
     // Data-heavy views want the whole monitor; the calculators read better narrow.
     if(btn.dataset.view==='pool') renderPoolView();
     if(btn.dataset.view==='plan') renderPlanView();
@@ -7522,7 +7536,25 @@ function renderLineupView(){
   computeAndRenderLineup(players);
 }
 
+// Prefers a real imported weekly projection over the static draft-day
+// "value" number whenever one exists for this player/week; falls back to
+// mv otherwise so lineups still work with zero rankings imported. Named
+// distinctly from the pre-existing lineupValue(players) (team-strength
+// scoring, a different thing entirely) to avoid clobbering it -- same
+// name, same scope, would otherwise silently overwrite one or the other.
+function weeklyPlayerValue(p, week){
+  const proj = currentWeekProjection(p.name, week);
+  if(proj) return { value: proj.projFpts, isProjected: true, startSit: proj.startSit };
+  return { value: p.mv||0, isProjected: false };
+}
+function weeklyPlayerValueCell(p, week){
+  const v = weeklyPlayerValue(p, week);
+  if(v.isProjected) return `${v.value.toFixed(1)} <span class="cc-sub" style="display:inline;font-size:10px;">proj${v.startSit?` · ${v.startSit}`:''}</span>`;
+  return String(v.value);
+}
+
 function computeAndRenderLineup(players){
+  const week = currentScheduleWeek();
   const available = players.filter(p=>p.status!=='Out' && p.status!=='Bye');
   const flagged = p => (p.status==='Questionable'||p.status==='Doubtful');
   const used = new Set();
@@ -7530,7 +7562,7 @@ function computeAndRenderLineup(players){
 
   const bestAt = (positions, excludeUsed=true)=>{
     const pool = available.filter(p=>positions.includes(p.pos) && (!excludeUsed || !used.has(p.name)));
-    pool.sort((a,b)=>(b.mv||0)-(a.mv||0));
+    pool.sort((a,b)=>weeklyPlayerValue(b,week).value - weeklyPlayerValue(a,week).value);
     return pool[0] || null;
   };
   const assign = (slotLabel, positions)=>{
@@ -7554,14 +7586,14 @@ function computeAndRenderLineup(players){
         if(!s.player) return `<tr><td>${s.slot}</td><td colspan="3" class="empty-cell">No eligible healthy player</td></tr>`;
         const p = s.player;
         const warn = flagged(p) ? `<span class="dead-tag">${p.status}</span>` : '';
-        return `<tr><td>${s.slot}</td><td>${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> ${warn}</td><td class="hero">${p.mv||0}</td><td></td></tr>`;
+        return `<tr><td>${s.slot}</td><td>${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span> ${warn}</td><td class="hero">${weeklyPlayerValueCell(p,week)}</td><td></td></tr>`;
       }).join('')
     }`;
 
   const bench = players.filter(p=>!used.has(p.name));
   document.getElementById('lineupBenchTable').innerHTML =
     `<thead><tr><th>Player</th><th>Pos</th><th>Value</th><th>Status</th></tr></thead><tbody>${
-      bench.map(p=>`<tr><td>${p.name}</td><td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td><td>${p.mv||0}</td><td>${p.status||'Healthy'}</td></tr>`).join('')
+      bench.map(p=>`<tr><td>${p.name}</td><td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td><td>${weeklyPlayerValueCell(p,week)}</td><td>${p.status||'Healthy'}</td></tr>`).join('')
       || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
 }
@@ -7589,6 +7621,192 @@ function expertRead(name){
   if(t && a)        return {kind:'split',  t, a, label:`split ${t} target / ${a} avoid`, cls:''};
   if(t)             return {kind:'target', t, a, label:`${t} expert targets`, cls:'ok'};
   return {kind:'avoid', t, a, label:`${a} expert avoids`, cls:'bad'};
+}
+
+/* ---------- FANTASYPROS IMPORT ----------
+   You bring your own FantasyPros export (weekly position rankings, waiver
+   rankings, whatever report is useful) as a CSV; this parses it, figures
+   out what kind of report it is, and stores it in state.fantasyPros. Not
+   one fixed schema -- FantasyPros' own reports differ by type, so this is
+   built to recognize more than one shape rather than assume there's only
+   ever going to be one import. */
+
+// Minimal RFC4180-ish CSV parser: handles quoted fields, embedded commas,
+// and escaped quotes ("" inside a quoted field). No external library
+// available client-side, so this is hand-rolled rather than pulled in.
+function parseCSVText(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field='';
+        if(row.length>1 || row[0]!=='') rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+function csvToObjects(text){
+  const rows = parseCSVText(text);
+  if(!rows.length) return [];
+  const headers = rows[0].map(h=>h.trim());
+  return rows.slice(1).filter(r=>r.length>1 || r[0]!=='').map(r=>{
+    const obj = {};
+    headers.forEach((h,i)=>{ obj[h] = (r[i]||'').trim(); });
+    return obj;
+  });
+}
+
+// FantasyPros export filenames follow FantasyPros_{year}_{Week_N|Waiver}_{POS}_Rankings.csv
+// -- confirmed against two real exports (a Week_1_RB file and a Waiver_ALL file).
+function parseFpFilename(filename){
+  const m = filename.match(/FantasyPros_(\d{4})_(?:Week_(\d+)|(Waiver))_([A-Za-z]+)_Rankings/i);
+  if(!m) return null;
+  return { year: Number(m[1]), week: m[2] ? Number(m[2]) : null, isWaiver: !!m[3], pos: m[4].toUpperCase() };
+}
+
+function classifyFpReport(headers){
+  const has = (h)=>headers.includes(h);
+  if(has('PROJ. FPTS') && has('START/SIT')) return 'weekly';
+  if(has('OWN') && has('POS')) return 'waiver';
+  return 'unknown';
+}
+
+// Imports one CSV, stores it in state.fantasyPros, returns a short summary
+// for the upload UI. Throws on an unrecognized shape rather than silently
+// storing garbage.
+function importFantasyProsCSV(filename, text){
+  const rows = csvToObjects(text);
+  if(!rows.length) throw new Error('No rows found in that file.');
+  const headers = Object.keys(rows[0]);
+  const meta = parseFpFilename(filename) || {};
+  const kind = classifyFpReport(headers);
+
+  if(!state.fantasyPros) state.fantasyPros = { weekly: {}, waiver: {} };
+
+  if(kind === 'weekly'){
+    const parsed = rows.map(r=>({
+      rank: Number(r['RK'])||null,
+      player: r['PLAYER NAME'],
+      team: r['TEAM'],
+      opp: r['OPP'],
+      startSit: r['START/SIT'],
+      projFpts: parseFloat(r['PROJ. FPTS'])||0,
+    })).filter(r=>r.player);
+    const key = `${meta.year||'?'}-wk${meta.week||'?'}-${meta.pos||'ALL'}`;
+    if(!state.fantasyPros.weekly) state.fantasyPros.weekly = {};
+    state.fantasyPros.weekly[key] = { filename, year:meta.year||null, week:meta.week||null, pos:meta.pos||null, importedAt: Date.now(), rows: parsed };
+    return { kind, key, count: parsed.length };
+  }
+
+  if(kind === 'waiver'){
+    const parsed = rows.map(r=>{
+      const rawPos = r['POS']||'';
+      const posMatch = rawPos.match(/^([A-Z]+)(\d+)?$/);
+      return {
+        rank: Number(r['RK'])||null,
+        player: r['PLAYER NAME'],
+        team: r['TEAM'],
+        pos: posMatch ? posMatch[1] : rawPos,
+        posRank: posMatch && posMatch[2] ? Number(posMatch[2]) : null,
+        bye: r['BYE WEEK'],
+        own: parseFloat(r['OWN'])||0,
+      };
+    }).filter(r=>r.player);
+    const key = `${meta.year||'?'}-waiver-${meta.pos||'ALL'}`;
+    if(!state.fantasyPros.waiver) state.fantasyPros.waiver = {};
+    state.fantasyPros.waiver[key] = { filename, year:meta.year||null, pos:meta.pos||null, importedAt: Date.now(), rows: parsed };
+    return { kind, key, count: parsed.length };
+  }
+
+  throw new Error(`Unrecognized FantasyPros export format (columns: ${headers.join(', ')}). This importer currently understands weekly position rankings (PROJ. FPTS + START/SIT columns) and waiver-wire rankings (OWN + POS columns).`);
+}
+
+// Best real projection for a player this week, across whichever position
+// files have been imported -- reuses expertKey() for name matching since
+// it's already a generic normalizer (curly quotes, "D.K." abbreviations,
+// case), not something specific to the expert-consensus feature.
+function currentWeekProjection(playerName, week){
+  if(!state.fantasyPros?.weekly) return null;
+  const key = expertKey(playerName);
+  for(const report of Object.values(state.fantasyPros.weekly)){
+    if(week != null && report.week != null && report.week !== week) continue;
+    const hit = report.rows.find(r=>expertKey(r.player)===key);
+    if(hit) return hit;
+  }
+  return null;
+}
+
+function renderImportView(){
+  const host = document.getElementById('importBody');
+  if(!host) return;
+  const weekly = Object.entries(state.fantasyPros?.weekly || {});
+  const waiver = Object.entries(state.fantasyPros?.waiver || {});
+
+  const reportRow = (key, r, kind) => `<div class="div-team-row" style="align-items:center;">
+    <span class="dt-name">${r.pos||'ALL'}${kind==='weekly' ? ` &middot; Week ${r.week}` : ' &middot; Waiver'}
+      <span class="dt-owner">${r.filename} &middot; ${r.rows.length} players &middot; imported ${new Date(r.importedAt).toLocaleString()}</span>
+    </span>
+    <button class="icon-btn" data-remove-fp="${kind}:${key}" title="Remove this import">&times;</button>
+  </div>`;
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Import Rankings</div>
+      <h2>Bring in real FantasyPros data.</h2>
+      <p>Export a rankings CSV from your FantasyPros account and drop it in below. Weekly position rankings (the ones with a PROJ. FPTS column) automatically feed the Lineup Coach for whatever week they're for -- other report types get stored here for tools built on top of them later.</p>
+      <input type="file" id="fpFileInput" accept=".csv" style="margin-top:12px;display:block;">
+      <p id="fpImportStatus" style="margin-top:8px;font-size:12.5px;color:var(--chalk-3);"></p>
+    </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Weekly position rankings &middot; feeds Lineup Coach</div>
+      ${weekly.length ? weekly.map(([k,r])=>reportRow(k,r,'weekly')).join('') : '<p style="color:var(--chalk-3);font-size:13px;margin:0;">None imported yet.</p>'}
+    </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Waiver-wire rankings &middot; stored for future waiver tools</div>
+      ${waiver.length ? waiver.map(([k,r])=>reportRow(k,r,'waiver')).join('') : '<p style="color:var(--chalk-3);font-size:13px;margin:0;">None imported yet.</p>'}
+    </div>
+  `;
+
+  document.getElementById('fpFileInput')?.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const statusEl = document.getElementById('fpImportStatus');
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const result = importFantasyProsCSV(file.name, String(reader.result));
+        saveState();
+        statusEl.textContent = `Imported ${result.count} players as ${result.kind} data (${result.key}).`;
+        renderImportView();
+      }catch(err){
+        statusEl.textContent = `Import failed: ${err.message}`;
+      }
+    };
+    reader.onerror = ()=>{ statusEl.textContent = 'Could not read that file.'; };
+    reader.readAsText(file);
+  });
+
+  document.querySelectorAll('[data-remove-fp]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const [kind, key] = btn.dataset.removeFp.split(':');
+      delete state.fantasyPros[kind][key];
+      saveState();
+      renderImportView();
+    });
+  });
 }
 
 /* ---------- CONTRACT-LENGTH ENGINE ----------
