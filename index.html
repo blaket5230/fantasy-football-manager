@@ -5570,12 +5570,81 @@ function renderChronicle(){
   renderTeamNews();
 }
 
-/* ---------- FANTASYPROS NEWS (live) ----------
+/* ---------- CBS TEAM NEWS (live, primary) ----------
+   CBS's own player-updates wire (942 items on a real call, no metering),
+   filtered server-side by owned_by_team_id -- no name matching needed,
+   unlike every other news source here, and it comes with full article
+   text and structured injury detail rather than a headline + one-line
+   impact note. This is the primary "your team" feed; FantasyPros' below
+   stays as a secondary, independent second opinion. */
+const CBS_TEAM_NEWS_META_KEY = "zubCbsTeamNewsMeta_v1";
+let cbsTeamNewsCache = null;
+let cbsTeamNewsInFlight = false;
+
+function getCbsTeamNewsMeta(){
+  try{ return JSON.parse(localStorage.getItem(CBS_TEAM_NEWS_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setCbsTeamNewsMeta(meta){
+  try{ localStorage.setItem(CBS_TEAM_NEWS_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+function myCbsTeamId(){
+  return Object.keys(CBS_TEAM_ID_TO_OWNER).find(id=>CBS_TEAM_ID_TO_OWNER[id]===MY_TEAM_OWNER) || null;
+}
+async function syncCbsTeamNews(){
+  if(cbsTeamNewsInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  cbsTeamNewsInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/news?source=cbs&team=${teamId}&limit=25&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    cbsTeamNewsCache = await res.json();
+    setCbsTeamNewsMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setCbsTeamNewsMeta({ lastSync: getCbsTeamNewsMeta().lastSync || null, error: e.message });
+  } finally {
+    cbsTeamNewsInFlight = false;
+  }
+}
+function maybeAutoSyncCbsTeamNews(){
+  if(cbsTeamNewsInFlight) return;
+  const meta = getCbsTeamNewsMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000; // matches backend's cache
+  if(!stale && cbsTeamNewsCache) return;
+  syncCbsTeamNews().then(()=>{ renderTeamNews(); });
+}
+function cbsTeamNewsStatusText(){
+  if(cbsTeamNewsInFlight) return 'Checking CBS for news on your roster…';
+  const meta = getCbsTeamNewsMeta();
+  if(!meta.lastSync) return 'Not checked yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked CBS ${when}${errPart}.`;
+}
+function renderCbsTeamNewsCard(){
+  const items = cbsTeamNewsCache?.items || [];
+  return `
+    <div class="chron-card">
+      <div class="cc-label">Your team &middot; CBS wire</div>
+      <p class="cc-sub" style="margin-bottom:10px;">${cbsTeamNewsStatusText()}</p>
+      ${items.length ? items.map(item=>`
+        <div class="trade-verdict" style="margin-bottom:8px;">
+          <strong>${item.title||item.headline||'(untitled update)'}</strong>
+          ${item.injury ? `<span class="dead-tag" style="margin-left:6px;">${item.injury.split(':')[0]}</span>` : ''}
+          <p style="margin:4px 0 0;font-size:12px;color:var(--chalk-2);">${item.news||''}</p>
+        </div>`).join('') : `<p style="color:var(--chalk-3);font-size:13px;margin:0;">Nothing on your roster in CBS's news wire right now.</p>`}
+    </div>`;
+}
+
+/* ---------- FANTASYPROS NEWS (live, secondary) ----------
    Real news from FantasyPros, filtered to items that mention a player on
    your roster. Their free tier caps every response at 10 items leaguewide
    -- most weeks, most rosters, that'll turn up nothing. That's expected,
    not broken: a hit here is a real signal, a miss just means nothing about
-   your specific players made the last 10 leaguewide stories. */
+   your specific players made the last 10 leaguewide stories. Kept as a
+   second, independent source alongside CBS's wire above -- different
+   bylines, occasionally different angles on the same news. */
 const FP_NEWS_META_KEY = "zubFpNewsMeta_v1";
 let fpNewsCache = null;
 let fpNewsInFlight = false;
@@ -5620,20 +5689,22 @@ function newsStatusText(){
 function renderTeamNews(){
   const host = document.getElementById('teamNewsBody');
   if(!host) return;
+  maybeAutoSyncCbsTeamNews();
   maybeAutoSyncFpNews();
 
   const myPlayers = myActivePlayers();
-  const items = (fpNewsCache?.items || []).filter(item=>{
+  const fpItems = (fpNewsCache?.items || []).filter(item=>{
     const text = `${item.title||''} ${item.desc||''}`;
     return myPlayers.some(p=>text.includes(p.name));
   });
 
   host.innerHTML = `
     <div class="chron-grid" style="grid-template-columns:1fr;">
+      ${renderCbsTeamNewsCard()}
       <div class="chron-card">
-        <div class="cc-label">Your team &middot; real news</div>
+        <div class="cc-label">Your team &middot; FantasyPros (secondary)</div>
         <p class="cc-sub" style="margin-bottom:10px;">${newsStatusText()}</p>
-        ${items.length ? items.map(item=>`
+        ${fpItems.length ? fpItems.map(item=>`
           <div class="trade-verdict" style="margin-bottom:8px;">
             <a href="${item.link}" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">${item.title}</a>
             ${item.impact ? `<p style="margin:4px 0 0;font-size:12px;color:var(--chalk-2);">${item.impact}</p>` : ''}
