@@ -1972,6 +1972,7 @@
     <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
+    <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
 
     <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
     <button data-view="finder" data-mode="league" hidden>Trade Finder</button>
@@ -2000,6 +2001,11 @@
   <!-- LEAGUE VIEW -->
   <div class="view" id="view-league">
     <div class="league-grid" id="leagueGrid"></div>
+  </div>
+
+  <!-- TRANSACTION LOG VIEW -->
+  <div class="view" id="view-transactions">
+    <div id="transactionsBody"></div>
   </div>
 
   <!-- SCHEDULE & DIVISIONS VIEW -->
@@ -3710,6 +3716,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='schedule') renderScheduleView();
     if(btn.dataset.view==='rules') renderRulesView();
     if(btn.dataset.view==='standings') renderStandingsView();
+    if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='recap') renderRecap();
     if(btn.dataset.view==='ideas') renderIdeasView();
   });
@@ -5772,6 +5779,113 @@ function maybeAutoSyncLiveScores(){
   syncLiveScores().then(()=>{
     renderScheduleView();
     if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
+  });
+}
+
+/* ---------- TRANSACTION LOG (League Analyzer) ---------- */
+const TXN_SYNC_META_KEY = "zubTxnSyncMeta_v1";
+let txnCache = null;
+let txnSyncInFlight = false;
+
+function getTxnSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(TXN_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setTxnSyncMeta(meta){
+  try{ localStorage.setItem(TXN_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncTransactions(){
+  if(txnSyncInFlight) return;
+  txnSyncInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/transactions?key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Newest first -- the id's leading segment is a unix-ish timestamp
+    // (see recon report / parseTransactions.js), sturdier to sort on than
+    // parsing the human date string.
+    txnCache = (data.transactions||[]).sort((a,b)=>
+      Number((b.id||'0-0').split('-')[0]) - Number((a.id||'0-0').split('-')[0]));
+    setTxnSyncMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setTxnSyncMeta({ lastSync: getTxnSyncMeta().lastSync || null, error: e.message });
+  } finally {
+    txnSyncInFlight = false;
+  }
+}
+
+function maybeAutoSyncTransactions(){
+  if(txnSyncInFlight) return;
+  const meta = getTxnSyncMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 5*60*1000;
+  if(!stale && txnCache) return;
+  syncTransactions().then(()=>{ renderTransactionsView(); });
+}
+
+// CBS's raw codes (WR/TE separate, TK for kicker) mapped onto this app's
+// existing pos-tag color classes (WRTE combined, PK for kicker).
+function txnPosClass(pos){
+  if(pos==='WR' || pos==='TE') return 'WRTE';
+  if(pos==='TK') return 'PK';
+  return pos || '';
+}
+
+function txnStatusText(){
+  if(txnSyncInFlight) return 'Syncing with CBS…';
+  const meta = getTxnSyncMeta();
+  if(!meta.lastSync) return 'Not synced with CBS yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  return meta.error ? `Last sync failed (${meta.error}) -- showing data from ${when}.` : `Synced with CBS ${when}.`;
+}
+
+function renderTransactionsView(){
+  const host = document.getElementById('transactionsBody');
+  if(!host) return;
+  maybeAutoSyncTransactions();
+
+  if(!txnCache){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Transaction Log</div>
+      <h2>${txnSyncInFlight ? 'Pulling the transaction log from CBS…' : 'No data yet.'}</h2>
+      <p>${txnStatusText()}</p>
+    </div>`;
+    return;
+  }
+
+  const cards = txnCache.map(t=>{
+    const owner = CBS_TEAM_ID_TO_OWNER[String(t.teamId)];
+    const displayName = owner ? nickOf(owner) : t.team;
+    const actionsHtml = t.actions.map(a=>`
+      <div class="div-team-row" style="align-items:center;">
+        <span class="dt-name" style="flex:1;font-weight:500;">${a.player}
+          <span class="pos-tag pos-${txnPosClass(a.pos)}" style="margin-left:4px;">${a.pos||''}</span>
+          <span style="color:var(--chalk-3);font-size:11px;">${a.nflTeam||''}</span>
+        </span>
+        <span style="font-size:11.5px;color:${a.action==='Dropped'?'var(--chalk-3)':'var(--jade)'};">${a.action||''}</span>
+      </div>`).join('');
+    return `<div class="chron-card"${t.isOwnTeam ? ' style="border-color:var(--gold);"' : ''}>
+      <div class="cc-label">${t.date}${t.isOwnTeam ? ' &middot; Your team' : ''}</div>
+      <div class="cc-title">${displayName}</div>
+      ${actionsHtml}
+      <div style="margin-top:8px;font-size:11px;color:var(--chalk-3);">Effective Week ${t.effectiveWeek} &middot; ${t.cost}</div>
+    </div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Transaction Log</div>
+      <h2>Every add, drop, and trade across all 12 teams.</h2>
+      <p id="txnSyncStatus">${txnStatusText()}</p>
+      <button id="txnSyncBtn" class="side-tab" style="margin-top:8px;" ${txnSyncInFlight?'disabled':''}>${txnSyncInFlight?'Syncing…':'Sync from CBS'}</button>
+    </div>
+    <div class="div-grid" style="margin-top:16px;align-items:start;">${cards}</div>
+  `;
+  document.getElementById('txnSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('txnSyncStatus');
+    if(statusEl) statusEl.textContent = 'Syncing with CBS…';
+    await syncTransactions();
+    renderTransactionsView();
   });
 }
 
