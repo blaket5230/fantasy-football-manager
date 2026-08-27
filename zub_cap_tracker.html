@@ -1974,6 +1974,7 @@
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
+    <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
 
     <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
     <button data-view="finder" data-mode="league" hidden>Trade Finder</button>
@@ -2018,6 +2019,10 @@
   <!-- ROSTER SYNC VIEW -->
   <div class="view" id="view-rostersync">
     <div id="rosterSyncBody"></div>
+  </div>
+
+  <div class="view" id="view-waivers">
+    <div id="waiverBody"></div>
   </div>
 
   <!-- SCHEDULE & DIVISIONS VIEW -->
@@ -3740,6 +3745,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
+    if(btn.dataset.view==='waivers') renderWaiverView();
     if(btn.dataset.view==='recap') renderRecap();
     if(btn.dataset.view==='ideas') renderIdeasView();
   });
@@ -6125,6 +6131,134 @@ function renderRosterSyncView(){
     if(statusEl) statusEl.textContent = 'Syncing with CBS…';
     await syncCbsRosters();
     renderRosterSyncView();
+  });
+}
+
+/* ---------- WAIVER WIRE (Sleeper trending, cross-checked against real ZUB availability) ----------
+   Sleeper's trending signal is leaguewide (tens of thousands of leagues), so
+   on its own it's just "what's popular," not "what's useful here" -- a
+   player already rostered by someone else in ZUB is noise. Cross-referenced
+   server-side (/api/trending) against the real ZUB free-agent pool, so
+   "actually available" here means actually available in this league. */
+const WAIVER_SYNC_META_KEY = "zubWaiverSyncMeta_v1";
+let waiverTrendingCache = null; // { add: [...], drop: [...] }
+let waiverSyncInFlight = false;
+
+function getWaiverSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(WAIVER_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setWaiverSyncMeta(meta){
+  try{ localStorage.setItem(WAIVER_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncWaiverTrending(){
+  if(waiverSyncInFlight) return;
+  waiverSyncInFlight = true;
+  try{
+    const [addRes, dropRes] = await Promise.all([
+      fetch(`${ZUB_SYNC_API}/api/trending?type=add&limit=25&key=${ZUB_SYNC_KEY}`),
+      fetch(`${ZUB_SYNC_API}/api/trending?type=drop&limit=25&key=${ZUB_SYNC_KEY}`),
+    ]);
+    if(!addRes.ok) throw new Error(`HTTP ${addRes.status} (add)`);
+    if(!dropRes.ok) throw new Error(`HTTP ${dropRes.status} (drop)`);
+    const [addData, dropData] = await Promise.all([addRes.json(), dropRes.json()]);
+    waiverTrendingCache = { add: addData.items, drop: dropData.items };
+    setWaiverSyncMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setWaiverSyncMeta({ lastSync: getWaiverSyncMeta().lastSync || null, error: e.message });
+  } finally {
+    waiverSyncInFlight = false;
+  }
+}
+function maybeAutoSyncWaiverTrending(){
+  if(waiverSyncInFlight) return;
+  const meta = getWaiverSyncMeta();
+  // matches the backend's own 30-minute cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && waiverTrendingCache) return;
+  syncWaiverTrending().then(()=>{ renderWaiverView(); });
+}
+function waiverSyncStatusText(){
+  if(waiverSyncInFlight) return 'Checking Sleeper for trending waiver moves…';
+  const meta = getWaiverSyncMeta();
+  const base = "Sleeper's trending signal is leaguewide, cross-checked against who's actually a free agent in ZUB right now.";
+  if(!meta.lastSync) return base;
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked Sleeper ${when}${errPart}. ${base}`;
+}
+
+// Sleeper's own position codes (K, DEF) -> CBS-style display, reusing the
+// same pos-tag CSS classes as the rest of the app (via txnPosClass).
+function waiverPosDisplay(pos){
+  if(pos === 'DEF') return 'DST';
+  if(pos === 'K') return 'TK';
+  return pos;
+}
+
+function renderWaiverPlayerRow(p){
+  const dispPos = waiverPosDisplay(p.pos);
+  const flags = [];
+  if(p.isZubFreeAgent === false) flags.push(`<span class="dead-tag" title="Already rostered by someone in ZUB">Rostered in ZUB</span>`);
+  if(p.isZubFreeAgent === null) flags.push(`<span class="dead-tag" title="Could not match this Sleeper player to a CBS id">Unmatched</span>`);
+  if(p.depthChartOrder) flags.push(`<span style="font-size:11px;color:var(--chalk-3);">Depth #${p.depthChartOrder}${p.depthChartPosition?` (${p.depthChartPosition})`:''}</span>`);
+  if(p.injuryStatus) flags.push(`<span class="dead-tag">${p.injuryStatus}</span>`);
+  return `<div class="div-team-row" style="align-items:center;">
+    <span class="dt-name">${p.name} <span class="pos-tag pos-${txnPosClass(dispPos)}">${dispPos}</span> <span style="color:var(--chalk-3);font-size:11px;">${p.team||''}</span></span>
+    <span style="display:flex;gap:8px;align-items:center;font-size:11px;flex-wrap:wrap;justify-content:flex-end;">${flags.join(' ')}<span style="color:var(--jade);">${(p.sleeperCount||0).toLocaleString()} leagues</span></span>
+  </div>`;
+}
+
+function renderWaiverView(){
+  const host = document.getElementById('waiverBody');
+  if(!host) return;
+  maybeAutoSyncWaiverTrending();
+
+  if(!waiverTrendingCache){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Waiver Wire</div>
+      <h2>${waiverSyncInFlight ? 'Checking Sleeper for trending moves…' : 'No data yet.'}</h2>
+      <p>${waiverSyncStatusText()}</p>
+    </div>`;
+    return;
+  }
+
+  const availableAdds = waiverTrendingCache.add.filter(p=>p.isZubFreeAgent);
+  const rosteredAdds = waiverTrendingCache.add.filter(p=>p.isZubFreeAgent===false);
+  const drops = waiverTrendingCache.drop;
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Waiver Wire</div>
+      <h2>What the rest of fantasy is chasing.</h2>
+      <p id="waiverSyncStatus">${waiverSyncStatusText()}</p>
+      <button id="waiverSyncBtn" class="side-tab" style="margin-top:8px;" ${waiverSyncInFlight?'disabled':''}>${waiverSyncInFlight?'Checking…':'Refresh'}</button>
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Actually available in ZUB</div>
+      <div class="cc-title">Trending adds you could actually grab</div>
+      ${availableAdds.length ? availableAdds.map(renderWaiverPlayerRow).join('') : '<p style="color:var(--chalk-3);font-size:13px;">None of the current trending adds are free agents in ZUB right now.</p>'}
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Already taken</div>
+      <div class="cc-title">Trending elsewhere, already rostered here</div>
+      ${rosteredAdds.length ? rosteredAdds.map(renderWaiverPlayerRow).join('') : '<p style="color:var(--chalk-3);font-size:13px;">None right now.</p>'}
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Waiver momentum</div>
+      <div class="cc-title">Trending drops leaguewide</div>
+      ${drops.length ? drops.map(renderWaiverPlayerRow).join('') : '<p style="color:var(--chalk-3);font-size:13px;">None right now.</p>'}
+    </div>
+  `;
+  document.getElementById('waiverSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('waiverSyncStatus');
+    if(statusEl) statusEl.textContent = 'Refreshing…';
+    await syncWaiverTrending();
+    renderWaiverView();
   });
 }
 
