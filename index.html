@@ -2396,7 +2396,8 @@
   <div class="view" id="view-lineup">
     <div class="panel">
       <h3>Set player status</h3>
-      <p class="panel-sub">Honest limit: this tool has no live injury feed or matchup data, that changes every week and isn't something baked into a static file. Flag anyone banged up or on bye yourself, and the suggested lineup below works around it.</p>
+      <p class="panel-sub" id="lineupInjuryNote">Checking FantasyPros for real injury flags…</p>
+      <div id="injuryWatchList"></div>
       <div class="table-scroll"><table class="result-table" id="lineupStatusTable"></table></div>
     </div>
 
@@ -7509,20 +7510,94 @@ function myActivePlayers(){
   if(!me) return [];
   return me.players.filter(p=>!p.deadCap);
 }
+
+/* ---------- FANTASYPROS INJURIES (live) ----------
+   FantasyPros' free tier truncates this to the ~10 most notable injuries
+   leaguewide (sorted by overall fantasy rank), not a full report --
+   confirmed against a real call. A miss here means "not one of the 10
+   most notable right now," not "confirmed healthy" -- flagging anyone
+   else banged up is still on you, same honest limit as before, just
+   narrower than it used to be. */
+const FP_INJURIES_META_KEY = "zubFpInjuriesMeta_v1";
+let fpInjuriesCache = null;
+let fpInjuriesInFlight = false;
+
+function getFpInjuriesMeta(){
+  try{ return JSON.parse(localStorage.getItem(FP_INJURIES_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setFpInjuriesMeta(meta){
+  try{ localStorage.setItem(FP_INJURIES_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncFpInjuries(){
+  if(fpInjuriesInFlight) return;
+  fpInjuriesInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/injuries?key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    fpInjuriesCache = await res.json();
+    setFpInjuriesMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setFpInjuriesMeta({ lastSync: getFpInjuriesMeta().lastSync || null, error: e.message });
+  } finally {
+    fpInjuriesInFlight = false;
+  }
+}
+function maybeAutoSyncFpInjuries(){
+  if(fpInjuriesInFlight) return;
+  const meta = getFpInjuriesMeta();
+  // matches the backend's own 30-minute cache -- no point checking more often
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && fpInjuriesCache) return;
+  syncFpInjuries().then(()=>{ renderLineupView(); });
+}
+function fpInjuryFor(playerName){
+  if(!fpInjuriesCache?.injuries) return null;
+  const key = expertKey(playerName);
+  return fpInjuriesCache.injuries.find(i=>expertKey(i.player)===key) || null;
+}
+function fpInjuriesStatusText(){
+  if(fpInjuriesInFlight) return 'Checking FantasyPros for real injury flags…';
+  const meta = getFpInjuriesMeta();
+  const base = "Covers only FantasyPros' top ~10 most notable injuries leaguewide (their free tier truncates the rest) -- flag anyone else banged up or on bye yourself.";
+  if(!meta.lastSync) return base;
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked FantasyPros ${when}${errPart}. ${base}`;
+}
+
 function renderLineupView(){
   const players = myActivePlayers();
+  maybeAutoSyncFpInjuries();
+
+  const noteEl = document.getElementById('lineupInjuryNote');
+  if(noteEl) noteEl.textContent = fpInjuriesStatusText();
+
+  const hits = players.map(p=>({p, hit: fpInjuryFor(p.name)})).filter(x=>x.hit);
+  const watchEl = document.getElementById('injuryWatchList');
+  if(watchEl){
+    watchEl.innerHTML = hits.map(({p,hit})=>`
+      <div class="trade-verdict bad" style="margin-bottom:8px;">
+        <strong>${p.name}</strong> (${hit.team}) &middot; FantasyPros flags this as <strong>${hit.status}</strong>${hit.comment?` &mdash; ${hit.comment}`:''}
+      </div>`).join('');
+  }
 
   // status table
   document.getElementById('lineupStatusTable').innerHTML =
     `<thead><tr><th>Player</th><th>Pos</th><th>Value</th><th>Status</th></tr></thead><tbody>${
-      players.map((p,i)=>`<tr>
-        <td>${p.name}</td>
+      players.map((p,i)=>{
+        const hit = fpInjuryFor(p.name);
+        const flag = hit ? ` <span class="dead-tag" title="FantasyPros: ${hit.status}${hit.comment?' -- '+hit.comment:''}">FP: ${hit.status}</span>` : '';
+        return `<tr>
+        <td>${p.name}${flag}</td>
         <td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td>
         <td>${p.mv||0}</td>
         <td><select data-status-idx="${i}" class="lineup-status-select">
           ${STATUS_OPTIONS.map(s=>`<option value="${s}" ${p.status===s?'selected':''}>${s}</option>`).join('')}
         </select></td>
-      </tr>`).join('') || '<tr><td>No players yet. Anyone you win tonight appears here as you log them.</td></tr>'
+      </tr>`;
+      }).join('') || '<tr><td>No players yet. Anyone you win tonight appears here as you log them.</td></tr>'
     }`;
   document.querySelectorAll('.lineup-status-select').forEach(sel=>{
     sel.addEventListener('change', ()=>{
