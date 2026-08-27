@@ -8430,7 +8430,65 @@ function computeAndRenderLineup(players){
 // Live-CBS-data path for the main starters/bench tables, once Roster Sync
 // has run -- shares computeCbsSuggestedStarters with the write box below,
 // so the two panels can never disagree with each other again.
+/* ---------- SLEEPER ROSTER ENRICHMENT (depth chart + weekly proj) ----------
+   Extends the trending-only Sleeper data (Waiver Wire) with depth chart
+   position/order and Sleeper's own pts_std weekly projection for every
+   player on your live roster, not just the ~25 trending ones. A depth
+   chart promotion is exactly the kind of thing easy to miss on a bench
+   player -- surfaced right where lineup decisions get made. pts_std is a
+   second opinion next to CBS's own projected_points, matching ZUB's
+   non-PPR scoring; expect it null until closer to kickoff, since Sleeper
+   doesn't publish weekly projections far in advance. */
+const SLEEPER_ROSTER_META_KEY = "zubSleeperRosterMeta_v1";
+let sleeperRosterCache = null; // array
+let sleeperRosterInFlight = false;
+
+function getSleeperRosterMeta(){
+  try{ return JSON.parse(localStorage.getItem(SLEEPER_ROSTER_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setSleeperRosterMeta(meta){
+  try{ localStorage.setItem(SLEEPER_ROSTER_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncSleeperRoster(){
+  if(sleeperRosterInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  sleeperRosterInFlight = true;
+  try{
+    const week = cbsRostersCache?.period || currentScheduleWeek();
+    const res = await fetch(`${ZUB_SYNC_API}/api/trending?type=roster&team=${teamId}&week=${week}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    sleeperRosterCache = data.items;
+    setSleeperRosterMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setSleeperRosterMeta({ lastSync: getSleeperRosterMeta().lastSync || null, error: e.message });
+  } finally {
+    sleeperRosterInFlight = false;
+  }
+}
+function maybeAutoSyncSleeperRoster(){
+  if(sleeperRosterInFlight) return;
+  const meta = getSleeperRosterMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && sleeperRosterCache) return;
+  syncSleeperRoster().then(()=>{
+    if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
+  });
+}
+function sleeperRosterFor(cbsPlayerId){
+  if(!sleeperRosterCache) return null;
+  return sleeperRosterCache.find(i=>i.cbsPlayerId===cbsPlayerId) || null;
+}
+function sleeperDepthBadge(cbsPlayerId){
+  const sp = sleeperRosterFor(cbsPlayerId);
+  if(!sp || sp.depthChartOrder == null) return '';
+  const projTxt = sp.sleeperProjStd != null ? ` &middot; ${sp.sleeperProjStd.toFixed(1)} Sleeper proj` : '';
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Sleeper depth chart">Depth #${sp.depthChartOrder} (${sp.depthChartPosition||sp.pos})${projTxt}</span>`;
+}
+
 function renderLiveLineupTables(cbsTeam){
+  maybeAutoSyncSleeperRoster();
   const week = cbsRostersCache.period;
   const starters = computeCbsSuggestedStarters(cbsTeam, week);
   const usedIds = new Set(starters.filter(s=>s.player).map(s=>s.player.id));
@@ -8443,7 +8501,7 @@ function renderLiveLineupTables(cbsTeam){
         const fpHit = fpInjuryFor(p.player);
         const statusText = p.injury || (fpHit ? fpHit.status : null);
         const warn = statusText ? `<span class="dead-tag" title="${p.injury ? 'CBS' : 'FantasyPros'}">${statusText}</span>` : '';
-        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}</td><td class="hero">${(p.projectedPoints||0).toFixed(1)}</td><td></td></tr>`;
+        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}${sleeperDepthBadge(p.id)}</td><td class="hero">${(p.projectedPoints||0).toFixed(1)}</td><td></td></tr>`;
       }).join('')
     }`;
 
@@ -8453,7 +8511,7 @@ function renderLiveLineupTables(cbsTeam){
       bench.map(p=>{
         const fpHit = fpInjuryFor(p.player);
         const statusText = p.injury || (fpHit ? fpHit.status : 'Healthy');
-        return `<tr><td>${p.player}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${(p.projectedPoints||0).toFixed(1)}</td><td>${statusText}</td></tr>`;
+        return `<tr><td>${p.player}${sleeperDepthBadge(p.id)}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${(p.projectedPoints||0).toFixed(1)}</td><td>${statusText}</td></tr>`;
       }).join('') || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
 
