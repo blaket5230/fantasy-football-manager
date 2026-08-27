@@ -1899,6 +1899,39 @@
 </style>
 </head>
 <body>
+<!-- Passphrase gate: cheap deterrent, not real security -- this is a public
+     static page (GitHub Pages on a public repo can't be restricted), so
+     anyone who views source can read ZUB_GATE_PASS below and get in
+     regardless. It only stops a casual visitor who stumbles on the URL from
+     landing straight in the app. The one endpoint with real consequences
+     (submitting a live CBS lineup change) has its own separate,
+     server-verified passphrase -- see submitLineupWrite() -- which is never
+     shipped in this page's source at all. -->
+<div id="zubGate" style="position:fixed;inset:0;z-index:99999;background:#0b0e14;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:system-ui,-apple-system,sans-serif;">
+  <div style="font-size:18px;color:#e8e8ea;">Enter passphrase</div>
+  <input id="zubGateInput" type="password" autocomplete="off" style="padding:10px 14px;border-radius:8px;border:1px solid #333;background:#1a1d24;color:#fff;font-size:15px;width:240px;text-align:center;" />
+  <button id="zubGateBtn" style="padding:10px 18px;border-radius:8px;border:none;background:#4f8cff;color:#fff;font-size:15px;cursor:pointer;">Enter</button>
+  <div id="zubGateErr" style="color:#ff6b6b;font-size:13px;min-height:16px;"></div>
+</div>
+<script>
+(function(){
+  var ZUB_GATE_PASS = "ledger-nectar-952";
+  var gate = document.getElementById('zubGate');
+  function unlock(){ gate.style.display = 'none'; try{ sessionStorage.setItem('zubGateOk','1'); }catch(e){} }
+  try{
+    if(sessionStorage.getItem('zubGateOk') === '1'){ unlock(); return; }
+  }catch(e){}
+  var input = document.getElementById('zubGateInput');
+  var err = document.getElementById('zubGateErr');
+  function check(){
+    if(input.value === ZUB_GATE_PASS){ unlock(); }
+    else { err.textContent = 'Incorrect passphrase.'; input.value=''; input.focus(); }
+  }
+  document.getElementById('zubGateBtn').addEventListener('click', check);
+  input.addEventListener('keydown', function(e){ if(e.key==='Enter') check(); });
+  input.focus();
+})();
+</script>
 <div id="cardHost"></div>
 <div class="wrap">
   <header>
@@ -8730,23 +8763,50 @@ function renderLineupWriteBox(){
   document.getElementById('pushLineupBtn')?.addEventListener('click', ()=>submitLineupWrite(diff));
 }
 
+// Separate from ZUB_SYNC_KEY above (which is embedded in this page's own
+// source, so it isn't a real secret) -- this one is never shipped in the
+// bundle. Asked once per browser session via prompt() and held only in
+// sessionStorage; the server (api/lineup.js) is the actual enforcement
+// point, so a wrong or missing value here just fails the request rather
+// than being a security boundary in itself.
+function getLineupWriteKey(){
+  let k = sessionStorage.getItem('zubLineupWriteKey');
+  if(!k){
+    k = window.prompt('Enter the lineup-write passphrase (asked once per browser session):');
+    if(k) sessionStorage.setItem('zubLineupWriteKey', k);
+  }
+  return k;
+}
+
 async function submitLineupWrite(diff){
   if(lineupWriteInFlight) return;
   const confirmMsg = `Push this real lineup change to your live CBS team?\n\n${diff.changes.join('\n')}`;
   if(!window.confirm(confirmMsg)) return;
+
+  const writeKey = getLineupWriteKey();
+  if(!writeKey){
+    lineupWriteError = 'Lineup-write passphrase is required.';
+    renderLineupWriteBox();
+    return;
+  }
 
   lineupWriteInFlight = true;
   lineupWriteError = null;
   renderLineupWriteBox();
 
   try{
-    const res = await fetch(`${ZUB_SYNC_API}/api/lineup?key=${ZUB_SYNC_KEY}`, {
+    const res = await fetch(`${ZUB_SYNC_API}/api/lineup?key=${ZUB_SYNC_KEY}&writeKey=${encodeURIComponent(writeKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ point: diff.point, active: diff.active, reserve: diff.reserve }),
     });
     const body = await res.json();
-    if(!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`);
+    if(!res.ok || !body.success){
+      // Wrong passphrase specifically -- clear it so the next attempt
+      // re-prompts instead of silently failing forever with a stale value.
+      if(res.status === 401) sessionStorage.removeItem('zubLineupWriteKey');
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
     await syncCbsRosters(); // re-sync so the diff box reflects the new live state
   }catch(e){
     lineupWriteError = e.message;
