@@ -1973,6 +1973,7 @@
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
+    <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
 
     <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
     <button data-view="finder" data-mode="league" hidden>Trade Finder</button>
@@ -2012,6 +2013,11 @@
   <!-- IMPORT RANKINGS VIEW -->
   <div class="view" id="view-import">
     <div id="importBody"></div>
+  </div>
+
+  <!-- ROSTER SYNC VIEW -->
+  <div class="view" id="view-rostersync">
+    <div id="rosterSyncBody"></div>
   </div>
 
   <!-- SCHEDULE & DIVISIONS VIEW -->
@@ -3732,6 +3738,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='rules') renderRulesView();
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
+    if(btn.dataset.view==='rostersync') renderRosterSyncView();
     if(btn.dataset.view==='recap') renderRecap();
     if(btn.dataset.view==='ideas') renderIdeasView();
   });
@@ -5977,6 +5984,146 @@ function renderTransactionsView(){
     if(statusEl) statusEl.textContent = 'Syncing with CBS…';
     await syncTransactions();
     renderTransactionsView();
+  });
+}
+
+/* ---------- ROSTER SYNC (live CBS rosters) ----------
+   Detects drift between the hand-maintained cap/contract data in
+   state.teams and what CBS actually shows rostered right now. Doesn't
+   touch contracts or cap -- CBS has no idea about money -- it flags real
+   pickups/drops that haven't been reflected locally yet, and quietly
+   attaches each matched player's real CBS id for exact joins elsewhere
+   (rankings, etc.) instead of name matching. */
+const ROSTER_SYNC_META_KEY = "zubRosterSyncMeta_v1";
+let cbsRostersCache = null;
+let rosterSyncInFlight = false;
+
+function getRosterSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(ROSTER_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setRosterSyncMeta(meta){
+  try{ localStorage.setItem(ROSTER_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+// For a given owner, find their CBS team's live roster in the cache.
+function cbsTeamFor(owner){
+  const cbsId = Object.keys(CBS_TEAM_ID_TO_OWNER).find(id=>CBS_TEAM_ID_TO_OWNER[id]===owner);
+  if(!cbsId || !cbsRostersCache) return null;
+  return cbsRostersCache.teams.find(t=>t.teamId===cbsId) || null;
+}
+
+// Matches local <-> CBS rosters by name, attaches cbsId to every matched
+// local player (mutates state.teams in place -- caller is responsible for
+// saveState()), and returns a drift report per team: real pickups CBS
+// shows that aren't recorded locally, and locally-active (non-deadCap)
+// players CBS no longer shows rostered. A deadCap player missing from the
+// live roster is expected (that's the whole point of deadCap), so those
+// are excluded from "gone from CBS" -- only an active player vanishing is
+// a real signal something hasn't been recorded yet.
+function computeRosterDrift(){
+  if(!cbsRostersCache) return [];
+  return state.teams.map(team=>{
+    const cbsTeam = cbsTeamFor(team.owner);
+    if(!cbsTeam) return { owner: team.owner, team: team.team, noCbsMatch: true };
+
+    const cbsByKey = new Map(cbsTeam.players.map(p=>[expertKey(p.player), p]));
+    const localByKey = new Map(team.players.map(p=>[expertKey(p.name), p]));
+
+    const goneFromCbs = [];
+    team.players.forEach(p=>{
+      const cbsMatch = cbsByKey.get(expertKey(p.name));
+      if(cbsMatch){ p.cbsId = cbsMatch.id; }
+      else if(!p.deadCap){ goneFromCbs.push(p); }
+    });
+
+    const newPickups = cbsTeam.players.filter(cp=>!localByKey.has(expertKey(cp.player)));
+
+    return { owner: team.owner, team: team.team, newPickups, goneFromCbs };
+  });
+}
+
+async function syncCbsRosters(){
+  if(rosterSyncInFlight) return;
+  rosterSyncInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/rosters?key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    cbsRostersCache = await res.json();
+    computeRosterDrift(); // side effect: attaches real cbsId to matched local players
+    saveState();
+    setRosterSyncMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setRosterSyncMeta({ lastSync: getRosterSyncMeta().lastSync || null, error: e.message });
+  } finally {
+    rosterSyncInFlight = false;
+  }
+}
+function maybeAutoSyncCbsRosters(){
+  if(rosterSyncInFlight) return;
+  const meta = getRosterSyncMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 15*60*1000;
+  if(!stale && cbsRostersCache) return;
+  syncCbsRosters().then(()=>{ renderRosterSyncView(); });
+}
+function rosterSyncStatusText(){
+  if(rosterSyncInFlight) return 'Syncing rosters from CBS…';
+  const meta = getRosterSyncMeta();
+  if(!meta.lastSync) return 'Not synced with CBS yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Synced with CBS ${when}${errPart}.`;
+}
+
+function renderRosterSyncView(){
+  const host = document.getElementById('rosterSyncBody');
+  if(!host) return;
+  maybeAutoSyncCbsRosters();
+
+  if(!cbsRostersCache){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Roster Sync</div>
+      <h2>${rosterSyncInFlight ? 'Pulling live rosters from CBS…' : 'No data yet.'}</h2>
+      <p>${rosterSyncStatusText()}</p>
+    </div>`;
+    return;
+  }
+
+  const drift = computeRosterDrift();
+  const cards = drift.map(d=>{
+    if(d.noCbsMatch) return `<div class="chron-card"><div class="cc-title">${d.team}</div><p style="color:var(--chalk-3);font-size:13px;">No matching CBS team found.</p></div>`;
+    const clean = !d.newPickups.length && !d.goneFromCbs.length;
+    const pickupsHtml = d.newPickups.map(p=>`
+      <div class="div-team-row" style="align-items:center;">
+        <span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> <span style="color:var(--chalk-3);font-size:11px;">${p.proTeam||''}</span></span>
+        <span style="font-size:11px;color:var(--jade);">On CBS, not recorded here</span>
+      </div>`).join('');
+    const goneHtml = d.goneFromCbs.map(p=>`
+      <div class="div-team-row" style="align-items:center;">
+        <span class="dt-name">${p.name} <span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></span>
+        <span style="font-size:11px;color:var(--coral);">No longer on CBS roster</span>
+      </div>`).join('');
+    return `<div class="chron-card"${clean?'':' style="border-color:var(--gold);"'}>
+      <div class="cc-label">${nickOf(d.owner)}</div>
+      <div class="cc-title">${d.team}</div>
+      ${clean ? `<p style="color:var(--jade);font-size:12.5px;margin:8px 0 0;">&#10003; Matches CBS -- nothing to reconcile.</p>` : (pickupsHtml + goneHtml)}
+    </div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Roster Sync</div>
+      <h2>Real rosters, straight from CBS.</h2>
+      <p id="rosterSyncStatus">${rosterSyncStatusText()} Matched players get their real CBS id attached automatically, for exact matching everywhere else in the tool. This doesn't touch contracts or cap -- CBS has no idea about money -- it just flags real moves that haven't been recorded here yet.</p>
+      <button id="rosterSyncBtn" class="side-tab" style="margin-top:8px;" ${rosterSyncInFlight?'disabled':''}>${rosterSyncInFlight?'Syncing…':'Sync from CBS'}</button>
+    </div>
+    <div class="div-grid" style="margin-top:16px;align-items:start;">${cards}</div>
+  `;
+  document.getElementById('rosterSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('rosterSyncStatus');
+    if(statusEl) statusEl.textContent = 'Syncing with CBS…';
+    await syncCbsRosters();
+    renderRosterSyncView();
   });
 }
 
