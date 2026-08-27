@@ -5673,6 +5673,104 @@ const SEASON_SCHEDULE = {
 };
 const SEASON_WEEKS = 14;
 
+/* ---------- LIVE CBS SYNC ----------
+   CBS's own numeric team IDs, stable for the season. Mapped by ID rather
+   than team-name string because two CBS names differ from this roster's
+   spelling ("Cardinals Inn" vs "Cardinal Inn", "Dewood" vs "DeWood"). */
+const CBS_TEAM_ID_TO_OWNER = {
+  "31": "Justin McDonald",
+  "26": "Blake Taylor",
+  "27": "Brett Booker",
+  "23": "PJ Humphreys",
+  "34": "Caleb DeWoody",
+  "35": "Brandon Hill",
+  "33": "Travis and Wayne Banks",
+  "1": "JS Bull",
+  "19": "Tom McDonald",
+  "24": "Jon Thorn",
+  "2": "Scott Bull",
+  "28": "Ryan Monigan"
+};
+const ZUB_SYNC_API = "https://zub-fantasy-sync.vercel.app";
+const LIVE_SYNC_META_KEY = "zubLiveSyncMeta_v1";
+
+function getLiveSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(LIVE_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setLiveSyncMeta(meta){
+  try{ localStorage.setItem(LIVE_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+// CBS reports 0 for any team whose players haven't kicked off yet, which
+// isn't a real result -- skip those rather than writing placeholder zeros
+// into weeklyScores (that would also fool currentScheduleWeek() into
+// thinking an unplayed week was already filled in).
+async function fetchLiveWeek(week){
+  const res = await fetch(`${ZUB_SYNC_API}/api/scores?week=${week}`);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const scores = {};
+  (data.matchups||[]).forEach(m=>{
+    [m.away, m.home].forEach(side=>{
+      const owner = side && CBS_TEAM_ID_TO_OWNER[String(side.teamId)];
+      if(owner && typeof side.score === 'number' && side.score !== 0){
+        scores[owner] = side.score;
+      }
+    });
+  });
+  return scores;
+}
+
+let liveSyncInFlight = false;
+// Live CBS scores win automatically for any week they cover; manual entry
+// is still there as the fallback for weeks CBS doesn't have yet, or if a
+// sync fails outright.
+async function syncLiveScores(upToWeek){
+  if(liveSyncInFlight) return { ok:false, error:'already syncing' };
+  liveSyncInFlight = true;
+  const targetWeek = upToWeek || currentScheduleWeek();
+  const result = { ok:true, weeksSynced:[], errors:[] };
+  try{
+    for(let w=1; w<=targetWeek; w++){
+      try{
+        const scores = await fetchLiveWeek(w);
+        const owners = Object.keys(scores);
+        if(!owners.length) continue;
+        if(!state.weeklyScores[w]) state.weeklyScores[w] = {};
+        owners.forEach(o=>{ state.weeklyScores[w][o] = scores[o]; });
+        result.weeksSynced.push(w);
+      }catch(e){ result.errors.push({week:w, error:e.message}); }
+    }
+    saveState();
+    _standingsCache = null;
+    setLiveSyncMeta({ lastSync: Date.now(), weeksSynced: result.weeksSynced, errors: result.errors });
+  } finally {
+    liveSyncInFlight = false;
+  }
+  return result;
+}
+
+function liveSyncStatusText(){
+  if(liveSyncInFlight) return 'Syncing live scores from CBS…';
+  const meta = getLiveSyncMeta();
+  if(!meta.lastSync) return 'Not synced with CBS yet — click Sync, or type scores in manually below.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.errors?.length ? ` (${meta.errors.length} week${meta.errors.length>1?'s':''} failed to sync)` : '';
+  return `Synced with CBS ${when}${errPart}. Live scores win automatically — type over one below only if you need to correct it.`;
+}
+
+function maybeAutoSyncLiveScores(){
+  if(liveSyncInFlight) return;
+  const meta = getLiveSyncMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 5*60*1000;
+  if(!stale) return;
+  syncLiveScores().then(()=>{
+    renderScheduleView();
+    if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
+  });
+}
+
 function renderScheduleView(){
   const host = document.getElementById('scheduleBody');
   if(!host) return;
@@ -5695,15 +5793,24 @@ function renderScheduleView(){
     <div class="div-grid" style="margin-bottom:24px;">${divs}</div>
 
     <div class="chron-card">
-      <div class="cc-label">Enter scores</div>
-      <p style="margin-bottom:12px;">Nothing pulls these in automatically -- there's no live CBS feed -- so the standings only know what gets typed in here.</p>
+      <div class="cc-label">Live scores</div>
+      <p id="liveSyncStatus" style="margin-bottom:12px;">${liveSyncStatusText()}</p>
+      <button id="liveSyncBtn" class="side-tab" style="margin-bottom:16px;" ${liveSyncInFlight?'disabled':''}>${liveSyncInFlight?'Syncing…':'Sync from CBS'}</button>
       <div class="side-tabs" style="flex-wrap:wrap;margin-bottom:16px;">${weekBtns}</div>
       <div id="weekScoreBody"></div>
     </div>
   `;
   document.querySelectorAll('#scheduleBody [data-week]').forEach(b=>
     b.addEventListener('click', ()=>{ scheduleSelectedWeek = Number(b.dataset.week); renderScheduleView(); }));
+  document.getElementById('liveSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('liveSyncStatus');
+    if(statusEl) statusEl.textContent = 'Syncing live scores from CBS…';
+    await syncLiveScores();
+    renderScheduleView();
+    if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
+  });
   renderWeekScoreBody();
+  maybeAutoSyncLiveScores();
 }
 
 function currentScheduleWeek(){
@@ -5950,12 +6057,13 @@ function renderPlayoffPicture(){
 function renderStandingsView(){
   const host = document.getElementById('standingsBody');
   if(!host) return;
+  maybeAutoSyncLiveScores();
   const anyScores = Object.keys(state.weeklyScores||{}).length > 0;
   if(!anyScores){
     host.innerHTML = `<div class="chron-hero">
       <div class="chron-kicker">League &middot; Standings</div>
-      <h2>No scores logged yet.</h2>
-      <p>Head to Schedule and start entering weekly results -- I'll build the standings, the playoff picture and the bye race from there.</p>
+      <h2>${liveSyncInFlight ? 'Syncing with CBS…' : 'No scores logged yet.'}</h2>
+      <p>${liveSyncInFlight ? "Pulling this week's scores from CBS now -- check back in a moment." : "Head to Schedule to sync live scores from CBS, or start entering weekly results yourself -- I'll build the standings, the playoff picture and the bye race from there."}</p>
     </div>`;
     return;
   }
