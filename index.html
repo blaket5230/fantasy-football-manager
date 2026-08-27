@@ -4190,6 +4190,7 @@ function computeDrop(){
 
 /* ---------- TRADE ANALYZER ---------- */
 function renderTradeView(){
+  maybeAutoSyncWaiverValue();
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
   const opts = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
@@ -4262,10 +4263,18 @@ function computeTrade(){
     if(aConsolidates || bConsolidates){
       readout += " Note: consolidating several smaller pieces into one difference-maker is usually worth more to the side getting the single player than raw value totals suggest, roster spots are scarce.";
     }
+    const aLive = liveRankSummaryHTML(aSendPlayers);
+    const bLive = liveRankSummaryHTML(bSendPlayers);
+    const liveRankHTML = (aLive || bLive) ? `<div style="margin-top:8px;font-size:12px;">
+      <b>Live FantasyPros ROS rank</b> (cross-check only, not part of the cap/legality read -- needs Roster Sync to have matched a player to their CBS id):<br>
+      ${aLive ? `${tA.team||tA.owner}: ${aLive}<br>` : ''}
+      ${bLive ? `${tB.team||tB.owner}: ${bLive}` : ''}
+    </div>` : '';
     fairnessHTML = `<div class="trade-verdict ${gap<0.10?'ok':(gap<0.25?'':'bad')}">
       <strong>Market value read</strong><br>
       ${tA.team||tA.owner} sends: ${aSendMV} MV &middot; ${tB.team||tB.owner} sends: ${bSendMV} MV<br>
       ${readout}
+      ${liveRankHTML}
     </div>`;
   }
 
@@ -4300,6 +4309,7 @@ function posCounts(team){
 function myTeam(){ return state.teams.find(t=>t.owner===MY_TEAM_OWNER); }
 
 function renderFinderView(){
+  maybeAutoSyncWaiverValue();
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
@@ -4334,9 +4344,13 @@ function renderFinderView(){
     });
   });
   targets.sort((a,b)=>b.mv-a.mv);
+  // Live FantasyPros ROS rank alongside the static mv, where Roster Sync has
+  // matched the player to their real CBS id -- a cross-check, not a
+  // replacement, since mv still drives the actual value-gap math below.
+  const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rankEcr??'--'}` : '--'; };
   document.getElementById('finderTargets').innerHTML = targets.length
-    ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Value/$</th></tr></thead><tbody>${
-        targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
+    ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Live ROS rank</th><th>Value/$</th></tr></thead><tbody>${
+        targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${rankCell(x.player)}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No other team has an active ${weakest} on the books right now.</td></tr></tbody>`;
 
@@ -4367,7 +4381,7 @@ function renderFinderView(){
   offers.sort((a,b)=>a.gap-b.gap);
   document.getElementById('finderOffers').innerHTML = offers.length
     ? `<thead><tr><th>You send</th><th>You get</th><th>From</th><th>Value gap</th><th>Your cap after</th><th>Their cap after</th></tr></thead><tbody>${
-        offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0})</td><td>${o.get.player.name} (MV ${o.get.mv})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
+        offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0}${liveRankFor(o.give)?`, ROS ${rankCell(o.give)}`:''})</td><td>${o.get.player.name} (MV ${o.get.mv}${liveRankFor(o.get.player)?`, ROS ${rankCell(o.get.player)}`:''})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No value-comparable, roster-legal offers found from your ${deepest} depth right now. Try widening the search manually in the Trade Analyzer.</td></tr></tbody>`;
 }
@@ -6255,7 +6269,29 @@ function maybeAutoSyncWaiverValue(){
   // matches the backend's own 1-hour cache
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
   if(!stale && rosRankingsCache) return;
-  syncWaiverValue().then(()=>{ renderWaiverView(); });
+  // Shared cache -- Waiver Wire and Trade Analyzer both want live rankings,
+  // so whichever view is on screen when the fetch resolves gets refreshed.
+  syncWaiverValue().then(()=>{
+    if(document.getElementById('view-waivers')?.classList.contains('active')) renderWaiverView();
+    if(document.getElementById('view-trade')?.classList.contains('active')) computeTrade();
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
+}
+
+// A trade's cap legality is decided by the contract data in state.teams --
+// that stays authoritative and unchanged below. This is a second, purely
+// informational cross-check: if Roster Sync has matched a traded player to
+// their real CBS id, look up their current FantasyPros ROS rank so the
+// fairness read isn't leaning entirely on a hand-set draft-day mv number
+// that may be stale months into the season.
+function liveRankFor(p){
+  if(!p.cbsId || !rosRankingsCache) return null;
+  return rosRankingsCache.find(r=>r.cbsPlayerId===p.cbsId) || null;
+}
+function liveRankSummaryHTML(players){
+  const matched = players.map(p=>({p, r: liveRankFor(p)})).filter(x=>x.r);
+  if(!matched.length) return '';
+  return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rankEcr??'--'})</span>`).join(', ');
 }
 function waiverValueStatusText(){
   if(waiverValueInFlight) return 'Pulling FantasyPros rest-of-season rankings…';
