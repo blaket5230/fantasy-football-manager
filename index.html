@@ -5692,6 +5692,10 @@ const CBS_TEAM_ID_TO_OWNER = {
   "28": "Ryan Monigan"
 };
 const ZUB_SYNC_API = "https://zub-fantasy-sync.vercel.app";
+// Shared with the backend's lib/syncKey.js -- gates out casual/bot traffic
+// hitting the bare API URL. Necessarily visible in this public page's JS,
+// since there's no server here to keep it hidden; see that file's comment.
+const ZUB_SYNC_KEY = "Z8clWqKU0QP-ge4V6NlIj9bCkmvDeLYW";
 const LIVE_SYNC_META_KEY = "zubLiveSyncMeta_v1";
 
 function getLiveSyncMeta(){
@@ -5706,7 +5710,7 @@ function setLiveSyncMeta(meta){
 // into weeklyScores (that would also fool currentScheduleWeek() into
 // thinking an unplayed week was already filled in).
 async function fetchLiveWeek(week){
-  const res = await fetch(`${ZUB_SYNC_API}/api/scores?week=${week}`);
+  const res = await fetch(`${ZUB_SYNC_API}/api/scores?week=${week}&key=${ZUB_SYNC_KEY}`);
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const scores = {};
