@@ -6210,10 +6210,132 @@ function renderWaiverPlayerRow(p){
   </div>`;
 }
 
+/* ---------- BEST AVAILABLE (FantasyPros ROS rankings x real ZUB free agents) ----------
+   Sleeper trending is "what's popular"; this is "who's actually good and
+   available" -- FantasyPros' consensus rest-of-season rankings (the same
+   no-auth board /api/rankings already serves, live, no CSV export needed)
+   filtered down to real ZUB free agents, grouped by position. Also flags a
+   real upgrade: your own worst-ranked rostered player at that position, if
+   any available free agent out-ranks them. */
+const WAIVER_VALUE_META_KEY = "zubWaiverValueMeta_v1";
+let rosRankingsCache = null; // array, from /api/rankings?type=ros
+let freeAgentsCache = null;  // array, from /api/free-agents
+let waiverValueInFlight = false;
+
+function getWaiverValueMeta(){
+  try{ return JSON.parse(localStorage.getItem(WAIVER_VALUE_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setWaiverValueMeta(meta){
+  try{ localStorage.setItem(WAIVER_VALUE_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncWaiverValue(){
+  if(waiverValueInFlight) return;
+  waiverValueInFlight = true;
+  try{
+    const [rankRes, faRes] = await Promise.all([
+      fetch(`${ZUB_SYNC_API}/api/rankings?type=ros&key=${ZUB_SYNC_KEY}`),
+      fetch(`${ZUB_SYNC_API}/api/free-agents?key=${ZUB_SYNC_KEY}`),
+    ]);
+    if(!rankRes.ok) throw new Error(`HTTP ${rankRes.status} (rankings)`);
+    if(!faRes.ok) throw new Error(`HTTP ${faRes.status} (free agents)`);
+    const [rankData, faData] = await Promise.all([rankRes.json(), faRes.json()]);
+    rosRankingsCache = rankData.players;
+    freeAgentsCache = faData.freeAgents;
+    setWaiverValueMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setWaiverValueMeta({ lastSync: getWaiverValueMeta().lastSync || null, error: e.message });
+  } finally {
+    waiverValueInFlight = false;
+  }
+}
+function maybeAutoSyncWaiverValue(){
+  if(waiverValueInFlight) return;
+  const meta = getWaiverValueMeta();
+  // matches the backend's own 1-hour cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && rosRankingsCache) return;
+  syncWaiverValue().then(()=>{ renderWaiverView(); });
+}
+function waiverValueStatusText(){
+  if(waiverValueInFlight) return 'Pulling FantasyPros rest-of-season rankings…';
+  const meta = getWaiverValueMeta();
+  if(!meta.lastSync) return 'Not pulled yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Pulled ${when}${errPart}.`;
+}
+
+const WAIVER_VALUE_POSITIONS = ['QB','RB','WR','TE','TK','DST'];
+
+function bestAvailableByPosition(){
+  if(!rosRankingsCache || !freeAgentsCache) return {};
+  const freeAgentIds = new Set(freeAgentsCache.map(p=>p.id));
+  const out = {};
+  WAIVER_VALUE_POSITIONS.forEach(pos=>{ out[pos] = []; });
+  rosRankingsCache.forEach(r=>{
+    if(!r.cbsPlayerId || !freeAgentIds.has(r.cbsPlayerId)) return;
+    if(!out[r.pos]) return;
+    out[r.pos].push(r);
+  });
+  Object.keys(out).forEach(pos=>{
+    out[pos].sort((a,b)=>(a.rankEcr??9999)-(b.rankEcr??9999));
+    out[pos] = out[pos].slice(0,5);
+  });
+  return out;
+}
+
+// Your own live roster's worst-ranked player at each position -- the bar a
+// free agent has to clear to actually be an upgrade, not just a name.
+function weakestOwnByPosition(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam || !rosRankingsCache) return {};
+  const rankByCbsId = new Map(rosRankingsCache.filter(r=>r.cbsPlayerId).map(r=>[r.cbsPlayerId, r]));
+  const out = {};
+  cbsTeam.players.forEach(p=>{
+    const r = rankByCbsId.get(p.id);
+    if(!r || !WAIVER_VALUE_POSITIONS.includes(r.pos)) return;
+    if(!out[r.pos] || (r.rankEcr??9999) > (out[r.pos].rankEcr??9999)) out[r.pos] = r;
+  });
+  return out;
+}
+
+function renderBestAvailableCard(){
+  if(!rosRankingsCache || !freeAgentsCache){
+    return `<p style="color:var(--chalk-3);font-size:13px;margin:0;">${waiverValueInFlight?'Pulling FantasyPros rankings…':'No rankings pulled yet.'}</p>`;
+  }
+  const byPos = bestAvailableByPosition();
+  const weakest = weakestOwnByPosition();
+
+  const sections = WAIVER_VALUE_POSITIONS.map(pos=>{
+    const list = byPos[pos] || [];
+    if(!list.length) return '';
+    const weak = weakest[pos];
+    const rows = list.map(r=>{
+      const isUpgrade = weak && (r.rankEcr??9999) < (weak.rankEcr??9999);
+      const upgradeTag = isUpgrade
+        ? `<span style="font-size:10px;color:var(--jade);margin-left:8px;" title="Ranks ahead of your current ${weak.player} (#${weak.rankEcr})">&#8593; upgrade over ${weak.player}</span>`
+        : '';
+      return `<div class="div-team-row" style="align-items:center;">
+        <span class="dt-name">#${r.rankEcr??'--'} ${r.player} <span style="color:var(--chalk-3);font-size:11px;">${r.team||''}</span>${upgradeTag}</span>
+        <span style="font-size:11px;color:var(--chalk-3);">${r.recommendation||r.tag||''}</span>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;color:var(--chalk-2);margin-bottom:4px;">${pos}${weak?` <span style="font-weight:400;color:var(--chalk-3);">(your weakest: ${weak.player}, #${weak.rankEcr??'--'})</span>`:''}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  return sections || '<p style="color:var(--chalk-3);font-size:13px;margin:0;">No matched free agents found in the current rankings.</p>';
+}
+
 function renderWaiverView(){
   const host = document.getElementById('waiverBody');
   if(!host) return;
   maybeAutoSyncWaiverTrending();
+  maybeAutoSyncWaiverValue();
 
   if(!waiverTrendingCache){
     host.innerHTML = `<div class="chron-hero">
@@ -6234,6 +6356,13 @@ function renderWaiverView(){
       <h2>What the rest of fantasy is chasing.</h2>
       <p id="waiverSyncStatus">${waiverSyncStatusText()}</p>
       <button id="waiverSyncBtn" class="side-tab" style="margin-top:8px;" ${waiverSyncInFlight?'disabled':''}>${waiverSyncInFlight?'Checking…':'Refresh'}</button>
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">FantasyPros rest-of-season rankings &middot; real ZUB free agents</div>
+      <div class="cc-title">Best available by position</div>
+      <p id="waiverValueStatus" style="font-size:12px;color:var(--chalk-3);margin:4px 0 10px;">${waiverValueStatusText()}</p>
+      ${renderBestAvailableCard()}
     </div>
 
     <div class="chron-card" style="margin-top:16px;">
