@@ -5581,9 +5581,121 @@ function renderChronicle(){
       </div>
     </div>
 
+    <div id="whatsChangedBody"></div>
     <div id="teamNewsBody"></div>
   `;
+  renderWhatsChanged();
   renderTeamNews();
+}
+
+/* ---------- WHAT'S CHANGED (day-over-day history) ----------
+   First consumer of the snapshots table's actual history, not just its
+   latest row -- backed by /api/history, which diffs the two most recent
+   collector runs (see zub-fantasy-sync's daily cron). Roster diff needs
+   Roster Sync's cbsId matching to know which CBS team is "yours"; reuses
+   myCbsTeamId() from the CBS team news section above. With fewer than 2
+   collected snapshots (a brand new deployment, or the first day this ran)
+   this correctly says so rather than showing an empty diff that would
+   look identical to "nothing changed". */
+const HISTORY_META_KEY = "zubHistoryMeta_v1";
+let historyCache = null; // { roster: {...}, news: { cbs: {...}, espn: {...} } }
+let historyInFlight = false;
+
+function getHistoryMeta(){
+  try{ return JSON.parse(localStorage.getItem(HISTORY_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setHistoryMeta(meta){
+  try{ localStorage.setItem(HISTORY_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncHistory(){
+  if(historyInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  historyInFlight = true;
+  try{
+    const [rosterRes, newsRes] = await Promise.all([
+      fetch(`${ZUB_SYNC_API}/api/history?diff=roster&team=${teamId}&key=${ZUB_SYNC_KEY}`),
+      fetch(`${ZUB_SYNC_API}/api/history?diff=news&team=${teamId}&key=${ZUB_SYNC_KEY}`),
+    ]);
+    if(!rosterRes.ok) throw new Error(`HTTP ${rosterRes.status} (roster diff)`);
+    if(!newsRes.ok) throw new Error(`HTTP ${newsRes.status} (news diff)`);
+    const [roster, news] = await Promise.all([rosterRes.json(), newsRes.json()]);
+    historyCache = { roster, news };
+    setHistoryMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setHistoryMeta({ lastSync: getHistoryMeta().lastSync || null, error: e.message });
+  } finally {
+    historyInFlight = false;
+  }
+}
+function maybeAutoSyncHistory(){
+  if(historyInFlight) return;
+  const meta = getHistoryMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && historyCache) return;
+  syncHistory().then(()=>{
+    if(document.getElementById('view-chronicle')?.classList.contains('active')) renderWhatsChanged();
+  });
+}
+function historyStatusText(){
+  if(historyInFlight) return 'Checking for what changed…';
+  const meta = getHistoryMeta();
+  if(!meta.lastSync) return 'Not checked yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked ${when}${errPart}.`;
+}
+
+function renderWhatsChanged(){
+  const host = document.getElementById('whatsChangedBody');
+  if(!host) return;
+  maybeAutoSyncHistory();
+
+  if(!historyCache){
+    host.innerHTML = `<div class="chron-card" style="margin-bottom:16px;">
+      <div class="cc-label">What's changed</div>
+      <p style="color:var(--chalk-3);font-size:13px;margin:0;">${historyInFlight?'Checking…':'No data yet.'}</p>
+    </div>`;
+    return;
+  }
+
+  const { roster, news } = historyCache;
+  const sections = [];
+
+  if(!roster.ready){
+    sections.push(`<p style="color:var(--chalk-3);font-size:13px;margin:0 0 8px;">Roster history: ${roster.reason || "not enough history yet -- check back after tomorrow's daily sync."}</p>`);
+  } else if(roster.added.length || roster.removed.length || roster.changed.length){
+    const rows = [
+      ...roster.added.map(p=>`<div class="div-team-row" style="align-items:center;"><span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span><span style="color:var(--jade);font-size:11px;">Added to roster</span></div>`),
+      ...roster.removed.map(p=>`<div class="div-team-row" style="align-items:center;"><span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span><span style="color:var(--coral);font-size:11px;">No longer rostered</span></div>`),
+      ...roster.changed.map(c=>`<div class="div-team-row" style="align-items:center;"><span class="dt-name">${c.player}</span><span style="font-size:11px;color:var(--chalk-3);">${c.field}: ${c.from||'--'} &rarr; ${c.to||'--'}</span></div>`),
+    ];
+    sections.push(`<div class="cc-label" style="margin-top:10px;">Roster changes since ${new Date(roster.from).toLocaleString()}</div>${rows.join('')}`);
+  } else {
+    sections.push(`<p style="color:var(--jade);font-size:13px;margin:0 0 8px;">No roster changes since ${new Date(roster.from).toLocaleString()}.</p>`);
+  }
+
+  if(news.cbs?.ready && news.cbs.count){
+    sections.push(`<div class="cc-label" style="margin-top:14px;">New team news (CBS)</div>${news.cbs.items.map(i=>`
+      <div class="trade-verdict" style="margin-bottom:6px;">
+        <strong>${i.title}</strong>${i.injury?` <span class="dead-tag">${i.injury.split(':')[0]}</span>`:''}
+      </div>`).join('')}`);
+  }
+  if(news.espn?.ready && news.espn.count){
+    sections.push(`<div class="cc-label" style="margin-top:14px;">New around the league (ESPN)</div>${news.espn.items.map(i=>`
+      <div class="trade-verdict" style="margin-bottom:6px;">
+        <a href="${i.link}" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">${i.headline}</a>
+      </div>`).join('')}`);
+  }
+
+  host.innerHTML = `
+    <div class="chron-card" style="margin-bottom:16px;">
+      <div class="cc-label">What's changed</div>
+      <p class="cc-sub" style="margin:0 0 10px;">${historyStatusText()}</p>
+      ${sections.join('')}
+    </div>
+  `;
 }
 
 /* ---------- CBS TEAM NEWS (live, primary) ----------
