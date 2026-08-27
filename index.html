@@ -2411,6 +2411,7 @@
       <h3>Suggested starting lineup</h3>
       <p class="panel-sub">Best value at each required slot (1 QB, 2 RB, 2 WR/TE, 1 flex, 1 PK, 1 DST), automatically skipping anyone flagged Out or Bye. Anyone flagged Questionable or Doubtful still shows up but gets flagged, your call on those.</p>
       <div class="table-scroll"><table class="result-table" id="lineupStartersTable"></table></div>
+      <div id="lineupWriteBox" style="margin-top:14px;"></div>
     </div>
 
     <div class="panel">
@@ -7894,6 +7895,148 @@ function computeAndRenderLineup(players){
       bench.map(p=>`<tr><td>${p.name}</td><td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td><td>${weeklyPlayerValueCell(p,week)}</td><td>${p.status||'Healthy'}</td></tr>`).join('')
       || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
+
+  renderLineupWriteBox();
+}
+
+/* ---------- LINEUP WRITE (push to CBS) ----------
+   Deliberately NOT built on the "suggested starting lineup" above -- that
+   table draws from state.teams, which this app only ever seeds with
+   *keeper contracts* (a handful of multi-year deals for cap accounting),
+   not the real 18-man roster. Confirmed by testing: Blake Taylor's local
+   list has exactly 2 non-deadCap entries (both QBs), so a lineup diffed
+   against that would have benched almost the entire real CBS team. Once
+   this is a real write instead of just a display, that gap actually
+   matters -- so this section computes its own suggested lineup straight
+   from the live CBS roster (cbsRostersCache, from Roster Sync), using CBS's
+   own per-player projected_points (already scored under this league's real
+   rules) and bye weeks. Requires Roster Sync to have run at least once. */
+let lineupWriteInFlight = false;
+let lineupWriteError = null;
+
+// Required roster slots, in CBS's own roster_pos codes, and which of CBS's
+// own base position codes (QB/RB/WR/TE/TK/DST) are eligible for each.
+const CBS_ROSTER_SLOTS = [
+  { slot: 'QB', label: 'QB', positions: ['QB'] },
+  { slot: 'RB', label: 'RB', positions: ['RB'] },
+  { slot: 'RB', label: 'RB', positions: ['RB'] },
+  { slot: 'WR-TE', label: 'WR/TE', positions: ['WR','TE'] },
+  { slot: 'WR-TE', label: 'WR/TE', positions: ['WR','TE'] },
+  { slot: 'RB-WR-TE', label: 'FLEX (RB/WR/TE)', positions: ['RB','WR','TE'] },
+  { slot: 'TK', label: 'PK', positions: ['TK'] },
+  { slot: 'DST', label: 'DST', positions: ['DST'] },
+];
+
+// Best lineup CBS's own roster + projections can build: highest
+// projected_points at each slot, skipping anyone on bye this week. Doesn't
+// second-guess CBS's projections with local injury flags -- a real Out
+// player generally projects near zero anyway, and this stays honest about
+// only using data actually available here.
+function computeCbsSuggestedStarters(cbsTeam, week){
+  const used = new Set();
+  const bestAt = (positions)=>{
+    const pool = cbsTeam.players.filter(p=>
+      positions.includes(p.pos) && !used.has(p.id) && String(p.byeWeek||'') !== String(week||''));
+    pool.sort((a,b)=>(b.projectedPoints||0)-(a.projectedPoints||0));
+    return pool[0] || null;
+  };
+  return CBS_ROSTER_SLOTS.map(({slot,label,positions})=>{
+    const p = bestAt(positions);
+    if(p) used.add(p.id);
+    return { slot, label, player: p };
+  });
+}
+
+function buildLineupWriteDiff(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam) return { error: 'noSync' };
+
+  const week = cbsRostersCache.period;
+  const starters = computeCbsSuggestedStarters(cbsTeam, week);
+  const active = {}, reserve = {}, changes = [];
+  const desiredActiveIds = new Set();
+
+  starters.forEach(s=>{
+    if(!s.player) return;
+    desiredActiveIds.add(s.player.id);
+    if(s.player.rosterStatus !== 'A' || s.player.rosterPos !== s.slot){
+      active[s.player.id] = { pos: s.slot };
+      changes.push(`Start ${s.player.player} at ${s.label}${s.player.rosterStatus!=='A' ? ' (off the bench)' : ' (slot change)'}`);
+    }
+  });
+
+  cbsTeam.players.forEach(cp=>{
+    if(cp.rosterStatus === 'A' && !desiredActiveIds.has(cp.id)){
+      reserve[cp.id] = { pos: cp.rosterPos };
+      changes.push(`Bench ${cp.player}`);
+    }
+  });
+
+  return { point: week, starters, active, reserve, changes };
+}
+
+function renderLineupWriteBox(){
+  const box = document.getElementById('lineupWriteBox');
+  if(!box) return;
+
+  if(!cbsRostersCache){
+    box.innerHTML = `<p class="panel-sub">Run <b>Roster Sync</b> (League tab) at least once to pull your real CBS roster before pushing a lineup.</p>`;
+    return;
+  }
+
+  const diff = buildLineupWriteDiff();
+  if(diff.error === 'noSync'){
+    box.innerHTML = `<p class="panel-sub">No live CBS roster found for ${MY_TEAM_OWNER} -- try Roster Sync again.</p>`;
+    return;
+  }
+
+  const suggestedHtml = `<ul style="margin:8px 0 0 18px;padding:0;">${
+    diff.starters.map(s=>`<li>${s.label}: ${s.player ? `${s.player.player} (${(s.player.projectedPoints||0).toFixed(1)} proj)` : '<em>no eligible player</em>'}</li>`).join('')
+  }</ul>`;
+
+  if(!diff.changes.length){
+    box.innerHTML = `
+      <p class="panel-sub" style="color:var(--jade);">This is already your live lineup on CBS (week ${diff.point}) -- nothing to push.</p>
+      <p class="panel-sub" style="margin-top:8px;">Based on CBS's own projections:</p>${suggestedHtml}`;
+    return;
+  }
+
+  box.innerHTML = `
+    <p class="panel-sub">Best lineup by CBS's own projected points (week ${diff.point}):</p>${suggestedHtml}
+    <div class="trade-verdict" style="margin:10px 0;">
+      <strong>Differs from what's live on CBS:</strong>
+      <ul style="margin:8px 0 0 18px;padding:0;">${diff.changes.map(c=>`<li>${c}</li>`).join('')}</ul>
+    </div>
+    <button id="pushLineupBtn" class="side-tab" ${lineupWriteInFlight?'disabled':''}>${lineupWriteInFlight?'Pushing to CBS…':'Push this lineup to CBS'}</button>
+    <p style="margin-top:8px;font-size:12px;color:${lineupWriteError?'var(--coral)':'var(--chalk-3)'};">${lineupWriteInFlight?'Sending to CBS…':(lineupWriteError?`Failed: ${lineupWriteError}`:'')}</p>
+  `;
+  document.getElementById('pushLineupBtn')?.addEventListener('click', ()=>submitLineupWrite(diff));
+}
+
+async function submitLineupWrite(diff){
+  if(lineupWriteInFlight) return;
+  const confirmMsg = `Push this real lineup change to your live CBS team?\n\n${diff.changes.join('\n')}`;
+  if(!window.confirm(confirmMsg)) return;
+
+  lineupWriteInFlight = true;
+  lineupWriteError = null;
+  renderLineupWriteBox();
+
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/lineup?key=${ZUB_SYNC_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ point: diff.point, active: diff.active, reserve: diff.reserve }),
+    });
+    const body = await res.json();
+    if(!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`);
+    await syncCbsRosters(); // re-sync so the diff box reflects the new live state
+  }catch(e){
+    lineupWriteError = e.message;
+  }finally{
+    lineupWriteInFlight = false;
+    renderLineupWriteBox();
+  }
 }
 
 
