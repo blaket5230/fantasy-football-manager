@@ -4017,6 +4017,22 @@ function renderTeamDetail(){
     YEARS.map(y=>`<th class="${y===state.currentYear?'current-yr':''}">'${String(y).slice(2)}</th>`).join('') +
     '<th></th></tr>';
 
+  // Live CBS status per contract row -- a convenience, not a replacement
+  // for Roster Sync's own league-wide drift view: is this specific player,
+  // whose contract you're looking at right now, still actually on the real
+  // roster, and active or benched. No-ops silently until Roster Sync has
+  // run at least once (cbsTeamFor returns null with no cache yet).
+  const teamCbsRoster = cbsTeamFor(t.owner);
+  const liveStatusTag = (p) => {
+    if(!teamCbsRoster || p.deadCap) return '';
+    const cbsMatch = p.cbsId ? teamCbsRoster.players.find(cp=>cp.id===p.cbsId) : null;
+    if(cbsMatch){
+      const active = cbsMatch.rosterStatus === 'A';
+      return `<span class="pos-tag" style="margin-left:4px;color:var(--jade);border-color:rgba(52,199,89,.3);background:rgba(52,199,89,.1);" title="Live on CBS: ${active?'Active':'Reserve'} (${cbsMatch.rosterPos})">${active?'Active':'Bench'} on CBS</span>`;
+    }
+    return `<span class="dead-tag" title="Not found on the live CBS roster -- may have been dropped or traded since this contract was entered">Not on CBS roster</span>`;
+  };
+
   tbody.innerHTML = t.players.map((p,pi)=>{
     const cells = YEARS.map(y=>{
       const val = p.years[y];
@@ -4027,7 +4043,7 @@ function renderTeamDetail(){
       return `<td class="${cls}" contenteditable="true" data-player="${pi}" data-year="${y}">${val}</td>`;
     }).join('');
     return `<tr class="${p.deadCap?'dead-cap':''}">
-      <td class="player-name">${p.name}${p.deadCap?'<span class="dead-tag">Dead cap</span>':''}${p.mv?`<span class="pos-tag" style="margin-left:4px;color:var(--gold);border-color:rgba(229,181,103,0.3);background:rgba(229,181,103,0.1);">MV ${p.mv}</span>`:''}</td>
+      <td class="player-name">${p.name}${p.deadCap?'<span class="dead-tag">Dead cap</span>':''}${p.mv?`<span class="pos-tag" style="margin-left:4px;color:var(--gold);border-color:rgba(229,181,103,0.3);background:rgba(229,181,103,0.1);">MV ${p.mv}</span>`:''}${liveStatusTag(p)}</td>
       <td>${p.pos?`<span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>`:''}</td>
       <td>$${p.base}</td>
       ${cells}
