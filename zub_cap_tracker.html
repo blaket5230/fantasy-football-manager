@@ -2414,7 +2414,7 @@
 
     <div class="panel">
       <h3>Suggested starting lineup</h3>
-      <p class="panel-sub">Best value at each required slot (1 QB, 2 RB, 2 WR/TE, 1 flex, 1 PK, 1 DST), automatically skipping anyone flagged Out or Bye. Anyone flagged Questionable or Doubtful still shows up but gets flagged, your call on those.</p>
+      <p class="panel-sub">Once Roster Sync has run, this is built from your live 18-man CBS roster using CBS's own projected points and bye weeks -- not the status table above, which only covers hand-entered keeper contracts. Before that first sync, falls back to the status table below with manual Out/Bye/Questionable flags.</p>
       <div class="table-scroll"><table class="result-table" id="lineupStartersTable"></table></div>
       <div id="lineupWriteBox" style="margin-top:14px;"></div>
     </div>
@@ -8283,6 +8283,17 @@ function weeklyPlayerValueCell(p, week){
 }
 
 function computeAndRenderLineup(players){
+  // Prefer the live CBS roster (Roster Sync) once it's available -- the local
+  // players list here is only ever the hand-entered keeper-contract subset
+  // (state.teams), which for a real team can be almost empty (confirmed:
+  // Blake Taylor's local list has exactly 2 non-deadCap entries, both QBs).
+  // Building the "suggested lineup" from that produced a table that
+  // contradicted the live-data lineup the write box below computes
+  // separately -- same underlying gap that write feature had to work around,
+  // just showing up here as two disagreeing panels instead of a bad write.
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(cbsTeam){ renderLiveLineupTables(cbsTeam); return; }
+
   const week = currentScheduleWeek();
   const available = players.filter(p=>p.status!=='Out' && p.status!=='Bye');
   const flagged = p => (p.status==='Questionable'||p.status==='Doubtful');
@@ -8329,18 +8340,44 @@ function computeAndRenderLineup(players){
   renderLineupWriteBox();
 }
 
+// Live-CBS-data path for the main starters/bench tables, once Roster Sync
+// has run -- shares computeCbsSuggestedStarters with the write box below,
+// so the two panels can never disagree with each other again.
+function renderLiveLineupTables(cbsTeam){
+  const week = cbsRostersCache.period;
+  const starters = computeCbsSuggestedStarters(cbsTeam, week);
+  const usedIds = new Set(starters.filter(s=>s.player).map(s=>s.player.id));
+
+  document.getElementById('lineupStartersTable').innerHTML =
+    `<thead><tr><th>Slot</th><th>Player</th><th>Value</th><th></th></tr></thead><tbody>${
+      starters.map(s=>{
+        if(!s.player) return `<tr><td>${s.label}</td><td colspan="3" class="empty-cell">No eligible player</td></tr>`;
+        const p = s.player;
+        const fpHit = fpInjuryFor(p.player);
+        const statusText = p.injury || (fpHit ? fpHit.status : null);
+        const warn = statusText ? `<span class="dead-tag" title="${p.injury ? 'CBS' : 'FantasyPros'}">${statusText}</span>` : '';
+        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}</td><td class="hero">${(p.projectedPoints||0).toFixed(1)}</td><td></td></tr>`;
+      }).join('')
+    }`;
+
+  const bench = cbsTeam.players.filter(p=>!usedIds.has(p.id));
+  document.getElementById('lineupBenchTable').innerHTML =
+    `<thead><tr><th>Player</th><th>Pos</th><th>Value</th><th>Status</th></tr></thead><tbody>${
+      bench.map(p=>{
+        const fpHit = fpInjuryFor(p.player);
+        const statusText = p.injury || (fpHit ? fpHit.status : 'Healthy');
+        return `<tr><td>${p.player}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${(p.projectedPoints||0).toFixed(1)}</td><td>${statusText}</td></tr>`;
+      }).join('') || '<tr><td>Nobody left on the bench.</td></tr>'
+    }`;
+
+  renderLineupWriteBox();
+}
+
 /* ---------- LINEUP WRITE (push to CBS) ----------
-   Deliberately NOT built on the "suggested starting lineup" above -- that
-   table draws from state.teams, which this app only ever seeds with
-   *keeper contracts* (a handful of multi-year deals for cap accounting),
-   not the real 18-man roster. Confirmed by testing: Blake Taylor's local
-   list has exactly 2 non-deadCap entries (both QBs), so a lineup diffed
-   against that would have benched almost the entire real CBS team. Once
-   this is a real write instead of just a display, that gap actually
-   matters -- so this section computes its own suggested lineup straight
-   from the live CBS roster (cbsRostersCache, from Roster Sync), using CBS's
-   own per-player projected_points (already scored under this league's real
-   rules) and bye weeks. Requires Roster Sync to have run at least once. */
+   Shares computeCbsSuggestedStarters with renderLiveLineupTables above --
+   this box now only needs to show the diff and the push button, since the
+   full suggested lineup is already visible in the table above it. Requires
+   Roster Sync to have run at least once. */
 let lineupWriteInFlight = false;
 let lineupWriteError = null;
 
@@ -8420,21 +8457,14 @@ function renderLineupWriteBox(){
     return;
   }
 
-  const suggestedHtml = `<ul style="margin:8px 0 0 18px;padding:0;">${
-    diff.starters.map(s=>`<li>${s.label}: ${s.player ? `${s.player.player} (${(s.player.projectedPoints||0).toFixed(1)} proj)` : '<em>no eligible player</em>'}</li>`).join('')
-  }</ul>`;
-
   if(!diff.changes.length){
-    box.innerHTML = `
-      <p class="panel-sub" style="color:var(--jade);">This is already your live lineup on CBS (week ${diff.point}) -- nothing to push.</p>
-      <p class="panel-sub" style="margin-top:8px;">Based on CBS's own projections:</p>${suggestedHtml}`;
+    box.innerHTML = `<p class="panel-sub" style="color:var(--jade);">The table above is already your live lineup on CBS (week ${diff.point}) -- nothing to push.</p>`;
     return;
   }
 
   box.innerHTML = `
-    <p class="panel-sub">Best lineup by CBS's own projected points (week ${diff.point}):</p>${suggestedHtml}
-    <div class="trade-verdict" style="margin:10px 0;">
-      <strong>Differs from what's live on CBS:</strong>
+    <div class="trade-verdict" style="margin-bottom:10px;">
+      <strong>The lineup above differs from what's live on CBS (week ${diff.point}):</strong>
       <ul style="margin:8px 0 0 18px;padding:0;">${diff.changes.map(c=>`<li>${c}</li>`).join('')}</ul>
     </div>
     <button id="pushLineupBtn" class="side-tab" ${lineupWriteInFlight?'disabled':''}>${lineupWriteInFlight?'Pushing to CBS…':'Push this lineup to CBS'}</button>
