@@ -6262,6 +6262,137 @@ function renderWaiverView(){
   });
 }
 
+/* ---------- ESPN CROSS-CHECK ----------
+   Secondary provider signal only -- ZUB lives on CBS, not ESPN. Surfaces
+   ESPN's leaguewide ownership/ADP for your own live roster (matched by CBS
+   id, via /api/espn), plus on-demand per-player news. ESPN's own default
+   projections are PPR, so those aren't surfaced here at all -- not
+   comparable to this league's STD scoring without more caveats than the
+   number is worth. News has no bulk form on ESPN's side, so it's a manual
+   per-player pull, not something auto-synced like everything else. */
+const ESPN_SYNC_META_KEY = "zubEspnSyncMeta_v1";
+let espnPlayersCache = null; // array
+let espnSyncInFlight = false;
+let espnNewsCache = {}; // espnId -> news[]
+
+function getEspnSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(ESPN_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setEspnSyncMeta(meta){
+  try{ localStorage.setItem(ESPN_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncEspnPlayers(){
+  if(espnSyncInFlight) return;
+  espnSyncInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/espn?mode=players&limit=500&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    espnPlayersCache = data.items;
+    setEspnSyncMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setEspnSyncMeta({ lastSync: getEspnSyncMeta().lastSync || null, error: e.message });
+  } finally {
+    espnSyncInFlight = false;
+  }
+}
+function maybeAutoSyncEspnPlayers(){
+  if(espnSyncInFlight) return;
+  const meta = getEspnSyncMeta();
+  // matches the backend's own 1-hour cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && espnPlayersCache) return;
+  syncEspnPlayers().then(()=>{ renderImportView(); });
+}
+function espnSyncStatusText(){
+  if(espnSyncInFlight) return 'Pulling ESPN’s ownership/ADP board…';
+  const meta = getEspnSyncMeta();
+  const base = 'Secondary signal only -- ZUB lives on CBS, not ESPN.';
+  if(!meta.lastSync) return base;
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Pulled ${when}${errPart}. ${base}`;
+}
+// NOT named espnFor -- that name's already taken by the hand-collected ESPN
+// analyst sleeper/bust/breakout panel further down (a completely different
+// "ESPN" thing: draft-guide opinion, not this live ownership/ADP API).
+// Collision caught by testing, same class of bug as the earlier
+// lineupValue() clash -- a same-name function declared later in the file
+// silently wins, so the live API version was never actually being called.
+function espnApiFor(cbsPlayerId){
+  if(!espnPlayersCache || !cbsPlayerId) return null;
+  return espnPlayersCache.find(p=>p.cbsPlayerId===cbsPlayerId) || null;
+}
+
+async function fetchEspnNewsFor(espnId){
+  if(espnNewsCache[espnId]) return espnNewsCache[espnId];
+  const res = await fetch(`${ZUB_SYNC_API}/api/espn?mode=news&espnId=${encodeURIComponent(espnId)}&limit=3&key=${ZUB_SYNC_KEY}`);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  espnNewsCache[espnId] = data.news;
+  return data.news;
+}
+
+function renderEspnCrossCheckBody(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam) return `<p style="color:var(--chalk-3);font-size:13px;margin:0;">Run Roster Sync first so this can match your live roster.</p>`;
+  if(!espnPlayersCache) return `<p style="color:var(--chalk-3);font-size:13px;margin:0;">${espnSyncInFlight?'Pulling ESPN data…':'No ESPN data pulled yet.'}</p>`;
+
+  return cbsTeam.players.map(p=>{
+    const e = espnApiFor(p.id);
+    if(!e) return `<div class="div-team-row" style="align-items:center;">
+      <span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span>
+      <span style="font-size:11px;color:var(--chalk-3);">No ESPN match</span>
+    </div>`;
+    return `<div class="div-team-row" style="align-items:center;flex-wrap:wrap;">
+      <span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span>
+      <span style="font-size:11px;color:var(--chalk-3);display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span>ESPN own ${e.percentOwned!=null?e.percentOwned.toFixed(1)+'%':'--'}</span>
+        <span>ADP ${e.adp!=null?e.adp.toFixed(1):'--'}</span>
+        ${e.injuryStatus && e.injuryStatus!=='ACTIVE' ? `<span class="dead-tag">${e.injuryStatus}</span>` : ''}
+        <button class="icon-btn" data-espn-news="${e.espnId}" title="Recent news from ESPN">News</button>
+      </span>
+      <div class="espn-news-slot" data-espn-news-slot="${e.espnId}" style="width:100%;font-size:12px;color:var(--chalk-3);margin-top:4px;"></div>
+    </div>`;
+  }).join('');
+}
+
+function renderEspnCrossCheck(){
+  maybeAutoSyncEspnPlayers();
+  return `
+    <p id="espnSyncStatus" style="font-size:12.5px;color:var(--chalk-3);margin:0 0 8px;">${espnSyncStatusText()}</p>
+    <button id="espnSyncBtn" class="side-tab" style="margin-bottom:10px;" ${espnSyncInFlight?'disabled':''}>${espnSyncInFlight?'Pulling…':'Pull ESPN board'}</button>
+    <div id="espnCrossCheckRows">${renderEspnCrossCheckBody()}</div>
+  `;
+}
+
+function bindEspnCrossCheckEvents(){
+  document.getElementById('espnSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('espnSyncStatus');
+    if(statusEl) statusEl.textContent = 'Pulling ESPN data…';
+    await syncEspnPlayers();
+    renderImportView();
+  });
+  document.querySelectorAll('[data-espn-news]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const espnId = btn.dataset.espnNews;
+      const slot = document.querySelector(`[data-espn-news-slot="${espnId}"]`);
+      if(!slot) return;
+      slot.textContent = 'Loading…';
+      try{
+        const news = await fetchEspnNewsFor(espnId);
+        slot.innerHTML = news.length
+          ? news.map(n=>`<div style="margin-top:4px;"><b>${n.headline||''}</b>${n.description && n.description!==n.headline ? ` -- ${n.description}` : ''}</div>`).join('')
+          : 'No recent news.';
+      }catch(e){
+        slot.textContent = `Failed: ${e.message}`;
+      }
+    });
+  });
+}
+
 function renderScheduleView(){
   const host = document.getElementById('scheduleBody');
   if(!host) return;
@@ -8353,7 +8484,14 @@ function renderImportView(){
       <div class="cc-label">Waiver-wire rankings &middot; stored for future waiver tools</div>
       ${waiver.length ? waiver.map(([k,r])=>reportRow(k,r,'waiver')).join('') : '<p style="color:var(--chalk-3);font-size:13px;margin:0;">None imported yet.</p>'}
     </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Cross-provider check &middot; ESPN</div>
+      <div class="cc-title">Your roster, seen from ESPN's side</div>
+      ${renderEspnCrossCheck()}
+    </div>
   `;
+
+  bindEspnCrossCheckEvents();
 
   document.getElementById('fpFileInput')?.addEventListener('change', (e)=>{
     const file = e.target.files[0];
