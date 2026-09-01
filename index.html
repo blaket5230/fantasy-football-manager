@@ -6181,10 +6181,20 @@ function matchupPlayerRow(p){
 }
 
 function matchupTeamTable(team){
-  const starters = (team?.rosterPlayers||[]).filter(p=>p.isStarter);
+  const all = team?.rosterPlayers||[];
+  const starters = all.filter(p=>p.isStarter);
+  const bench = all.filter(p=>!p.isStarter);
   const projTotal = starters.reduce((s,p)=>s+(p.projectedPoints||0),0);
   const anyActual = starters.some(p=>p.points!=null);
   const actualTotal = starters.reduce((s,p)=>s+(p.points||0),0);
+  const benchTable = bench.length ? `
+    <details style="margin-top:6px;">
+      <summary style="cursor:pointer;color:var(--chalk-3);font-size:12px;">Bench (${bench.length})</summary>
+      <table class="result-table" style="margin-top:6px;">
+        <thead><tr><th>Bench</th><th>Team</th><th style="text-align:right;">Proj</th><th style="text-align:right;">Actual</th></tr></thead>
+        <tbody>${bench.map(matchupPlayerRow).join('')}</tbody>
+      </table>
+    </details>` : '';
   return `
     <table class="result-table">
       <thead><tr><th>Starter</th><th>Team</th><th style="text-align:right;">Proj</th><th style="text-align:right;">Actual</th></tr></thead>
@@ -6194,7 +6204,7 @@ function matchupTeamTable(team){
         <td style="text-align:right;">${projTotal.toFixed(1)}</td>
         <td style="text-align:right;">${anyActual ? actualTotal.toFixed(1) : '--'}</td>
       </tr></tfoot>
-    </table>`;
+    </table>${benchTable}`;
 }
 
 async function renderMatchupView(){
