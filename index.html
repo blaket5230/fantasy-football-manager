@@ -2008,6 +2008,7 @@
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
     <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
+    <button data-view="matchup" data-mode="leaguehub" hidden>Matchup</button>
 
     <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
     <button data-view="finder" data-mode="league" hidden>Trade Finder</button>
@@ -2056,6 +2057,14 @@
 
   <div class="view" id="view-waivers">
     <div id="waiverBody"></div>
+  </div>
+
+  <!-- MATCHUP VIEW -->
+  <div class="view" id="view-matchup">
+    <div class="panel">
+      <h3>Head-to-head matchup</h3>
+      <div id="matchupBody"></div>
+    </div>
   </div>
 
   <!-- SCHEDULE & DIVISIONS VIEW -->
@@ -3779,6 +3788,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
     if(btn.dataset.view==='waivers') renderWaiverView();
+    if(btn.dataset.view==='matchup') renderMatchupView();
     if(btn.dataset.view==='recap') renderRecap();
     if(btn.dataset.view==='ideas') renderIdeasView();
   });
@@ -6130,6 +6140,121 @@ function maybeAutoSyncLiveScores(){
   syncLiveScores().then(()=>{
     renderScheduleView();
     if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
+  });
+}
+
+/* ---------- MATCHUP (head-to-head) ----------
+   No new CBS scraping for this -- it's built entirely from the same
+   /api/scores payload fetchLiveWeek already reads, just unwrapped instead
+   of trimmed down to team totals. Each team's rosterPlayers array carries
+   per-starter projected points (always populated) and actual live points
+   (starterSnsTotal/benchSnsTotal -- null until real games kick off, see
+   lib/parseScoreboard.js). This is a boxscore-style side-by-side, not a
+   position-paired "edge" comparison like CBS's own Scoring Preview tool --
+   simpler to build correctly and robust to either roster's exact slot
+   construction. */
+let matchupSelectedWeek = null;
+const matchupWeekCache = {};
+
+async function fetchMatchupWeek(week){
+  if(matchupWeekCache[week]) return matchupWeekCache[week];
+  const res = await fetch(`${ZUB_SYNC_API}/api/scores?week=${week}&key=${ZUB_SYNC_KEY}`);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  matchupWeekCache[week] = data;
+  return data;
+}
+
+function myCbsTeamId(){
+  return Object.keys(CBS_TEAM_ID_TO_OWNER).find(id=>CBS_TEAM_ID_TO_OWNER[id]===MY_TEAM_OWNER) || null;
+}
+
+function matchupPlayerRow(p){
+  const proj = p.projectedPoints!=null ? Number(p.projectedPoints).toFixed(1) : '--';
+  const actual = p.points!=null ? Number(p.points).toFixed(1) : '--';
+  return `<tr>
+    <td class="player-name">${p.name||'--'}${p.primaryPosition?` <span class="pos-tag pos-${p.primaryPosition}">${posLabel(p.primaryPosition)}</span>`:''}</td>
+    <td style="color:var(--chalk-3);font-size:11px;">${p.proTeam||''}</td>
+    <td style="text-align:right;">${proj}</td>
+    <td style="text-align:right;font-weight:600;">${actual}</td>
+  </tr>`;
+}
+
+function matchupTeamTable(team){
+  const starters = (team?.rosterPlayers||[]).filter(p=>p.isStarter);
+  const projTotal = starters.reduce((s,p)=>s+(p.projectedPoints||0),0);
+  const anyActual = starters.some(p=>p.points!=null);
+  const actualTotal = starters.reduce((s,p)=>s+(p.points||0),0);
+  return `
+    <table class="result-table">
+      <thead><tr><th>Starter</th><th>Team</th><th style="text-align:right;">Proj</th><th style="text-align:right;">Actual</th></tr></thead>
+      <tbody>${starters.map(matchupPlayerRow).join('') || '<tr><td colspan="4" class="panel-sub">No starters found.</td></tr>'}</tbody>
+      <tfoot><tr style="font-weight:700;border-top:2px solid var(--line);">
+        <td colspan="2">Total</td>
+        <td style="text-align:right;">${projTotal.toFixed(1)}</td>
+        <td style="text-align:right;">${anyActual ? actualTotal.toFixed(1) : '--'}</td>
+      </tr></tfoot>
+    </table>`;
+}
+
+async function renderMatchupView(){
+  const box = document.getElementById('matchupBody');
+  if(!box) return;
+  if(matchupSelectedWeek==null) matchupSelectedWeek = currentScheduleWeek();
+
+  const myId = myCbsTeamId();
+  if(!myId){
+    box.innerHTML = `<p class="panel-sub">No CBS team mapping found for ${MY_TEAM_OWNER}.</p>`;
+    return;
+  }
+
+  const weekOptions = Array.from({length: SEASON_WEEKS}, (_,i)=>i+1)
+    .map(w=>`<option value="${w}" ${w===matchupSelectedWeek?'selected':''}>Week ${w}</option>`).join('');
+  box.innerHTML = `
+    <p class="panel-sub">Week <select id="matchupWeekSelect">${weekOptions}</select> &middot; Loading from CBS…</p>`;
+  document.getElementById('matchupWeekSelect')?.addEventListener('change', (e)=>{
+    matchupSelectedWeek = Number(e.target.value);
+    renderMatchupView();
+  });
+
+  let data;
+  try{
+    data = await fetchMatchupWeek(matchupSelectedWeek);
+  }catch(e){
+    box.innerHTML = `<p class="panel-sub" style="color:var(--coral);">Failed to load week ${matchupSelectedWeek}: ${e.message}</p>`;
+    return;
+  }
+
+  const matchup = (data.matchups||[]).find(m =>
+    String(m.away?.teamId)===String(myId) || String(m.home?.teamId)===String(myId));
+  if(!matchup){
+    box.innerHTML = `<p class="panel-sub">No matchup found for ${MY_TEAM_OWNER} in week ${matchupSelectedWeek}.</p>`;
+    return;
+  }
+  const isAway = String(matchup.away.teamId)===String(myId);
+  const myTeam = (data.teams||[]).find(t=>String(t.id)===String(isAway?matchup.away.teamId:matchup.home.teamId));
+  const oppTeam = (data.teams||[]).find(t=>String(t.id)===String(isAway?matchup.home.teamId:matchup.away.teamId));
+  if(!myTeam || !oppTeam){
+    box.innerHTML = `<p class="panel-sub">Team roster data missing for this matchup (try again after a Roster Sync).</p>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <p class="panel-sub">Week <select id="matchupWeekSelect">${weekOptions}</select> &middot; Built from your live CBS roster and CBS's own weekly projections for each starter -- no separate matchup tool needed.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <h4 style="margin:0 0 8px;">${myTeam.name} <span style="color:var(--chalk-3);font-weight:400;">(you)</span></h4>
+        <div class="table-scroll">${matchupTeamTable(myTeam)}</div>
+      </div>
+      <div>
+        <h4 style="margin:0 0 8px;">${oppTeam.name}</h4>
+        <div class="table-scroll">${matchupTeamTable(oppTeam)}</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('matchupWeekSelect')?.addEventListener('change', (e)=>{
+    matchupSelectedWeek = Number(e.target.value);
+    renderMatchupView();
   });
 }
 
