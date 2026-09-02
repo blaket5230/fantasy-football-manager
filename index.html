@@ -6784,7 +6784,7 @@ function bestAvailableByPosition(){
     out[r.pos].push(r);
   });
   Object.keys(out).forEach(pos=>{
-    out[pos].sort((a,b)=>(a.rankEcr??9999)-(b.rankEcr??9999));
+    out[pos].sort((a,b)=>waiverRankFor(a)-waiverRankFor(b));
     out[pos] = out[pos].slice(0,5);
   });
   return out;
@@ -6800,7 +6800,7 @@ function weakestOwnByPosition(){
   cbsTeam.players.forEach(p=>{
     const r = rankByCbsId.get(p.id);
     if(!r || !WAIVER_VALUE_POSITIONS.includes(r.pos)) return;
-    if(!out[r.pos] || (r.rankEcr??9999) > (out[r.pos].rankEcr??9999)) out[r.pos] = r;
+    if(!out[r.pos] || waiverRankFor(r) > waiverRankFor(out[r.pos])) out[r.pos] = r;
   });
   return out;
 }
@@ -6817,17 +6817,17 @@ function renderBestAvailableCard(){
     if(!list.length) return '';
     const weak = weakest[pos];
     const rows = list.map(r=>{
-      const isUpgrade = weak && (r.rankEcr??9999) < (weak.rankEcr??9999);
+      const isUpgrade = weak && waiverRankFor(r) < waiverRankFor(weak);
       const upgradeTag = isUpgrade
-        ? `<span style="font-size:10px;color:var(--jade);margin-left:8px;" title="Ranks ahead of your current ${weak.player} (#${weak.rankEcr})">&#8593; upgrade over ${weak.player}</span>`
+        ? `<span style="font-size:10px;color:var(--jade);margin-left:8px;" title="Ranks ahead of your current ${weak.player} (#${waiverRankFor(weak)})">&#8593; upgrade over ${weak.player}</span>`
         : '';
       return `<div class="div-team-row" style="align-items:center;">
-        <span class="dt-name">#${r.rankEcr??'--'} ${r.player} <span style="color:var(--chalk-3);font-size:11px;">${r.team||''}</span>${upgradeTag}</span>
+        <span class="dt-name">#${waiverRankFor(r)} ${r.player} <span style="color:var(--chalk-3);font-size:11px;">${r.team||''}</span>${ensembleRosBadge(r.cbsPlayerId)}${upgradeTag}</span>
         <span style="font-size:11px;color:var(--chalk-3);">${r.recommendation||r.tag||''}</span>
       </div>`;
     }).join('');
     return `<div style="margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;color:var(--chalk-2);margin-bottom:4px;">${pos}${weak?` <span style="font-weight:400;color:var(--chalk-3);">(your weakest: ${weak.player}, #${weak.rankEcr??'--'})</span>`:''}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--chalk-2);margin-bottom:4px;">${pos}${weak?` <span style="font-weight:400;color:var(--chalk-3);">(your weakest: ${weak.player}, #${waiverRankFor(weak)})</span>`:''}</div>
       ${rows}
     </div>`;
   }).join('');
@@ -6840,6 +6840,7 @@ function renderWaiverView(){
   if(!host) return;
   maybeAutoSyncWaiverTrending();
   maybeAutoSyncWaiverValue();
+  maybeAutoSyncEnsembleRos();
 
   if(!waiverTrendingCache){
     host.innerHTML = `<div class="chron-hero">
@@ -8940,6 +8941,75 @@ function ensembleConfidenceBadge(cbsPlayerId){
   if(!ep || ep.matchupAdjustedPoints == null) return '';
   const srcTxt = (ep.sources||[]).join('+');
   return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble projection blended from ${srcTxt}">${ep.confidence==='blended'?'blended':srcTxt}</span>`;
+}
+
+/* ---------- ENSEMBLE ROS RANKINGS ----------
+   This backend's own blended rest-of-season rank (FantasyPros rankEcr +
+   ESPN draftRankStd -- api/players.js mode=ensemble&scope=ros), with
+   cross-provider agreement and expert-disagreement flagged per player.
+   Drives Waiver Wire's best-available/weakest-own comparisons below,
+   falling back to the raw FantasyPros rankEcr already in rosRankingsCache
+   wherever the ensemble has no rank for a player. Shared cache -- Waiver
+   Wire and Trade Analyzer/Finder (Phase 3) both want this. */
+const ENSEMBLE_ROS_META_KEY = "zubEnsembleRosMeta_v1";
+let ensembleRosCache = null; // array of rankings from mode=ensemble&scope=ros
+let ensembleRosInFlight = false;
+
+function getEnsembleRosMeta(){
+  try{ return JSON.parse(localStorage.getItem(ENSEMBLE_ROS_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setEnsembleRosMeta(meta){
+  try{ localStorage.setItem(ENSEMBLE_ROS_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncEnsembleRos(){
+  if(ensembleRosInFlight) return;
+  ensembleRosInFlight = true;
+  try{
+    const year = new Date().getFullYear();
+    const res = await fetch(`${ZUB_SYNC_API}/api/players?mode=ensemble&scope=ros&year=${year}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    ensembleRosCache = data.rankings;
+    setEnsembleRosMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
+  }catch(e){
+    setEnsembleRosMeta({ lastSync: getEnsembleRosMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    ensembleRosInFlight = false;
+  }
+}
+function maybeAutoSyncEnsembleRos(){
+  if(ensembleRosInFlight) return;
+  const meta = getEnsembleRosMeta();
+  // matches the backend's own 30-minute cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && ensembleRosCache) return;
+  // Back off after a failed attempt -- same re-trigger risk as every other
+  // auto-sync in this file (see the FantasyPros-injuries fix for the full
+  // explanation) while Waiver Wire/Trade Analyzer/Trade Finder stays open.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncEnsembleRos().then(()=>{
+    if(document.getElementById('view-waivers')?.classList.contains('active')) renderWaiverView();
+    if(document.getElementById('view-trade')?.classList.contains('active')) computeTrade();
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
+}
+function ensembleRosFor(cbsPlayerId){
+  if(!ensembleRosCache || !cbsPlayerId) return null;
+  return ensembleRosCache.find(r=>r.cbsPlayerId===cbsPlayerId) || null;
+}
+// Ensemble rank when available, falling back to the raw FantasyPros rankEcr
+// already on the rosRankingsCache row -- keeps every position group sortable
+// even for players the ensemble has no ESPN/FP overlap for yet.
+function waiverRankFor(r){
+  const ens = ensembleRosFor(r.cbsPlayerId);
+  return ens && ens.rank != null ? ens.rank : (r.rankEcr ?? 9999);
+}
+function ensembleRosBadge(cbsPlayerId){
+  const ens = ensembleRosFor(cbsPlayerId);
+  if(!ens || ens.rank == null) return '';
+  const srcTxt = (ens.sources||[]).join('+');
+  const disagreeTxt = ens.sourceAgreement===false ? ' &middot; sources disagree' : '';
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble ROS rank blended from ${srcTxt}${ens.expertDisagreement?` (expert disagreement: ${ens.expertDisagreement})`:''}">${srcTxt}${disagreeTxt}</span>`;
 }
 
 function renderLiveLineupTables(cbsTeam){
