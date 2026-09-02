@@ -4250,6 +4250,7 @@ function computeDrop(){
 /* ---------- TRADE ANALYZER ---------- */
 function renderTradeView(){
   maybeAutoSyncWaiverValue();
+  maybeAutoSyncEnsembleRos();
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
   const opts = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
@@ -4325,7 +4326,7 @@ function computeTrade(){
     const aLive = liveRankSummaryHTML(aSendPlayers);
     const bLive = liveRankSummaryHTML(bSendPlayers);
     const liveRankHTML = (aLive || bLive) ? `<div style="margin-top:8px;font-size:12px;">
-      <b>Live FantasyPros ROS rank</b> (cross-check only, not part of the cap/legality read -- needs Roster Sync to have matched a player to their CBS id):<br>
+      <b>Live ROS rank</b> (this backend's ensemble blend where available, FantasyPros-only otherwise -- cross-check only, not part of the cap/legality read -- needs Roster Sync to have matched a player to their CBS id):<br>
       ${aLive ? `${tA.team||tA.owner}: ${aLive}<br>` : ''}
       ${bLive ? `${tB.team||tB.owner}: ${bLive}` : ''}
     </div>` : '';
@@ -4369,6 +4370,7 @@ function myTeam(){ return state.teams.find(t=>t.owner===MY_TEAM_OWNER); }
 
 function renderFinderView(){
   maybeAutoSyncWaiverValue();
+  maybeAutoSyncEnsembleRos();
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
@@ -4403,10 +4405,11 @@ function renderFinderView(){
     });
   });
   targets.sort((a,b)=>b.mv-a.mv);
-  // Live FantasyPros ROS rank alongside the static mv, where Roster Sync has
-  // matched the player to their real CBS id -- a cross-check, not a
-  // replacement, since mv still drives the actual value-gap math below.
-  const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rankEcr??'--'}` : '--'; };
+  // Live ROS rank alongside the static mv, where Roster Sync has matched the
+  // player to their real CBS id -- this backend's ensemble blend where
+  // available, FantasyPros-only otherwise. A cross-check, not a replacement:
+  // mv still drives the actual value-gap math below, untouched.
+  const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rank??'--'}${liveRankBadge(r)}` : '--'; };
   document.getElementById('finderTargets').innerHTML = targets.length
     ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Live ROS rank</th><th>Value/$</th></tr></thead><tbody>${
         targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${rankCell(x.player)}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
@@ -6749,17 +6752,32 @@ function maybeAutoSyncWaiverValue(){
 // A trade's cap legality is decided by the contract data in state.teams --
 // that stays authoritative and unchanged below. This is a second, purely
 // informational cross-check: if Roster Sync has matched a traded player to
-// their real CBS id, look up their current FantasyPros ROS rank so the
+// their real CBS id, look up their current rest-of-season rank so the
 // fairness read isn't leaning entirely on a hand-set draft-day mv number
-// that may be stale months into the season.
+// that may be stale months into the season. Prefers this backend's blended
+// ensemble rank (FantasyPros + ESPN, api/players.js mode=ensemble&scope=ros)
+// over the raw FantasyPros-only rankEcr wherever the ensemble has a rank for
+// this player, falling back to the FP-only number otherwise -- callers get
+// one normalized shape ({rank, sources, ...}) regardless of which it was.
 function liveRankFor(p){
-  if(!p.cbsId || !rosRankingsCache) return null;
-  return rosRankingsCache.find(r=>r.cbsPlayerId===p.cbsId) || null;
+  if(!p.cbsId) return null;
+  const ens = ensembleRosFor(p.cbsId);
+  if(ens && ens.rank != null){
+    return { rank: ens.rank, sources: ens.sources, expertDisagreement: ens.expertDisagreement, sourceAgreement: ens.sourceAgreement, isEnsemble: true };
+  }
+  if(!rosRankingsCache) return null;
+  const r = rosRankingsCache.find(r=>r.cbsPlayerId===p.cbsId);
+  return r ? { rank: r.rankEcr, sources: ['fp'], expertDisagreement: null, sourceAgreement: null, isEnsemble: false } : null;
+}
+function liveRankBadge(r){
+  if(!r || !r.isEnsemble) return '';
+  const srcTxt = (r.sources||[]).join('+');
+  return ` <span style="font-size:10px;color:var(--chalk-3);" title="Ensemble ROS rank blended from ${srcTxt}${r.expertDisagreement?` (expert disagreement: ${r.expertDisagreement})`:''}">(${srcTxt})</span>`;
 }
 function liveRankSummaryHTML(players){
   const matched = players.map(p=>({p, r: liveRankFor(p)})).filter(x=>x.r);
   if(!matched.length) return '';
-  return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rankEcr??'--'})</span>`).join(', ');
+  return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rank??'--'})</span>${liveRankBadge(r)}`).join(', ');
 }
 function waiverValueStatusText(){
   if(waiverValueInFlight) return 'Pulling FantasyPros rest-of-season rankings…';
