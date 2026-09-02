@@ -8837,8 +8837,66 @@ function sleeperDepthBadge(cbsPlayerId){
   return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Sleeper depth chart">Depth #${sp.depthChartOrder} (${sp.depthChartPosition||sp.pos})${projTxt}</span>`;
 }
 
+/* ---------- ENSEMBLE WEEKLY PROJECTIONS ----------
+   This backend's own blended weekly point projection (CBS + Sleeper + ESPN,
+   matchup-adjusted by CBS's oprk) -- see zub-fantasy-sync/lib/ensemble.js.
+   Drives the actual start/sit picks in computeCbsSuggestedStarters below,
+   falling back to CBS's lone projectedPoints wherever it isn't available
+   yet (free agents, or before the first sync completes). */
+const ENSEMBLE_WEEKLY_META_KEY = "zubEnsembleWeeklyMeta_v1";
+let ensembleWeeklyCache = null; // array of projections from mode=ensemble&scope=weekly
+let ensembleWeeklyInFlight = false;
+
+function getEnsembleWeeklyMeta(){
+  try{ return JSON.parse(localStorage.getItem(ENSEMBLE_WEEKLY_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setEnsembleWeeklyMeta(meta){
+  try{ localStorage.setItem(ENSEMBLE_WEEKLY_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncEnsembleWeekly(){
+  if(ensembleWeeklyInFlight) return;
+  ensembleWeeklyInFlight = true;
+  try{
+    const week = cbsRostersCache?.period || currentScheduleWeek();
+    const year = new Date().getFullYear();
+    const res = await fetch(`${ZUB_SYNC_API}/api/players?mode=ensemble&scope=weekly&year=${year}&week=${week}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    ensembleWeeklyCache = data.projections;
+    setEnsembleWeeklyMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setEnsembleWeeklyMeta({ lastSync: getEnsembleWeeklyMeta().lastSync || null, error: e.message });
+  } finally {
+    ensembleWeeklyInFlight = false;
+  }
+}
+function maybeAutoSyncEnsembleWeekly(){
+  if(ensembleWeeklyInFlight) return;
+  const meta = getEnsembleWeeklyMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && ensembleWeeklyCache) return;
+  syncEnsembleWeekly().then(()=>{
+    if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
+  });
+}
+function ensembleWeeklyFor(cbsPlayerId){
+  if(!ensembleWeeklyCache) return null;
+  return ensembleWeeklyCache.find(p=>p.cbsPlayerId===cbsPlayerId) || null;
+}
+function lineupValueFor(p){
+  const ens = ensembleWeeklyFor(p.id);
+  return ens && ens.matchupAdjustedPoints != null ? ens.matchupAdjustedPoints : (p.projectedPoints||0);
+}
+function ensembleConfidenceBadge(cbsPlayerId){
+  const ep = ensembleWeeklyFor(cbsPlayerId);
+  if(!ep || ep.matchupAdjustedPoints == null) return '';
+  const srcTxt = (ep.sources||[]).join('+');
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble projection blended from ${srcTxt}">${ep.confidence==='blended'?'blended':srcTxt}</span>`;
+}
+
 function renderLiveLineupTables(cbsTeam){
   maybeAutoSyncSleeperRoster();
+  maybeAutoSyncEnsembleWeekly();
   const week = cbsRostersCache.period;
   const starters = computeCbsSuggestedStarters(cbsTeam, week);
   const usedIds = new Set(starters.filter(s=>s.player).map(s=>s.player.id));
@@ -8851,7 +8909,7 @@ function renderLiveLineupTables(cbsTeam){
         const fpHit = fpInjuryFor(p.player);
         const statusText = p.injury || (fpHit ? fpHit.status : null);
         const warn = statusText ? `<span class="dead-tag" title="${p.injury ? 'CBS' : 'FantasyPros'}">${statusText}</span>` : '';
-        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}${sleeperDepthBadge(p.id)}</td><td class="hero">${(p.projectedPoints||0).toFixed(1)}</td><td></td></tr>`;
+        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}${sleeperDepthBadge(p.id)}${ensembleConfidenceBadge(p.id)}</td><td class="hero">${lineupValueFor(p).toFixed(1)}</td><td></td></tr>`;
       }).join('')
     }`;
 
@@ -8861,7 +8919,7 @@ function renderLiveLineupTables(cbsTeam){
       bench.map(p=>{
         const fpHit = fpInjuryFor(p.player);
         const statusText = p.injury || (fpHit ? fpHit.status : 'Healthy');
-        return `<tr><td>${p.player}${sleeperDepthBadge(p.id)}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${(p.projectedPoints||0).toFixed(1)}</td><td>${statusText}</td></tr>`;
+        return `<tr><td>${p.player}${sleeperDepthBadge(p.id)}${ensembleConfidenceBadge(p.id)}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${lineupValueFor(p).toFixed(1)}</td><td>${statusText}</td></tr>`;
       }).join('') || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
 
@@ -8889,17 +8947,19 @@ const CBS_ROSTER_SLOTS = [
   { slot: 'DST', label: 'DST', positions: ['DST'] },
 ];
 
-// Best lineup CBS's own roster + projections can build: highest
-// projected_points at each slot, skipping anyone on bye this week. Doesn't
-// second-guess CBS's projections with local injury flags -- a real Out
-// player generally projects near zero anyway, and this stays honest about
-// only using data actually available here.
+// Best lineup this backend's own data can build: highest ensemble
+// matchup-adjusted points (CBS+Sleeper+ESPN blended, oprk-adjusted -- see
+// lineupValueFor above) at each slot, falling back to CBS's lone
+// projected_points wherever the ensemble has nothing, skipping anyone on
+// bye this week. Doesn't second-guess projections with local injury flags
+// -- a real Out player generally projects near zero anyway, and this stays
+// honest about only using data actually available here.
 function computeCbsSuggestedStarters(cbsTeam, week){
   const used = new Set();
   const bestAt = (positions)=>{
     const pool = cbsTeam.players.filter(p=>
       positions.includes(p.pos) && !used.has(p.id) && String(p.byeWeek||'') !== String(week||''));
-    pool.sort((a,b)=>(b.projectedPoints||0)-(a.projectedPoints||0));
+    pool.sort((a,b)=>lineupValueFor(b)-lineupValueFor(a));
     return pool[0] || null;
   };
   return CBS_ROSTER_SLOTS.map(({slot,label,positions})=>{
