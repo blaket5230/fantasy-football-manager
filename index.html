@@ -5664,9 +5664,9 @@ async function syncHistory(){
     if(!newsRes.ok) throw new Error(`HTTP ${newsRes.status} (news diff)`);
     const [roster, news] = await Promise.all([rosterRes.json(), newsRes.json()]);
     historyCache = { roster, news };
-    setHistoryMeta({ lastSync: Date.now(), error: null });
+    setHistoryMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setHistoryMeta({ lastSync: getHistoryMeta().lastSync || null, error: e.message });
+    setHistoryMeta({ lastSync: getHistoryMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     historyInFlight = false;
   }
@@ -5676,6 +5676,10 @@ function maybeAutoSyncHistory(){
   const meta = getHistoryMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
   if(!stale && historyCache) return;
+  // Back off after a failed attempt -- see the FantasyPros-injuries fix
+  // above for the full explanation of why an unconditional retry-on-every-
+  // render here can spin two functions off each other forever.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncHistory().then(()=>{
     if(document.getElementById('view-chronicle')?.classList.contains('active')) renderWhatsChanged();
   });
@@ -5770,9 +5774,9 @@ async function syncCbsTeamNews(){
     const res = await fetch(`${ZUB_SYNC_API}/api/news?source=cbs&team=${teamId}&limit=25&key=${ZUB_SYNC_KEY}`);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     cbsTeamNewsCache = await res.json();
-    setCbsTeamNewsMeta({ lastSync: Date.now(), error: null });
+    setCbsTeamNewsMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setCbsTeamNewsMeta({ lastSync: getCbsTeamNewsMeta().lastSync || null, error: e.message });
+    setCbsTeamNewsMeta({ lastSync: getCbsTeamNewsMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     cbsTeamNewsInFlight = false;
   }
@@ -5782,6 +5786,10 @@ function maybeAutoSyncCbsTeamNews(){
   const meta = getCbsTeamNewsMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000; // matches backend's cache
   if(!stale && cbsTeamNewsCache) return;
+  // Back off after a failed attempt -- renderTeamNews() calls this, and this
+  // calls renderTeamNews() back in its .then(), same infinite-retry shape as
+  // the FantasyPros-injuries fix elsewhere in this file.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncCbsTeamNews().then(()=>{ renderTeamNews(); });
 }
 function cbsTeamNewsStatusText(){
@@ -5833,9 +5841,9 @@ async function syncFpNews(){
     const res = await fetch(`${ZUB_SYNC_API}/api/news?key=${ZUB_SYNC_KEY}`);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     fpNewsCache = await res.json();
-    setFpNewsMeta({ lastSync: Date.now(), error: null });
+    setFpNewsMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setFpNewsMeta({ lastSync: getFpNewsMeta().lastSync || null, error: e.message });
+    setFpNewsMeta({ lastSync: getFpNewsMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     fpNewsInFlight = false;
   }
@@ -5845,6 +5853,10 @@ function maybeAutoSyncFpNews(){
   const meta = getFpNewsMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000; // matches backend's cache
   if(!stale && fpNewsCache) return;
+  // Back off after a failed attempt -- same infinite-retry shape as the
+  // FantasyPros-injuries fix elsewhere in this file (renderTeamNews() calls
+  // this, and this calls renderTeamNews() back in its .then()).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncFpNews().then(()=>{ renderTeamNews(); });
 }
 function newsStatusText(){
@@ -6362,9 +6374,9 @@ async function syncTransactions(){
     // parsing the human date string.
     txnCache = (data.transactions||[]).sort((a,b)=>
       Number((b.id||'0-0').split('-')[0]) - Number((a.id||'0-0').split('-')[0]));
-    setTxnSyncMeta({ lastSync: Date.now(), error: null });
+    setTxnSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setTxnSyncMeta({ lastSync: getTxnSyncMeta().lastSync || null, error: e.message });
+    setTxnSyncMeta({ lastSync: getTxnSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     txnSyncInFlight = false;
   }
@@ -6375,6 +6387,10 @@ function maybeAutoSyncTransactions(){
   const meta = getTxnSyncMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 5*60*1000;
   if(!stale && txnCache) return;
+  // Back off after a failed attempt -- same infinite-retry shape as the
+  // FantasyPros-injuries fix elsewhere in this file (renderTransactionsView()
+  // calls this, and this calls renderTransactionsView() back in its .then()).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncTransactions().then(()=>{ renderTransactionsView(); });
 }
 
@@ -6509,9 +6525,9 @@ async function syncCbsRosters(){
     cbsRostersCache = await res.json();
     computeRosterDrift(); // side effect: attaches real cbsId to matched local players
     saveState();
-    setRosterSyncMeta({ lastSync: Date.now(), error: null });
+    setRosterSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setRosterSyncMeta({ lastSync: getRosterSyncMeta().lastSync || null, error: e.message });
+    setRosterSyncMeta({ lastSync: getRosterSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     rosterSyncInFlight = false;
   }
@@ -6521,6 +6537,12 @@ function maybeAutoSyncCbsRosters(){
   const meta = getRosterSyncMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 15*60*1000;
   if(!stale && cbsRostersCache) return;
+  // Back off after a failed attempt instead of retrying on every render --
+  // renderRosterSyncView() calls this, and this calls renderRosterSyncView()
+  // back in its .then(), so a permanently-failing fetch would otherwise spin
+  // the two functions off each other forever (confirmed live for the
+  // equivalent FantasyPros-injuries pair below).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncCbsRosters().then(()=>{ renderRosterSyncView(); });
 }
 function rosterSyncStatusText(){
@@ -6614,9 +6636,9 @@ async function syncWaiverTrending(){
     if(!dropRes.ok) throw new Error(`HTTP ${dropRes.status} (drop)`);
     const [addData, dropData] = await Promise.all([addRes.json(), dropRes.json()]);
     waiverTrendingCache = { add: addData.items, drop: dropData.items };
-    setWaiverSyncMeta({ lastSync: Date.now(), error: null });
+    setWaiverSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setWaiverSyncMeta({ lastSync: getWaiverSyncMeta().lastSync || null, error: e.message });
+    setWaiverSyncMeta({ lastSync: getWaiverSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     waiverSyncInFlight = false;
   }
@@ -6627,6 +6649,10 @@ function maybeAutoSyncWaiverTrending(){
   // matches the backend's own 30-minute cache
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
   if(!stale && waiverTrendingCache) return;
+  // Back off after a failed attempt -- same infinite-retry shape as the
+  // FantasyPros-injuries fix elsewhere in this file (renderWaiverView() calls
+  // this, and this calls renderWaiverView() back in its .then()).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncWaiverTrending().then(()=>{ renderWaiverView(); });
 }
 function waiverSyncStatusText(){
@@ -6693,9 +6719,9 @@ async function syncWaiverValue(){
     const [rankData, faData] = await Promise.all([rankRes.json(), faRes.json()]);
     rosRankingsCache = rankData.players;
     freeAgentsCache = faData.freeAgents;
-    setWaiverValueMeta({ lastSync: Date.now(), error: null });
+    setWaiverValueMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setWaiverValueMeta({ lastSync: getWaiverValueMeta().lastSync || null, error: e.message });
+    setWaiverValueMeta({ lastSync: getWaiverValueMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     waiverValueInFlight = false;
   }
@@ -6706,6 +6732,11 @@ function maybeAutoSyncWaiverValue(){
   // matches the backend's own 1-hour cache
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
   if(!stale && rosRankingsCache) return;
+  // Back off after a failed attempt -- with one of Waiver Wire/Trade
+  // Analyzer/Trade Finder left open, a permanently-failing fetch would
+  // otherwise re-trigger on every render of that view, same infinite-retry
+  // shape as the FantasyPros-injuries fix elsewhere in this file.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   // Shared cache -- Waiver Wire and Trade Analyzer both want live rankings,
   // so whichever view is on screen when the fetch resolves gets refreshed.
   syncWaiverValue().then(()=>{
@@ -8627,9 +8658,9 @@ async function syncFpInjuries(){
     const res = await fetch(`${ZUB_SYNC_API}/api/injuries?key=${ZUB_SYNC_KEY}`);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     fpInjuriesCache = await res.json();
-    setFpInjuriesMeta({ lastSync: Date.now(), error: null });
+    setFpInjuriesMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setFpInjuriesMeta({ lastSync: getFpInjuriesMeta().lastSync || null, error: e.message });
+    setFpInjuriesMeta({ lastSync: getFpInjuriesMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     fpInjuriesInFlight = false;
   }
@@ -8640,6 +8671,13 @@ function maybeAutoSyncFpInjuries(){
   // matches the backend's own 30-minute cache -- no point checking more often
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
   if(!stale && fpInjuriesCache) return;
+  // Back off after a failed attempt instead of retrying on every render --
+  // this is called at the top of every renderLineupView(), and its own
+  // .then() calls renderLineupView() again, so a permanently-failing fetch
+  // (backend down, rate-limited, or fully network-blocked) would otherwise
+  // spin the two functions off each other forever with no backoff at all.
+  // Confirmed live: reproduced a hung, unresponsive tab this way.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncFpInjuries().then(()=>{ renderLineupView(); });
 }
 function fpInjuryFor(playerName){
@@ -8810,9 +8848,9 @@ async function syncSleeperRoster(){
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     sleeperRosterCache = data.items;
-    setSleeperRosterMeta({ lastSync: Date.now(), error: null });
+    setSleeperRosterMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setSleeperRosterMeta({ lastSync: getSleeperRosterMeta().lastSync || null, error: e.message });
+    setSleeperRosterMeta({ lastSync: getSleeperRosterMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     sleeperRosterInFlight = false;
   }
@@ -8822,6 +8860,12 @@ function maybeAutoSyncSleeperRoster(){
   const meta = getSleeperRosterMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
   if(!stale && sleeperRosterCache) return;
+  // Back off after a failed attempt -- with the Lineup Coach view left open,
+  // a permanently-failing fetch would otherwise re-trigger on every render
+  // this causes (renderLiveLineupTables calls this, and this re-renders the
+  // lineup view in its .then() while that view stays active), same failure
+  // mode as the FantasyPros-injuries/roster-sync pairs above.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncSleeperRoster().then(()=>{
     if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
   });
@@ -8863,9 +8907,9 @@ async function syncEnsembleWeekly(){
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     ensembleWeeklyCache = data.projections;
-    setEnsembleWeeklyMeta({ lastSync: Date.now(), error: null });
+    setEnsembleWeeklyMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setEnsembleWeeklyMeta({ lastSync: getEnsembleWeeklyMeta().lastSync || null, error: e.message });
+    setEnsembleWeeklyMeta({ lastSync: getEnsembleWeeklyMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     ensembleWeeklyInFlight = false;
   }
@@ -8875,6 +8919,10 @@ function maybeAutoSyncEnsembleWeekly(){
   const meta = getEnsembleWeeklyMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
   if(!stale && ensembleWeeklyCache) return;
+  // Back off after a failed attempt -- same re-trigger risk as the sync
+  // functions above while the Lineup Coach view stays open and the backend
+  // stays unreachable.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncEnsembleWeekly().then(()=>{
     if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
   });
