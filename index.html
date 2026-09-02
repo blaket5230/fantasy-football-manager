@@ -1899,6 +1899,39 @@
 </style>
 </head>
 <body>
+<!-- Passphrase gate: cheap deterrent, not real security -- this is a public
+     static page (GitHub Pages on a public repo can't be restricted), so
+     anyone who views source can read ZUB_GATE_PASS below and get in
+     regardless. It only stops a casual visitor who stumbles on the URL from
+     landing straight in the app. The one endpoint with real consequences
+     (submitting a live CBS lineup change) has its own separate,
+     server-verified passphrase -- see submitLineupWrite() -- which is never
+     shipped in this page's source at all. -->
+<div id="zubGate" style="position:fixed;inset:0;z-index:99999;background:#0b0e14;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-family:system-ui,-apple-system,sans-serif;">
+  <div style="font-size:18px;color:#e8e8ea;">Enter passphrase</div>
+  <input id="zubGateInput" type="password" autocomplete="off" style="padding:10px 14px;border-radius:8px;border:1px solid #333;background:#1a1d24;color:#fff;font-size:15px;width:240px;text-align:center;" />
+  <button id="zubGateBtn" style="padding:10px 18px;border-radius:8px;border:none;background:#4f8cff;color:#fff;font-size:15px;cursor:pointer;">Enter</button>
+  <div id="zubGateErr" style="color:#ff6b6b;font-size:13px;min-height:16px;"></div>
+</div>
+<script>
+(function(){
+  var ZUB_GATE_PASS = "ledger-nectar-952";
+  var gate = document.getElementById('zubGate');
+  function unlock(){ gate.style.display = 'none'; try{ sessionStorage.setItem('zubGateOk','1'); }catch(e){} }
+  try{
+    if(sessionStorage.getItem('zubGateOk') === '1'){ unlock(); return; }
+  }catch(e){}
+  var input = document.getElementById('zubGateInput');
+  var err = document.getElementById('zubGateErr');
+  function check(){
+    if(input.value === ZUB_GATE_PASS){ unlock(); }
+    else { err.textContent = 'Incorrect passphrase.'; input.value=''; input.focus(); }
+  }
+  document.getElementById('zubGateBtn').addEventListener('click', check);
+  input.addEventListener('keydown', function(e){ if(e.key==='Enter') check(); });
+  input.focus();
+})();
+</script>
 <div id="cardHost"></div>
 <div class="wrap">
   <header>
@@ -1974,6 +2007,8 @@
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
+    <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
+    <button data-view="matchup" data-mode="leaguehub" hidden>Matchup</button>
 
     <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
     <button data-view="finder" data-mode="league" hidden>Trade Finder</button>
@@ -2018,6 +2053,18 @@
   <!-- ROSTER SYNC VIEW -->
   <div class="view" id="view-rostersync">
     <div id="rosterSyncBody"></div>
+  </div>
+
+  <div class="view" id="view-waivers">
+    <div id="waiverBody"></div>
+  </div>
+
+  <!-- MATCHUP VIEW -->
+  <div class="view" id="view-matchup">
+    <div class="panel">
+      <h3>Head-to-head matchup</h3>
+      <div id="matchupBody"></div>
+    </div>
   </div>
 
   <!-- SCHEDULE & DIVISIONS VIEW -->
@@ -2409,8 +2456,9 @@
 
     <div class="panel">
       <h3>Suggested starting lineup</h3>
-      <p class="panel-sub">Best value at each required slot (1 QB, 2 RB, 2 WR/TE, 1 flex, 1 PK, 1 DST), automatically skipping anyone flagged Out or Bye. Anyone flagged Questionable or Doubtful still shows up but gets flagged, your call on those.</p>
+      <p class="panel-sub">Once Roster Sync has run, this is built from your live 18-man CBS roster using CBS's own projected points and bye weeks -- not the status table above, which only covers hand-entered keeper contracts. Before that first sync, falls back to the status table below with manual Out/Bye/Questionable flags.</p>
       <div class="table-scroll"><table class="result-table" id="lineupStartersTable"></table></div>
+      <div id="lineupWriteBox" style="margin-top:14px;"></div>
     </div>
 
     <div class="panel">
@@ -3739,6 +3787,8 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
+    if(btn.dataset.view==='waivers') renderWaiverView();
+    if(btn.dataset.view==='matchup') renderMatchupView();
     if(btn.dataset.view==='recap') renderRecap();
     if(btn.dataset.view==='ideas') renderIdeasView();
   });
@@ -4010,6 +4060,22 @@ function renderTeamDetail(){
     YEARS.map(y=>`<th class="${y===state.currentYear?'current-yr':''}">'${String(y).slice(2)}</th>`).join('') +
     '<th></th></tr>';
 
+  // Live CBS status per contract row -- a convenience, not a replacement
+  // for Roster Sync's own league-wide drift view: is this specific player,
+  // whose contract you're looking at right now, still actually on the real
+  // roster, and active or benched. No-ops silently until Roster Sync has
+  // run at least once (cbsTeamFor returns null with no cache yet).
+  const teamCbsRoster = cbsTeamFor(t.owner);
+  const liveStatusTag = (p) => {
+    if(!teamCbsRoster || p.deadCap) return '';
+    const cbsMatch = p.cbsId ? teamCbsRoster.players.find(cp=>cp.id===p.cbsId) : null;
+    if(cbsMatch){
+      const active = cbsMatch.rosterStatus === 'A';
+      return `<span class="pos-tag" style="margin-left:4px;color:var(--jade);border-color:rgba(52,199,89,.3);background:rgba(52,199,89,.1);" title="Live on CBS: ${active?'Active':'Reserve'} (${cbsMatch.rosterPos})">${active?'Active':'Bench'} on CBS</span>`;
+    }
+    return `<span class="dead-tag" title="Not found on the live CBS roster -- may have been dropped or traded since this contract was entered">Not on CBS roster</span>`;
+  };
+
   tbody.innerHTML = t.players.map((p,pi)=>{
     const cells = YEARS.map(y=>{
       const val = p.years[y];
@@ -4020,7 +4086,7 @@ function renderTeamDetail(){
       return `<td class="${cls}" contenteditable="true" data-player="${pi}" data-year="${y}">${val}</td>`;
     }).join('');
     return `<tr class="${p.deadCap?'dead-cap':''}">
-      <td class="player-name">${p.name}${p.deadCap?'<span class="dead-tag">Dead cap</span>':''}${p.mv?`<span class="pos-tag" style="margin-left:4px;color:var(--gold);border-color:rgba(229,181,103,0.3);background:rgba(229,181,103,0.1);">MV ${p.mv}</span>`:''}</td>
+      <td class="player-name">${p.name}${p.deadCap?'<span class="dead-tag">Dead cap</span>':''}${p.mv?`<span class="pos-tag" style="margin-left:4px;color:var(--gold);border-color:rgba(229,181,103,0.3);background:rgba(229,181,103,0.1);">MV ${p.mv}</span>`:''}${liveStatusTag(p)}</td>
       <td>${p.pos?`<span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span>`:''}</td>
       <td>$${p.base}</td>
       ${cells}
@@ -4183,6 +4249,7 @@ function computeDrop(){
 
 /* ---------- TRADE ANALYZER ---------- */
 function renderTradeView(){
+  maybeAutoSyncWaiverValue();
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
   const opts = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
@@ -4255,10 +4322,18 @@ function computeTrade(){
     if(aConsolidates || bConsolidates){
       readout += " Note: consolidating several smaller pieces into one difference-maker is usually worth more to the side getting the single player than raw value totals suggest, roster spots are scarce.";
     }
+    const aLive = liveRankSummaryHTML(aSendPlayers);
+    const bLive = liveRankSummaryHTML(bSendPlayers);
+    const liveRankHTML = (aLive || bLive) ? `<div style="margin-top:8px;font-size:12px;">
+      <b>Live FantasyPros ROS rank</b> (cross-check only, not part of the cap/legality read -- needs Roster Sync to have matched a player to their CBS id):<br>
+      ${aLive ? `${tA.team||tA.owner}: ${aLive}<br>` : ''}
+      ${bLive ? `${tB.team||tB.owner}: ${bLive}` : ''}
+    </div>` : '';
     fairnessHTML = `<div class="trade-verdict ${gap<0.10?'ok':(gap<0.25?'':'bad')}">
       <strong>Market value read</strong><br>
       ${tA.team||tA.owner} sends: ${aSendMV} MV &middot; ${tB.team||tB.owner} sends: ${bSendMV} MV<br>
       ${readout}
+      ${liveRankHTML}
     </div>`;
   }
 
@@ -4293,6 +4368,7 @@ function posCounts(team){
 function myTeam(){ return state.teams.find(t=>t.owner===MY_TEAM_OWNER); }
 
 function renderFinderView(){
+  maybeAutoSyncWaiverValue();
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
@@ -4327,9 +4403,13 @@ function renderFinderView(){
     });
   });
   targets.sort((a,b)=>b.mv-a.mv);
+  // Live FantasyPros ROS rank alongside the static mv, where Roster Sync has
+  // matched the player to their real CBS id -- a cross-check, not a
+  // replacement, since mv still drives the actual value-gap math below.
+  const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rankEcr??'--'}` : '--'; };
   document.getElementById('finderTargets').innerHTML = targets.length
-    ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Value/$</th></tr></thead><tbody>${
-        targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
+    ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Live ROS rank</th><th>Value/$</th></tr></thead><tbody>${
+        targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${rankCell(x.player)}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No other team has an active ${weakest} on the books right now.</td></tr></tbody>`;
 
@@ -4360,7 +4440,7 @@ function renderFinderView(){
   offers.sort((a,b)=>a.gap-b.gap);
   document.getElementById('finderOffers').innerHTML = offers.length
     ? `<thead><tr><th>You send</th><th>You get</th><th>From</th><th>Value gap</th><th>Your cap after</th><th>Their cap after</th></tr></thead><tbody>${
-        offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0})</td><td>${o.get.player.name} (MV ${o.get.mv})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
+        offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0}${liveRankFor(o.give)?`, ROS ${rankCell(o.give)}`:''})</td><td>${o.get.player.name} (MV ${o.get.mv}${liveRankFor(o.get.player)?`, ROS ${rankCell(o.get.player)}`:''})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No value-comparable, roster-legal offers found from your ${deepest} depth right now. Try widening the search manually in the Trade Analyzer.</td></tr></tbody>`;
 }
@@ -5544,17 +5624,198 @@ function renderChronicle(){
       </div>
     </div>
 
+    <div id="whatsChangedBody"></div>
     <div id="teamNewsBody"></div>
   `;
+  renderWhatsChanged();
   renderTeamNews();
 }
 
-/* ---------- FANTASYPROS NEWS (live) ----------
+/* ---------- WHAT'S CHANGED (day-over-day history) ----------
+   First consumer of the snapshots table's actual history, not just its
+   latest row -- backed by /api/history, which diffs the two most recent
+   collector runs (see zub-fantasy-sync's daily cron). Roster diff needs
+   Roster Sync's cbsId matching to know which CBS team is "yours"; reuses
+   myCbsTeamId() from the CBS team news section above. With fewer than 2
+   collected snapshots (a brand new deployment, or the first day this ran)
+   this correctly says so rather than showing an empty diff that would
+   look identical to "nothing changed". */
+const HISTORY_META_KEY = "zubHistoryMeta_v1";
+let historyCache = null; // { roster: {...}, news: { cbs: {...}, espn: {...} } }
+let historyInFlight = false;
+
+function getHistoryMeta(){
+  try{ return JSON.parse(localStorage.getItem(HISTORY_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setHistoryMeta(meta){
+  try{ localStorage.setItem(HISTORY_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncHistory(){
+  if(historyInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  historyInFlight = true;
+  try{
+    const [rosterRes, newsRes] = await Promise.all([
+      fetch(`${ZUB_SYNC_API}/api/history?diff=roster&team=${teamId}&key=${ZUB_SYNC_KEY}`),
+      fetch(`${ZUB_SYNC_API}/api/history?diff=news&team=${teamId}&key=${ZUB_SYNC_KEY}`),
+    ]);
+    if(!rosterRes.ok) throw new Error(`HTTP ${rosterRes.status} (roster diff)`);
+    if(!newsRes.ok) throw new Error(`HTTP ${newsRes.status} (news diff)`);
+    const [roster, news] = await Promise.all([rosterRes.json(), newsRes.json()]);
+    historyCache = { roster, news };
+    setHistoryMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setHistoryMeta({ lastSync: getHistoryMeta().lastSync || null, error: e.message });
+  } finally {
+    historyInFlight = false;
+  }
+}
+function maybeAutoSyncHistory(){
+  if(historyInFlight) return;
+  const meta = getHistoryMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && historyCache) return;
+  syncHistory().then(()=>{
+    if(document.getElementById('view-chronicle')?.classList.contains('active')) renderWhatsChanged();
+  });
+}
+function historyStatusText(){
+  if(historyInFlight) return 'Checking for what changed…';
+  const meta = getHistoryMeta();
+  if(!meta.lastSync) return 'Not checked yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked ${when}${errPart}.`;
+}
+
+function renderWhatsChanged(){
+  const host = document.getElementById('whatsChangedBody');
+  if(!host) return;
+  maybeAutoSyncHistory();
+
+  if(!historyCache){
+    host.innerHTML = `<div class="chron-card" style="margin-bottom:16px;">
+      <div class="cc-label">What's changed</div>
+      <p style="color:var(--chalk-3);font-size:13px;margin:0;">${historyInFlight?'Checking…':'No data yet.'}</p>
+    </div>`;
+    return;
+  }
+
+  const { roster, news } = historyCache;
+  const sections = [];
+
+  if(!roster.ready){
+    sections.push(`<p style="color:var(--chalk-3);font-size:13px;margin:0 0 8px;">Roster history: ${roster.reason || "not enough history yet -- check back after tomorrow's daily sync."}</p>`);
+  } else if(roster.added.length || roster.removed.length || roster.changed.length){
+    const rows = [
+      ...roster.added.map(p=>`<div class="div-team-row" style="align-items:center;"><span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span><span style="color:var(--jade);font-size:11px;">Added to roster</span></div>`),
+      ...roster.removed.map(p=>`<div class="div-team-row" style="align-items:center;"><span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span><span style="color:var(--coral);font-size:11px;">No longer rostered</span></div>`),
+      ...roster.changed.map(c=>`<div class="div-team-row" style="align-items:center;"><span class="dt-name">${c.player}</span><span style="font-size:11px;color:var(--chalk-3);">${c.field}: ${c.from||'--'} &rarr; ${c.to||'--'}</span></div>`),
+    ];
+    sections.push(`<div class="cc-label" style="margin-top:10px;">Roster changes since ${new Date(roster.from).toLocaleString()}</div>${rows.join('')}`);
+  } else {
+    sections.push(`<p style="color:var(--jade);font-size:13px;margin:0 0 8px;">No roster changes since ${new Date(roster.from).toLocaleString()}.</p>`);
+  }
+
+  if(news.cbs?.ready && news.cbs.count){
+    sections.push(`<div class="cc-label" style="margin-top:14px;">New team news (CBS)</div>${news.cbs.items.map(i=>`
+      <div class="trade-verdict" style="margin-bottom:6px;">
+        <strong>${i.title}</strong>${i.injury?` <span class="dead-tag">${i.injury.split(':')[0]}</span>`:''}
+      </div>`).join('')}`);
+  }
+  if(news.espn?.ready && news.espn.count){
+    sections.push(`<div class="cc-label" style="margin-top:14px;">New around the league (ESPN)</div>${news.espn.items.map(i=>`
+      <div class="trade-verdict" style="margin-bottom:6px;">
+        <a href="${i.link}" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">${i.headline}</a>
+      </div>`).join('')}`);
+  }
+
+  host.innerHTML = `
+    <div class="chron-card" style="margin-bottom:16px;">
+      <div class="cc-label">What's changed</div>
+      <p class="cc-sub" style="margin:0 0 10px;">${historyStatusText()}</p>
+      ${sections.join('')}
+    </div>
+  `;
+}
+
+/* ---------- CBS TEAM NEWS (live, primary) ----------
+   CBS's own player-updates wire (942 items on a real call, no metering),
+   filtered server-side by owned_by_team_id -- no name matching needed,
+   unlike every other news source here, and it comes with full article
+   text and structured injury detail rather than a headline + one-line
+   impact note. This is the primary "your team" feed; FantasyPros' below
+   stays as a secondary, independent second opinion. */
+const CBS_TEAM_NEWS_META_KEY = "zubCbsTeamNewsMeta_v1";
+let cbsTeamNewsCache = null;
+let cbsTeamNewsInFlight = false;
+
+function getCbsTeamNewsMeta(){
+  try{ return JSON.parse(localStorage.getItem(CBS_TEAM_NEWS_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setCbsTeamNewsMeta(meta){
+  try{ localStorage.setItem(CBS_TEAM_NEWS_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+function myCbsTeamId(){
+  return Object.keys(CBS_TEAM_ID_TO_OWNER).find(id=>CBS_TEAM_ID_TO_OWNER[id]===MY_TEAM_OWNER) || null;
+}
+async function syncCbsTeamNews(){
+  if(cbsTeamNewsInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  cbsTeamNewsInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/news?source=cbs&team=${teamId}&limit=25&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    cbsTeamNewsCache = await res.json();
+    setCbsTeamNewsMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setCbsTeamNewsMeta({ lastSync: getCbsTeamNewsMeta().lastSync || null, error: e.message });
+  } finally {
+    cbsTeamNewsInFlight = false;
+  }
+}
+function maybeAutoSyncCbsTeamNews(){
+  if(cbsTeamNewsInFlight) return;
+  const meta = getCbsTeamNewsMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000; // matches backend's cache
+  if(!stale && cbsTeamNewsCache) return;
+  syncCbsTeamNews().then(()=>{ renderTeamNews(); });
+}
+function cbsTeamNewsStatusText(){
+  if(cbsTeamNewsInFlight) return 'Checking CBS for news on your roster…';
+  const meta = getCbsTeamNewsMeta();
+  if(!meta.lastSync) return 'Not checked yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked CBS ${when}${errPart}.`;
+}
+function renderCbsTeamNewsCard(){
+  const items = cbsTeamNewsCache?.items || [];
+  return `
+    <div class="chron-card">
+      <div class="cc-label">Your team &middot; CBS wire</div>
+      <p class="cc-sub" style="margin-bottom:10px;">${cbsTeamNewsStatusText()}</p>
+      ${items.length ? items.map(item=>`
+        <div class="trade-verdict" style="margin-bottom:8px;">
+          <strong>${item.title||item.headline||'(untitled update)'}</strong>
+          ${item.injury ? `<span class="dead-tag" style="margin-left:6px;">${item.injury.split(':')[0]}</span>` : ''}
+          <p style="margin:4px 0 0;font-size:12px;color:var(--chalk-2);">${item.news||''}</p>
+        </div>`).join('') : `<p style="color:var(--chalk-3);font-size:13px;margin:0;">Nothing on your roster in CBS's news wire right now.</p>`}
+    </div>`;
+}
+
+/* ---------- FANTASYPROS NEWS (live, secondary) ----------
    Real news from FantasyPros, filtered to items that mention a player on
    your roster. Their free tier caps every response at 10 items leaguewide
    -- most weeks, most rosters, that'll turn up nothing. That's expected,
    not broken: a hit here is a real signal, a miss just means nothing about
-   your specific players made the last 10 leaguewide stories. */
+   your specific players made the last 10 leaguewide stories. Kept as a
+   second, independent source alongside CBS's wire above -- different
+   bylines, occasionally different angles on the same news. */
 const FP_NEWS_META_KEY = "zubFpNewsMeta_v1";
 let fpNewsCache = null;
 let fpNewsInFlight = false;
@@ -5599,20 +5860,22 @@ function newsStatusText(){
 function renderTeamNews(){
   const host = document.getElementById('teamNewsBody');
   if(!host) return;
+  maybeAutoSyncCbsTeamNews();
   maybeAutoSyncFpNews();
 
   const myPlayers = myActivePlayers();
-  const items = (fpNewsCache?.items || []).filter(item=>{
+  const fpItems = (fpNewsCache?.items || []).filter(item=>{
     const text = `${item.title||''} ${item.desc||''}`;
     return myPlayers.some(p=>text.includes(p.name));
   });
 
   host.innerHTML = `
     <div class="chron-grid" style="grid-template-columns:1fr;">
+      ${renderCbsTeamNewsCard()}
       <div class="chron-card">
-        <div class="cc-label">Your team &middot; real news</div>
+        <div class="cc-label">Your team &middot; FantasyPros (secondary)</div>
         <p class="cc-sub" style="margin-bottom:10px;">${newsStatusText()}</p>
-        ${items.length ? items.map(item=>`
+        ${fpItems.length ? fpItems.map(item=>`
           <div class="trade-verdict" style="margin-bottom:8px;">
             <a href="${item.link}" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">${item.title}</a>
             ${item.impact ? `<p style="margin:4px 0 0;font-size:12px;color:var(--chalk-2);">${item.impact}</p>` : ''}
@@ -5756,13 +6019,18 @@ const ZUB_DIVISIONS = [
 function divisionOf(owner){ return ZUB_DIVISIONS.find(d=>d.teams.includes(owner))?.name || null; }
 function nickOf(owner){ const i=teamIdxOf(owner); return i>=0 ? (state.teams[i].team||owner) : owner; }
 
-/* Pulled straight off the real CBS schedule grid, cross-checked screenshot
-   by screenshot against the actual site rather than a first-pass
-   transcription -- every week is fully populated now, including week 3
-   (LickaMikeDitka/Jon Thorn vs texas SUCKS/JS Bull, The Big Apple/Ryan
-   Monigan vs PackNiners/Scott Bull), which an earlier pass had gotten
-   tangled and left blank for those four teams. */
-const SEASON_SCHEDULE = {
+/* Hand-typed fallback only -- the real source of truth is now CBS's own
+   /schedule/full, synced live via syncSeasonSchedule() below and swapped
+   into the mutable SEASON_SCHEDULE binding once it validates. This stays
+   as the value the app opens with (and the one it falls back to if that
+   live fetch ever fails) so nothing ever renders blank while waiting on
+   the network. Originally pulled off the real CBS schedule grid,
+   cross-checked screenshot by screenshot against the actual site rather
+   than a first-pass transcription -- every week is fully populated,
+   including week 3 (LickaMikeDitka/Jon Thorn vs texas SUCKS/JS Bull, The
+   Big Apple/Ryan Monigan vs PackNiners/Scott Bull), which an earlier pass
+   had gotten tangled and left blank for those four teams. */
+const SEASON_SCHEDULE_FALLBACK = {
   "Justin McDonald": {"1":"Blake Taylor", "2":"Brett Booker", "3":"Brandon Hill", "4":"PJ Humphreys", "5":"Caleb DeWoody", "6":"JS Bull", "7":"Travis and Wayne Banks", "8":"Tom McDonald", "9":"Scott Bull", "10":"Ryan Monigan", "11":"Jon Thorn", "12":"Blake Taylor", "13":"Brett Booker", "14":"Blake Taylor"},
   "Blake Taylor": {"1":"Justin McDonald", "2":"PJ Humphreys", "3":"Brett Booker", "4":"Caleb DeWoody", "5":"Brandon Hill", "6":"Tom McDonald", "7":"JS Bull", "8":"Travis and Wayne Banks", "9":"Jon Thorn", "10":"Scott Bull", "11":"Brett Booker", "12":"Justin McDonald", "13":"Ryan Monigan", "14":"Justin McDonald"},
   "Brett Booker": {"1":"Caleb DeWoody", "2":"Justin McDonald", "3":"Blake Taylor", "4":"Brandon Hill", "5":"PJ Humphreys", "6":"Travis and Wayne Banks", "7":"Tom McDonald", "8":"JS Bull", "9":"Ryan Monigan", "10":"Jon Thorn", "11":"Blake Taylor", "12":"Scott Bull", "13":"Justin McDonald", "14":"Caleb DeWoody"},
@@ -5776,6 +6044,11 @@ const SEASON_SCHEDULE = {
   "Jon Thorn": {"1":"Ryan Monigan", "2":"Scott Bull", "3":"JS Bull", "4":"Travis and Wayne Banks", "5":"Tom McDonald", "6":"Brandon Hill", "7":"PJ Humphreys", "8":"Caleb DeWoody", "9":"Blake Taylor", "10":"Brett Booker", "11":"Justin McDonald", "12":"Ryan Monigan", "13":"Scott Bull", "14":"Ryan Monigan"},
   "Scott Bull": {"1":"Travis and Wayne Banks", "2":"Jon Thorn", "3":"Ryan Monigan", "4":"Tom McDonald", "5":"JS Bull", "6":"Caleb DeWoody", "7":"Brandon Hill", "8":"PJ Humphreys", "9":"Justin McDonald", "10":"Blake Taylor", "11":"Ryan Monigan", "12":"Brett Booker", "13":"Jon Thorn", "14":"Travis and Wayne Banks"}
 };
+// Mutable -- syncSeasonSchedule() overwrites this in place once a live fetch
+// from CBS validates, so every reader (currentScheduleWeek, computeStandings,
+// renderWeekScoreBody) picking it up via closure sees the live version
+// without needing to know sync happened.
+let SEASON_SCHEDULE = SEASON_SCHEDULE_FALLBACK;
 const SEASON_WEEKS = 14;
 
 /* ---------- LIVE CBS SYNC ----------
@@ -5808,6 +6081,66 @@ function getLiveSyncMeta(){
 }
 function setLiveSyncMeta(meta){
   try{ localStorage.setItem(LIVE_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+/* ---------- LIVE SEASON SCHEDULE ----------
+   Replaces the hand-typed SEASON_SCHEDULE_FALLBACK with CBS's own
+   /schedule/full once it's fetched and validated -- see that constant's
+   comment above for why the fallback still exists and stays wired in. */
+const SEASON_SCHEDULE_CACHE_KEY = "zubSeasonScheduleCache_v1";
+
+// Converts CBS's live /schedule/full periods into the same
+// {owner: {week: opponentOwner}} shape SEASON_SCHEDULE_FALLBACK uses, so
+// every existing reader (currentScheduleWeek, computeStandings,
+// renderWeekScoreBody) keeps working unchanged. Only periods 1-SEASON_WEEKS
+// (regular season) are used -- periods beyond that are the playoff
+// bracket, which CBS itself shows as "TBA" until seeded and which this app
+// computes separately (see computeStandings/renderPlayoffPicture), not
+// from a fixed schedule pairing.
+function scheduleFromPeriods(periods){
+  const schedule = {};
+  (periods||[]).forEach(p=>{
+    if(p.period > SEASON_WEEKS) return;
+    const wk = String(p.period);
+    (p.matchups||[]).forEach(m=>{
+      const awayOwner = CBS_TEAM_ID_TO_OWNER[String(m.away.teamId)];
+      const homeOwner = CBS_TEAM_ID_TO_OWNER[String(m.home.teamId)];
+      if(!awayOwner || !homeOwner) return; // still "TBA", or an id outside this league's 12 tracked owners
+      if(!schedule[awayOwner]) schedule[awayOwner] = {};
+      if(!schedule[homeOwner]) schedule[homeOwner] = {};
+      schedule[awayOwner][wk] = homeOwner;
+      schedule[homeOwner][wk] = awayOwner;
+    });
+  });
+  return schedule;
+}
+
+// The schedule is set before Week 1 and barely changes mid-season, so
+// unlike live scores this only needs to run once per browser session
+// rather than on a 5-minute cadence -- cached in localStorage so a page
+// reload doesn't refetch every time either.
+async function syncSeasonSchedule(){
+  try{
+    const cached = JSON.parse(localStorage.getItem(SEASON_SCHEDULE_CACHE_KEY) || 'null');
+    if(cached && cached.schedule) SEASON_SCHEDULE = cached.schedule;
+  }catch(e){}
+
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/scores?mode=schedule&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const schedule = scheduleFromPeriods(data.periods);
+    // Sanity check before trusting it over the hand-verified fallback --
+    // every one of the 12 tracked owners needs a full SEASON_WEEKS row,
+    // the same shape the fallback guarantees.
+    const owners = Object.values(CBS_TEAM_ID_TO_OWNER);
+    const complete = owners.every(o => schedule[o] && Object.keys(schedule[o]).length === SEASON_WEEKS);
+    if(!complete) throw new Error('Live schedule fetch was incomplete -- keeping the current copy.');
+    SEASON_SCHEDULE = schedule;
+    try{ localStorage.setItem(SEASON_SCHEDULE_CACHE_KEY, JSON.stringify({ schedule, syncedAt: Date.now() })); }catch(e){}
+  }catch(e){
+    console.warn('Live schedule sync failed, staying on the fallback/cached schedule:', e.message);
+  }
 }
 
 // CBS reports 0 for any team whose players haven't kicked off yet, which
@@ -5877,6 +6210,131 @@ function maybeAutoSyncLiveScores(){
   syncLiveScores().then(()=>{
     renderScheduleView();
     if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
+  });
+}
+
+/* ---------- MATCHUP (head-to-head) ----------
+   No new CBS scraping for this -- it's built entirely from the same
+   /api/scores payload fetchLiveWeek already reads, just unwrapped instead
+   of trimmed down to team totals. Each team's rosterPlayers array carries
+   per-starter projected points (always populated) and actual live points
+   (starterSnsTotal/benchSnsTotal -- null until real games kick off, see
+   lib/parseScoreboard.js). This is a boxscore-style side-by-side, not a
+   position-paired "edge" comparison like CBS's own Scoring Preview tool --
+   simpler to build correctly and robust to either roster's exact slot
+   construction. */
+let matchupSelectedWeek = null;
+const matchupWeekCache = {};
+
+async function fetchMatchupWeek(week){
+  if(matchupWeekCache[week]) return matchupWeekCache[week];
+  const res = await fetch(`${ZUB_SYNC_API}/api/scores?week=${week}&key=${ZUB_SYNC_KEY}`);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  matchupWeekCache[week] = data;
+  return data;
+}
+
+function myCbsTeamId(){
+  return Object.keys(CBS_TEAM_ID_TO_OWNER).find(id=>CBS_TEAM_ID_TO_OWNER[id]===MY_TEAM_OWNER) || null;
+}
+
+function matchupPlayerRow(p){
+  const proj = p.projectedPoints!=null ? Number(p.projectedPoints).toFixed(1) : '--';
+  const actual = p.points!=null ? Number(p.points).toFixed(1) : '--';
+  return `<tr>
+    <td class="player-name">${p.name||'--'}${p.primaryPosition?` <span class="pos-tag pos-${p.primaryPosition}">${posLabel(p.primaryPosition)}</span>`:''}</td>
+    <td style="color:var(--chalk-3);font-size:11px;">${p.proTeam||''}</td>
+    <td style="text-align:right;">${proj}</td>
+    <td style="text-align:right;font-weight:600;">${actual}</td>
+  </tr>`;
+}
+
+function matchupTeamTable(team){
+  const all = team?.rosterPlayers||[];
+  const starters = all.filter(p=>p.isStarter);
+  const bench = all.filter(p=>!p.isStarter);
+  const projTotal = starters.reduce((s,p)=>s+(p.projectedPoints||0),0);
+  const anyActual = starters.some(p=>p.points!=null);
+  const actualTotal = starters.reduce((s,p)=>s+(p.points||0),0);
+  const benchTable = bench.length ? `
+    <details style="margin-top:6px;">
+      <summary style="cursor:pointer;color:var(--chalk-3);font-size:12px;">Bench (${bench.length})</summary>
+      <table class="result-table" style="margin-top:6px;">
+        <thead><tr><th>Bench</th><th>Team</th><th style="text-align:right;">Proj</th><th style="text-align:right;">Actual</th></tr></thead>
+        <tbody>${bench.map(matchupPlayerRow).join('')}</tbody>
+      </table>
+    </details>` : '';
+  return `
+    <table class="result-table">
+      <thead><tr><th>Starter</th><th>Team</th><th style="text-align:right;">Proj</th><th style="text-align:right;">Actual</th></tr></thead>
+      <tbody>${starters.map(matchupPlayerRow).join('') || '<tr><td colspan="4" class="panel-sub">No starters found.</td></tr>'}</tbody>
+      <tfoot><tr style="font-weight:700;border-top:2px solid var(--line);">
+        <td colspan="2">Total</td>
+        <td style="text-align:right;">${projTotal.toFixed(1)}</td>
+        <td style="text-align:right;">${anyActual ? actualTotal.toFixed(1) : '--'}</td>
+      </tr></tfoot>
+    </table>${benchTable}`;
+}
+
+async function renderMatchupView(){
+  const box = document.getElementById('matchupBody');
+  if(!box) return;
+  if(matchupSelectedWeek==null) matchupSelectedWeek = currentScheduleWeek();
+
+  const myId = myCbsTeamId();
+  if(!myId){
+    box.innerHTML = `<p class="panel-sub">No CBS team mapping found for ${MY_TEAM_OWNER}.</p>`;
+    return;
+  }
+
+  const weekOptions = Array.from({length: SEASON_WEEKS}, (_,i)=>i+1)
+    .map(w=>`<option value="${w}" ${w===matchupSelectedWeek?'selected':''}>Week ${w}</option>`).join('');
+  box.innerHTML = `
+    <p class="panel-sub">Week <select id="matchupWeekSelect">${weekOptions}</select> &middot; Loading from CBS…</p>`;
+  document.getElementById('matchupWeekSelect')?.addEventListener('change', (e)=>{
+    matchupSelectedWeek = Number(e.target.value);
+    renderMatchupView();
+  });
+
+  let data;
+  try{
+    data = await fetchMatchupWeek(matchupSelectedWeek);
+  }catch(e){
+    box.innerHTML = `<p class="panel-sub" style="color:var(--coral);">Failed to load week ${matchupSelectedWeek}: ${e.message}</p>`;
+    return;
+  }
+
+  const matchup = (data.matchups||[]).find(m =>
+    String(m.away?.teamId)===String(myId) || String(m.home?.teamId)===String(myId));
+  if(!matchup){
+    box.innerHTML = `<p class="panel-sub">No matchup found for ${MY_TEAM_OWNER} in week ${matchupSelectedWeek}.</p>`;
+    return;
+  }
+  const isAway = String(matchup.away.teamId)===String(myId);
+  const myTeam = (data.teams||[]).find(t=>String(t.id)===String(isAway?matchup.away.teamId:matchup.home.teamId));
+  const oppTeam = (data.teams||[]).find(t=>String(t.id)===String(isAway?matchup.home.teamId:matchup.away.teamId));
+  if(!myTeam || !oppTeam){
+    box.innerHTML = `<p class="panel-sub">Team roster data missing for this matchup (try again after a Roster Sync).</p>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <p class="panel-sub">Week <select id="matchupWeekSelect">${weekOptions}</select> &middot; Built from your live CBS roster and CBS's own weekly projections for each starter -- no separate matchup tool needed.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <h4 style="margin:0 0 8px;">${myTeam.name} <span style="color:var(--chalk-3);font-weight:400;">(you)</span></h4>
+        <div class="table-scroll">${matchupTeamTable(myTeam)}</div>
+      </div>
+      <div>
+        <h4 style="margin:0 0 8px;">${oppTeam.name}</h4>
+        <div class="table-scroll">${matchupTeamTable(oppTeam)}</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('matchupWeekSelect')?.addEventListener('change', (e)=>{
+    matchupSelectedWeek = Number(e.target.value);
+    renderMatchupView();
   });
 }
 
@@ -6124,6 +6582,416 @@ function renderRosterSyncView(){
     if(statusEl) statusEl.textContent = 'Syncing with CBS…';
     await syncCbsRosters();
     renderRosterSyncView();
+  });
+}
+
+/* ---------- WAIVER WIRE (Sleeper trending, cross-checked against real ZUB availability) ----------
+   Sleeper's trending signal is leaguewide (tens of thousands of leagues), so
+   on its own it's just "what's popular," not "what's useful here" -- a
+   player already rostered by someone else in ZUB is noise. Cross-referenced
+   server-side (/api/trending) against the real ZUB free-agent pool, so
+   "actually available" here means actually available in this league. */
+const WAIVER_SYNC_META_KEY = "zubWaiverSyncMeta_v1";
+let waiverTrendingCache = null; // { add: [...], drop: [...] }
+let waiverSyncInFlight = false;
+
+function getWaiverSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(WAIVER_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setWaiverSyncMeta(meta){
+  try{ localStorage.setItem(WAIVER_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncWaiverTrending(){
+  if(waiverSyncInFlight) return;
+  waiverSyncInFlight = true;
+  try{
+    const [addRes, dropRes] = await Promise.all([
+      fetch(`${ZUB_SYNC_API}/api/trending?type=add&limit=25&key=${ZUB_SYNC_KEY}`),
+      fetch(`${ZUB_SYNC_API}/api/trending?type=drop&limit=25&key=${ZUB_SYNC_KEY}`),
+    ]);
+    if(!addRes.ok) throw new Error(`HTTP ${addRes.status} (add)`);
+    if(!dropRes.ok) throw new Error(`HTTP ${dropRes.status} (drop)`);
+    const [addData, dropData] = await Promise.all([addRes.json(), dropRes.json()]);
+    waiverTrendingCache = { add: addData.items, drop: dropData.items };
+    setWaiverSyncMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setWaiverSyncMeta({ lastSync: getWaiverSyncMeta().lastSync || null, error: e.message });
+  } finally {
+    waiverSyncInFlight = false;
+  }
+}
+function maybeAutoSyncWaiverTrending(){
+  if(waiverSyncInFlight) return;
+  const meta = getWaiverSyncMeta();
+  // matches the backend's own 30-minute cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && waiverTrendingCache) return;
+  syncWaiverTrending().then(()=>{ renderWaiverView(); });
+}
+function waiverSyncStatusText(){
+  if(waiverSyncInFlight) return 'Checking Sleeper for trending waiver moves…';
+  const meta = getWaiverSyncMeta();
+  const base = "Sleeper's trending signal is leaguewide, cross-checked against who's actually a free agent in ZUB right now.";
+  if(!meta.lastSync) return base;
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Checked Sleeper ${when}${errPart}. ${base}`;
+}
+
+// Sleeper's own position codes (K, DEF) -> CBS-style display, reusing the
+// same pos-tag CSS classes as the rest of the app (via txnPosClass).
+function waiverPosDisplay(pos){
+  if(pos === 'DEF') return 'DST';
+  if(pos === 'K') return 'TK';
+  return pos;
+}
+
+function renderWaiverPlayerRow(p){
+  const dispPos = waiverPosDisplay(p.pos);
+  const flags = [];
+  if(p.isZubFreeAgent === false) flags.push(`<span class="dead-tag" title="Already rostered by someone in ZUB">Rostered in ZUB</span>`);
+  if(p.isZubFreeAgent === null) flags.push(`<span class="dead-tag" title="Could not match this Sleeper player to a CBS id">Unmatched</span>`);
+  if(p.depthChartOrder) flags.push(`<span style="font-size:11px;color:var(--chalk-3);">Depth #${p.depthChartOrder}${p.depthChartPosition?` (${p.depthChartPosition})`:''}</span>`);
+  if(p.injuryStatus) flags.push(`<span class="dead-tag">${p.injuryStatus}</span>`);
+  return `<div class="div-team-row" style="align-items:center;">
+    <span class="dt-name">${p.name} <span class="pos-tag pos-${txnPosClass(dispPos)}">${dispPos}</span> <span style="color:var(--chalk-3);font-size:11px;">${p.team||''}</span></span>
+    <span style="display:flex;gap:8px;align-items:center;font-size:11px;flex-wrap:wrap;justify-content:flex-end;">${flags.join(' ')}<span style="color:var(--jade);">${(p.sleeperCount||0).toLocaleString()} leagues</span></span>
+  </div>`;
+}
+
+/* ---------- BEST AVAILABLE (FantasyPros ROS rankings x real ZUB free agents) ----------
+   Sleeper trending is "what's popular"; this is "who's actually good and
+   available" -- FantasyPros' consensus rest-of-season rankings (the same
+   no-auth board /api/rankings already serves, live, no CSV export needed)
+   filtered down to real ZUB free agents, grouped by position. Also flags a
+   real upgrade: your own worst-ranked rostered player at that position, if
+   any available free agent out-ranks them. */
+const WAIVER_VALUE_META_KEY = "zubWaiverValueMeta_v1";
+let rosRankingsCache = null; // array, from /api/rankings?type=ros
+let freeAgentsCache = null;  // array, from /api/free-agents
+let waiverValueInFlight = false;
+
+function getWaiverValueMeta(){
+  try{ return JSON.parse(localStorage.getItem(WAIVER_VALUE_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setWaiverValueMeta(meta){
+  try{ localStorage.setItem(WAIVER_VALUE_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncWaiverValue(){
+  if(waiverValueInFlight) return;
+  waiverValueInFlight = true;
+  try{
+    const [rankRes, faRes] = await Promise.all([
+      fetch(`${ZUB_SYNC_API}/api/rankings?type=ros&key=${ZUB_SYNC_KEY}`),
+      fetch(`${ZUB_SYNC_API}/api/free-agents?key=${ZUB_SYNC_KEY}`),
+    ]);
+    if(!rankRes.ok) throw new Error(`HTTP ${rankRes.status} (rankings)`);
+    if(!faRes.ok) throw new Error(`HTTP ${faRes.status} (free agents)`);
+    const [rankData, faData] = await Promise.all([rankRes.json(), faRes.json()]);
+    rosRankingsCache = rankData.players;
+    freeAgentsCache = faData.freeAgents;
+    setWaiverValueMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setWaiverValueMeta({ lastSync: getWaiverValueMeta().lastSync || null, error: e.message });
+  } finally {
+    waiverValueInFlight = false;
+  }
+}
+function maybeAutoSyncWaiverValue(){
+  if(waiverValueInFlight) return;
+  const meta = getWaiverValueMeta();
+  // matches the backend's own 1-hour cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && rosRankingsCache) return;
+  // Shared cache -- Waiver Wire and Trade Analyzer both want live rankings,
+  // so whichever view is on screen when the fetch resolves gets refreshed.
+  syncWaiverValue().then(()=>{
+    if(document.getElementById('view-waivers')?.classList.contains('active')) renderWaiverView();
+    if(document.getElementById('view-trade')?.classList.contains('active')) computeTrade();
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
+}
+
+// A trade's cap legality is decided by the contract data in state.teams --
+// that stays authoritative and unchanged below. This is a second, purely
+// informational cross-check: if Roster Sync has matched a traded player to
+// their real CBS id, look up their current FantasyPros ROS rank so the
+// fairness read isn't leaning entirely on a hand-set draft-day mv number
+// that may be stale months into the season.
+function liveRankFor(p){
+  if(!p.cbsId || !rosRankingsCache) return null;
+  return rosRankingsCache.find(r=>r.cbsPlayerId===p.cbsId) || null;
+}
+function liveRankSummaryHTML(players){
+  const matched = players.map(p=>({p, r: liveRankFor(p)})).filter(x=>x.r);
+  if(!matched.length) return '';
+  return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rankEcr??'--'})</span>`).join(', ');
+}
+function waiverValueStatusText(){
+  if(waiverValueInFlight) return 'Pulling FantasyPros rest-of-season rankings…';
+  const meta = getWaiverValueMeta();
+  if(!meta.lastSync) return 'Not pulled yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Pulled ${when}${errPart}.`;
+}
+
+const WAIVER_VALUE_POSITIONS = ['QB','RB','WR','TE','TK','DST'];
+
+function bestAvailableByPosition(){
+  if(!rosRankingsCache || !freeAgentsCache) return {};
+  const freeAgentIds = new Set(freeAgentsCache.map(p=>p.id));
+  const out = {};
+  WAIVER_VALUE_POSITIONS.forEach(pos=>{ out[pos] = []; });
+  rosRankingsCache.forEach(r=>{
+    if(!r.cbsPlayerId || !freeAgentIds.has(r.cbsPlayerId)) return;
+    if(!out[r.pos]) return;
+    out[r.pos].push(r);
+  });
+  Object.keys(out).forEach(pos=>{
+    out[pos].sort((a,b)=>(a.rankEcr??9999)-(b.rankEcr??9999));
+    out[pos] = out[pos].slice(0,5);
+  });
+  return out;
+}
+
+// Your own live roster's worst-ranked player at each position -- the bar a
+// free agent has to clear to actually be an upgrade, not just a name.
+function weakestOwnByPosition(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam || !rosRankingsCache) return {};
+  const rankByCbsId = new Map(rosRankingsCache.filter(r=>r.cbsPlayerId).map(r=>[r.cbsPlayerId, r]));
+  const out = {};
+  cbsTeam.players.forEach(p=>{
+    const r = rankByCbsId.get(p.id);
+    if(!r || !WAIVER_VALUE_POSITIONS.includes(r.pos)) return;
+    if(!out[r.pos] || (r.rankEcr??9999) > (out[r.pos].rankEcr??9999)) out[r.pos] = r;
+  });
+  return out;
+}
+
+function renderBestAvailableCard(){
+  if(!rosRankingsCache || !freeAgentsCache){
+    return `<p style="color:var(--chalk-3);font-size:13px;margin:0;">${waiverValueInFlight?'Pulling FantasyPros rankings…':'No rankings pulled yet.'}</p>`;
+  }
+  const byPos = bestAvailableByPosition();
+  const weakest = weakestOwnByPosition();
+
+  const sections = WAIVER_VALUE_POSITIONS.map(pos=>{
+    const list = byPos[pos] || [];
+    if(!list.length) return '';
+    const weak = weakest[pos];
+    const rows = list.map(r=>{
+      const isUpgrade = weak && (r.rankEcr??9999) < (weak.rankEcr??9999);
+      const upgradeTag = isUpgrade
+        ? `<span style="font-size:10px;color:var(--jade);margin-left:8px;" title="Ranks ahead of your current ${weak.player} (#${weak.rankEcr})">&#8593; upgrade over ${weak.player}</span>`
+        : '';
+      return `<div class="div-team-row" style="align-items:center;">
+        <span class="dt-name">#${r.rankEcr??'--'} ${r.player} <span style="color:var(--chalk-3);font-size:11px;">${r.team||''}</span>${upgradeTag}</span>
+        <span style="font-size:11px;color:var(--chalk-3);">${r.recommendation||r.tag||''}</span>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;color:var(--chalk-2);margin-bottom:4px;">${pos}${weak?` <span style="font-weight:400;color:var(--chalk-3);">(your weakest: ${weak.player}, #${weak.rankEcr??'--'})</span>`:''}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  return sections || '<p style="color:var(--chalk-3);font-size:13px;margin:0;">No matched free agents found in the current rankings.</p>';
+}
+
+function renderWaiverView(){
+  const host = document.getElementById('waiverBody');
+  if(!host) return;
+  maybeAutoSyncWaiverTrending();
+  maybeAutoSyncWaiverValue();
+
+  if(!waiverTrendingCache){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Waiver Wire</div>
+      <h2>${waiverSyncInFlight ? 'Checking Sleeper for trending moves…' : 'No data yet.'}</h2>
+      <p>${waiverSyncStatusText()}</p>
+    </div>`;
+    return;
+  }
+
+  const availableAdds = waiverTrendingCache.add.filter(p=>p.isZubFreeAgent);
+  const rosteredAdds = waiverTrendingCache.add.filter(p=>p.isZubFreeAgent===false);
+  const drops = waiverTrendingCache.drop;
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Waiver Wire</div>
+      <h2>What the rest of fantasy is chasing.</h2>
+      <p id="waiverSyncStatus">${waiverSyncStatusText()}</p>
+      <button id="waiverSyncBtn" class="side-tab" style="margin-top:8px;" ${waiverSyncInFlight?'disabled':''}>${waiverSyncInFlight?'Checking…':'Refresh'}</button>
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">FantasyPros rest-of-season rankings &middot; real ZUB free agents</div>
+      <div class="cc-title">Best available by position</div>
+      <p id="waiverValueStatus" style="font-size:12px;color:var(--chalk-3);margin:4px 0 10px;">${waiverValueStatusText()}</p>
+      ${renderBestAvailableCard()}
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Actually available in ZUB</div>
+      <div class="cc-title">Trending adds you could actually grab</div>
+      ${availableAdds.length ? availableAdds.map(renderWaiverPlayerRow).join('') : '<p style="color:var(--chalk-3);font-size:13px;">None of the current trending adds are free agents in ZUB right now.</p>'}
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Already taken</div>
+      <div class="cc-title">Trending elsewhere, already rostered here</div>
+      ${rosteredAdds.length ? rosteredAdds.map(renderWaiverPlayerRow).join('') : '<p style="color:var(--chalk-3);font-size:13px;">None right now.</p>'}
+    </div>
+
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Waiver momentum</div>
+      <div class="cc-title">Trending drops leaguewide</div>
+      ${drops.length ? drops.map(renderWaiverPlayerRow).join('') : '<p style="color:var(--chalk-3);font-size:13px;">None right now.</p>'}
+    </div>
+  `;
+  document.getElementById('waiverSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('waiverSyncStatus');
+    if(statusEl) statusEl.textContent = 'Refreshing…';
+    await syncWaiverTrending();
+    renderWaiverView();
+  });
+}
+
+/* ---------- ESPN CROSS-CHECK ----------
+   Secondary provider signal only -- ZUB lives on CBS, not ESPN. Surfaces
+   ESPN's leaguewide ownership/ADP for your own live roster (matched by CBS
+   id, via /api/espn), plus on-demand per-player news. ESPN's own default
+   projections are PPR, so those aren't surfaced here at all -- not
+   comparable to this league's STD scoring without more caveats than the
+   number is worth. News has no bulk form on ESPN's side, so it's a manual
+   per-player pull, not something auto-synced like everything else. */
+const ESPN_SYNC_META_KEY = "zubEspnSyncMeta_v1";
+let espnPlayersCache = null; // array
+let espnSyncInFlight = false;
+let espnNewsCache = {}; // espnId -> news[]
+
+function getEspnSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(ESPN_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setEspnSyncMeta(meta){
+  try{ localStorage.setItem(ESPN_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncEspnPlayers(){
+  if(espnSyncInFlight) return;
+  espnSyncInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/espn?mode=players&limit=500&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    espnPlayersCache = data.items;
+    setEspnSyncMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setEspnSyncMeta({ lastSync: getEspnSyncMeta().lastSync || null, error: e.message });
+  } finally {
+    espnSyncInFlight = false;
+  }
+}
+function maybeAutoSyncEspnPlayers(){
+  if(espnSyncInFlight) return;
+  const meta = getEspnSyncMeta();
+  // matches the backend's own 1-hour cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && espnPlayersCache) return;
+  syncEspnPlayers().then(()=>{ renderImportView(); });
+}
+function espnSyncStatusText(){
+  if(espnSyncInFlight) return 'Pulling ESPN’s ownership/ADP board…';
+  const meta = getEspnSyncMeta();
+  const base = 'Secondary signal only -- ZUB lives on CBS, not ESPN.';
+  if(!meta.lastSync) return base;
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  const errPart = meta.error ? ` (last check failed: ${meta.error})` : '';
+  return `Pulled ${when}${errPart}. ${base}`;
+}
+// NOT named espnFor -- that name's already taken by the hand-collected ESPN
+// analyst sleeper/bust/breakout panel further down (a completely different
+// "ESPN" thing: draft-guide opinion, not this live ownership/ADP API).
+// Collision caught by testing, same class of bug as the earlier
+// lineupValue() clash -- a same-name function declared later in the file
+// silently wins, so the live API version was never actually being called.
+function espnApiFor(cbsPlayerId){
+  if(!espnPlayersCache || !cbsPlayerId) return null;
+  return espnPlayersCache.find(p=>p.cbsPlayerId===cbsPlayerId) || null;
+}
+
+async function fetchEspnNewsFor(espnId){
+  if(espnNewsCache[espnId]) return espnNewsCache[espnId];
+  const res = await fetch(`${ZUB_SYNC_API}/api/espn?mode=news&espnId=${encodeURIComponent(espnId)}&limit=3&key=${ZUB_SYNC_KEY}`);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  espnNewsCache[espnId] = data.news;
+  return data.news;
+}
+
+function renderEspnCrossCheckBody(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam) return `<p style="color:var(--chalk-3);font-size:13px;margin:0;">Run Roster Sync first so this can match your live roster.</p>`;
+  if(!espnPlayersCache) return `<p style="color:var(--chalk-3);font-size:13px;margin:0;">${espnSyncInFlight?'Pulling ESPN data…':'No ESPN data pulled yet.'}</p>`;
+
+  return cbsTeam.players.map(p=>{
+    const e = espnApiFor(p.id);
+    if(!e) return `<div class="div-team-row" style="align-items:center;">
+      <span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span>
+      <span style="font-size:11px;color:var(--chalk-3);">No ESPN match</span>
+    </div>`;
+    return `<div class="div-team-row" style="align-items:center;flex-wrap:wrap;">
+      <span class="dt-name">${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></span>
+      <span style="font-size:11px;color:var(--chalk-3);display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span>ESPN own ${e.percentOwned!=null?e.percentOwned.toFixed(1)+'%':'--'}</span>
+        <span>ADP ${e.adp!=null?e.adp.toFixed(1):'--'}</span>
+        ${e.injuryStatus && e.injuryStatus!=='ACTIVE' ? `<span class="dead-tag">${e.injuryStatus}</span>` : ''}
+        <button class="icon-btn" data-espn-news="${e.espnId}" title="Recent news from ESPN">News</button>
+      </span>
+      <div class="espn-news-slot" data-espn-news-slot="${e.espnId}" style="width:100%;font-size:12px;color:var(--chalk-3);margin-top:4px;"></div>
+    </div>`;
+  }).join('');
+}
+
+function renderEspnCrossCheck(){
+  maybeAutoSyncEspnPlayers();
+  return `
+    <p id="espnSyncStatus" style="font-size:12.5px;color:var(--chalk-3);margin:0 0 8px;">${espnSyncStatusText()}</p>
+    <button id="espnSyncBtn" class="side-tab" style="margin-bottom:10px;" ${espnSyncInFlight?'disabled':''}>${espnSyncInFlight?'Pulling…':'Pull ESPN board'}</button>
+    <div id="espnCrossCheckRows">${renderEspnCrossCheckBody()}</div>
+  `;
+}
+
+function bindEspnCrossCheckEvents(){
+  document.getElementById('espnSyncBtn')?.addEventListener('click', async ()=>{
+    const statusEl = document.getElementById('espnSyncStatus');
+    if(statusEl) statusEl.textContent = 'Pulling ESPN data…';
+    await syncEspnPlayers();
+    renderImportView();
+  });
+  document.querySelectorAll('[data-espn-news]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const espnId = btn.dataset.espnNews;
+      const slot = document.querySelector(`[data-espn-news-slot="${espnId}"]`);
+      if(!slot) return;
+      slot.textContent = 'Loading…';
+      try{
+        const news = await fetchEspnNewsFor(espnId);
+        slot.innerHTML = news.length
+          ? news.map(n=>`<div style="margin-top:4px;"><b>${n.headline||''}</b>${n.description && n.description!==n.headline ? ` -- ${n.description}` : ''}</div>`).join('')
+          : 'No recent news.';
+      }catch(e){
+        slot.textContent = `Failed: ${e.message}`;
+      }
+    });
   });
 }
 
@@ -7852,6 +8720,17 @@ function weeklyPlayerValueCell(p, week){
 }
 
 function computeAndRenderLineup(players){
+  // Prefer the live CBS roster (Roster Sync) once it's available -- the local
+  // players list here is only ever the hand-entered keeper-contract subset
+  // (state.teams), which for a real team can be almost empty (confirmed:
+  // Blake Taylor's local list has exactly 2 non-deadCap entries, both QBs).
+  // Building the "suggested lineup" from that produced a table that
+  // contradicted the live-data lineup the write box below computes
+  // separately -- same underlying gap that write feature had to work around,
+  // just showing up here as two disagreeing panels instead of a bad write.
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(cbsTeam){ renderLiveLineupTables(cbsTeam); return; }
+
   const week = currentScheduleWeek();
   const available = players.filter(p=>p.status!=='Out' && p.status!=='Bye');
   const flagged = p => (p.status==='Questionable'||p.status==='Doubtful');
@@ -7894,6 +8773,252 @@ function computeAndRenderLineup(players){
       bench.map(p=>`<tr><td>${p.name}</td><td><span class="pos-tag pos-${p.pos}">${posLabel(p.pos)}</span></td><td>${weeklyPlayerValueCell(p,week)}</td><td>${p.status||'Healthy'}</td></tr>`).join('')
       || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
+
+  renderLineupWriteBox();
+}
+
+// Live-CBS-data path for the main starters/bench tables, once Roster Sync
+// has run -- shares computeCbsSuggestedStarters with the write box below,
+// so the two panels can never disagree with each other again.
+/* ---------- SLEEPER ROSTER ENRICHMENT (depth chart + weekly proj) ----------
+   Extends the trending-only Sleeper data (Waiver Wire) with depth chart
+   position/order and Sleeper's own pts_std weekly projection for every
+   player on your live roster, not just the ~25 trending ones. A depth
+   chart promotion is exactly the kind of thing easy to miss on a bench
+   player -- surfaced right where lineup decisions get made. pts_std is a
+   second opinion next to CBS's own projected_points, matching ZUB's
+   non-PPR scoring; expect it null until closer to kickoff, since Sleeper
+   doesn't publish weekly projections far in advance. */
+const SLEEPER_ROSTER_META_KEY = "zubSleeperRosterMeta_v1";
+let sleeperRosterCache = null; // array
+let sleeperRosterInFlight = false;
+
+function getSleeperRosterMeta(){
+  try{ return JSON.parse(localStorage.getItem(SLEEPER_ROSTER_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setSleeperRosterMeta(meta){
+  try{ localStorage.setItem(SLEEPER_ROSTER_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncSleeperRoster(){
+  if(sleeperRosterInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  sleeperRosterInFlight = true;
+  try{
+    const week = cbsRostersCache?.period || currentScheduleWeek();
+    const res = await fetch(`${ZUB_SYNC_API}/api/trending?type=roster&team=${teamId}&week=${week}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    sleeperRosterCache = data.items;
+    setSleeperRosterMeta({ lastSync: Date.now(), error: null });
+  }catch(e){
+    setSleeperRosterMeta({ lastSync: getSleeperRosterMeta().lastSync || null, error: e.message });
+  } finally {
+    sleeperRosterInFlight = false;
+  }
+}
+function maybeAutoSyncSleeperRoster(){
+  if(sleeperRosterInFlight) return;
+  const meta = getSleeperRosterMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && sleeperRosterCache) return;
+  syncSleeperRoster().then(()=>{
+    if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
+  });
+}
+function sleeperRosterFor(cbsPlayerId){
+  if(!sleeperRosterCache) return null;
+  return sleeperRosterCache.find(i=>i.cbsPlayerId===cbsPlayerId) || null;
+}
+function sleeperDepthBadge(cbsPlayerId){
+  const sp = sleeperRosterFor(cbsPlayerId);
+  if(!sp || sp.depthChartOrder == null) return '';
+  const projTxt = sp.sleeperProjStd != null ? ` &middot; ${sp.sleeperProjStd.toFixed(1)} Sleeper proj` : '';
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Sleeper depth chart">Depth #${sp.depthChartOrder} (${sp.depthChartPosition||sp.pos})${projTxt}</span>`;
+}
+
+function renderLiveLineupTables(cbsTeam){
+  maybeAutoSyncSleeperRoster();
+  const week = cbsRostersCache.period;
+  const starters = computeCbsSuggestedStarters(cbsTeam, week);
+  const usedIds = new Set(starters.filter(s=>s.player).map(s=>s.player.id));
+
+  document.getElementById('lineupStartersTable').innerHTML =
+    `<thead><tr><th>Slot</th><th>Player</th><th>Value</th><th></th></tr></thead><tbody>${
+      starters.map(s=>{
+        if(!s.player) return `<tr><td>${s.label}</td><td colspan="3" class="empty-cell">No eligible player</td></tr>`;
+        const p = s.player;
+        const fpHit = fpInjuryFor(p.player);
+        const statusText = p.injury || (fpHit ? fpHit.status : null);
+        const warn = statusText ? `<span class="dead-tag" title="${p.injury ? 'CBS' : 'FantasyPros'}">${statusText}</span>` : '';
+        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}${sleeperDepthBadge(p.id)}</td><td class="hero">${(p.projectedPoints||0).toFixed(1)}</td><td></td></tr>`;
+      }).join('')
+    }`;
+
+  const bench = cbsTeam.players.filter(p=>!usedIds.has(p.id));
+  document.getElementById('lineupBenchTable').innerHTML =
+    `<thead><tr><th>Player</th><th>Pos</th><th>Value</th><th>Status</th></tr></thead><tbody>${
+      bench.map(p=>{
+        const fpHit = fpInjuryFor(p.player);
+        const statusText = p.injury || (fpHit ? fpHit.status : 'Healthy');
+        return `<tr><td>${p.player}${sleeperDepthBadge(p.id)}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${(p.projectedPoints||0).toFixed(1)}</td><td>${statusText}</td></tr>`;
+      }).join('') || '<tr><td>Nobody left on the bench.</td></tr>'
+    }`;
+
+  renderLineupWriteBox();
+}
+
+/* ---------- LINEUP WRITE (push to CBS) ----------
+   Shares computeCbsSuggestedStarters with renderLiveLineupTables above --
+   this box now only needs to show the diff and the push button, since the
+   full suggested lineup is already visible in the table above it. Requires
+   Roster Sync to have run at least once. */
+let lineupWriteInFlight = false;
+let lineupWriteError = null;
+
+// Required roster slots, in CBS's own roster_pos codes, and which of CBS's
+// own base position codes (QB/RB/WR/TE/TK/DST) are eligible for each.
+const CBS_ROSTER_SLOTS = [
+  { slot: 'QB', label: 'QB', positions: ['QB'] },
+  { slot: 'RB', label: 'RB', positions: ['RB'] },
+  { slot: 'RB', label: 'RB', positions: ['RB'] },
+  { slot: 'WR-TE', label: 'WR/TE', positions: ['WR','TE'] },
+  { slot: 'WR-TE', label: 'WR/TE', positions: ['WR','TE'] },
+  { slot: 'RB-WR-TE', label: 'FLEX (RB/WR/TE)', positions: ['RB','WR','TE'] },
+  { slot: 'TK', label: 'PK', positions: ['TK'] },
+  { slot: 'DST', label: 'DST', positions: ['DST'] },
+];
+
+// Best lineup CBS's own roster + projections can build: highest
+// projected_points at each slot, skipping anyone on bye this week. Doesn't
+// second-guess CBS's projections with local injury flags -- a real Out
+// player generally projects near zero anyway, and this stays honest about
+// only using data actually available here.
+function computeCbsSuggestedStarters(cbsTeam, week){
+  const used = new Set();
+  const bestAt = (positions)=>{
+    const pool = cbsTeam.players.filter(p=>
+      positions.includes(p.pos) && !used.has(p.id) && String(p.byeWeek||'') !== String(week||''));
+    pool.sort((a,b)=>(b.projectedPoints||0)-(a.projectedPoints||0));
+    return pool[0] || null;
+  };
+  return CBS_ROSTER_SLOTS.map(({slot,label,positions})=>{
+    const p = bestAt(positions);
+    if(p) used.add(p.id);
+    return { slot, label, player: p };
+  });
+}
+
+function buildLineupWriteDiff(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam) return { error: 'noSync' };
+
+  const week = cbsRostersCache.period;
+  const starters = computeCbsSuggestedStarters(cbsTeam, week);
+  const active = {}, reserve = {}, changes = [];
+  const desiredActiveIds = new Set();
+
+  starters.forEach(s=>{
+    if(!s.player) return;
+    desiredActiveIds.add(s.player.id);
+    if(s.player.rosterStatus !== 'A' || s.player.rosterPos !== s.slot){
+      active[s.player.id] = { pos: s.slot };
+      changes.push(`Start ${s.player.player} at ${s.label}${s.player.rosterStatus!=='A' ? ' (off the bench)' : ' (slot change)'}`);
+    }
+  });
+
+  cbsTeam.players.forEach(cp=>{
+    if(cp.rosterStatus === 'A' && !desiredActiveIds.has(cp.id)){
+      reserve[cp.id] = { pos: cp.rosterPos };
+      changes.push(`Bench ${cp.player}`);
+    }
+  });
+
+  return { point: week, starters, active, reserve, changes };
+}
+
+function renderLineupWriteBox(){
+  const box = document.getElementById('lineupWriteBox');
+  if(!box) return;
+
+  if(!cbsRostersCache){
+    box.innerHTML = `<p class="panel-sub">Run <b>Roster Sync</b> (League tab) at least once to pull your real CBS roster before pushing a lineup.</p>`;
+    return;
+  }
+
+  const diff = buildLineupWriteDiff();
+  if(diff.error === 'noSync'){
+    box.innerHTML = `<p class="panel-sub">No live CBS roster found for ${MY_TEAM_OWNER} -- try Roster Sync again.</p>`;
+    return;
+  }
+
+  if(!diff.changes.length){
+    box.innerHTML = `<p class="panel-sub" style="color:var(--jade);">The table above is already your live lineup on CBS (week ${diff.point}) -- nothing to push.</p>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="trade-verdict" style="margin-bottom:10px;">
+      <strong>The lineup above differs from what's live on CBS (week ${diff.point}):</strong>
+      <ul style="margin:8px 0 0 18px;padding:0;">${diff.changes.map(c=>`<li>${c}</li>`).join('')}</ul>
+    </div>
+    <button id="pushLineupBtn" class="side-tab" ${lineupWriteInFlight?'disabled':''}>${lineupWriteInFlight?'Pushing to CBS…':'Push this lineup to CBS'}</button>
+    <p style="margin-top:8px;font-size:12px;color:${lineupWriteError?'var(--coral)':'var(--chalk-3)'};">${lineupWriteInFlight?'Sending to CBS…':(lineupWriteError?`Failed: ${lineupWriteError}`:'')}</p>
+  `;
+  document.getElementById('pushLineupBtn')?.addEventListener('click', ()=>submitLineupWrite(diff));
+}
+
+// Separate from ZUB_SYNC_KEY above (which is embedded in this page's own
+// source, so it isn't a real secret) -- this one is never shipped in the
+// bundle. Asked once per browser session via prompt() and held only in
+// sessionStorage; the server (api/lineup.js) is the actual enforcement
+// point, so a wrong or missing value here just fails the request rather
+// than being a security boundary in itself.
+function getLineupWriteKey(){
+  let k = sessionStorage.getItem('zubLineupWriteKey');
+  if(!k){
+    k = window.prompt('Enter the lineup-write passphrase (asked once per browser session):');
+    if(k) sessionStorage.setItem('zubLineupWriteKey', k);
+  }
+  return k;
+}
+
+async function submitLineupWrite(diff){
+  if(lineupWriteInFlight) return;
+  const confirmMsg = `Push this real lineup change to your live CBS team?\n\n${diff.changes.join('\n')}`;
+  if(!window.confirm(confirmMsg)) return;
+
+  const writeKey = getLineupWriteKey();
+  if(!writeKey){
+    lineupWriteError = 'Lineup-write passphrase is required.';
+    renderLineupWriteBox();
+    return;
+  }
+
+  lineupWriteInFlight = true;
+  lineupWriteError = null;
+  renderLineupWriteBox();
+
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/lineup?key=${ZUB_SYNC_KEY}&writeKey=${encodeURIComponent(writeKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ point: diff.point, active: diff.active, reserve: diff.reserve }),
+    });
+    const body = await res.json();
+    if(!res.ok || !body.success){
+      // Wrong passphrase specifically -- clear it so the next attempt
+      // re-prompts instead of silently failing forever with a stale value.
+      if(res.status === 401) sessionStorage.removeItem('zubLineupWriteKey');
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    await syncCbsRosters(); // re-sync so the diff box reflects the new live state
+  }catch(e){
+    lineupWriteError = e.message;
+  }finally{
+    lineupWriteInFlight = false;
+    renderLineupWriteBox();
+  }
 }
 
 
@@ -8076,7 +9201,14 @@ function renderImportView(){
       <div class="cc-label">Waiver-wire rankings &middot; stored for future waiver tools</div>
       ${waiver.length ? waiver.map(([k,r])=>reportRow(k,r,'waiver')).join('') : '<p style="color:var(--chalk-3);font-size:13px;margin:0;">None imported yet.</p>'}
     </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <div class="cc-label">Cross-provider check &middot; ESPN</div>
+      <div class="cc-title">Your roster, seen from ESPN's side</div>
+      ${renderEspnCrossCheck()}
+    </div>
   `;
+
+  bindEspnCrossCheckEvents();
 
   document.getElementById('fpFileInput')?.addEventListener('change', (e)=>{
     const file = e.target.files[0];
@@ -16775,6 +17907,19 @@ loadState().then(()=>{
   if(footerDateEl){
     const [y,m,d] = VALUES_SNAPSHOT_DATE.split('-').map(Number);
     footerDateEl.textContent = `${m}/${d}/${y}`;
+  }
+});
+
+// Runs once per page load, after every const it needs (CBS_TEAM_ID_TO_OWNER,
+// ZUB_SYNC_KEY) has initialized -- called here at the very end of the boot
+// path rather than nearer applyActiveLeague() above for exactly that reason.
+// Re-renders Schedule/Standings only if the live fetch actually changed
+// anything and one of them happens to already be the open tab.
+syncSeasonSchedule().then(()=>{
+  if(document.getElementById('view-schedule')?.classList.contains('active')) renderScheduleView();
+  if(document.getElementById('view-standings')?.classList.contains('active')){
+    _standingsCache = null;
+    renderStandingsView();
   }
 });
 </script>
