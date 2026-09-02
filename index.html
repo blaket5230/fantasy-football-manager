@@ -2214,6 +2214,14 @@
       <p class="panel-sub">Realistic swaps, pairing a target with someone from your deepest position. <span class="th-help" title="Only pairs where both teams end up better off by their own needs, so these are offers worth actually sending rather than ones you would be embarrassed to make.">What makes an offer realistic</span></p>
       <div class="table-scroll"><table class="result-table" id="finderOffers"></table></div>
     </div>
+    <div class="panel">
+      <h3>Trade Radar</h3>
+      <p class="panel-sub" id="tradeRadarStatus">Real ensemble rest-of-season rank movement (this backend's own blended FantasyPros + ESPN read), not a generic buy/sell list.</p>
+      <div style="margin-top:8px;font-size:13px;font-weight:600;color:var(--chalk-2);">Buy-low targets &middot; on other rosters, rank improving</div>
+      <div class="table-scroll"><table class="result-table" id="tradeRadarBuyLow"></table></div>
+      <div style="margin-top:16px;font-size:13px;font-weight:600;color:var(--chalk-2);">Sell-high candidates &middot; yours, rank falling but still projects well</div>
+      <div class="table-scroll"><table class="result-table" id="tradeRadarSellHigh"></table></div>
+    </div>
   </div>
 
   <!-- DRAFT DAY -->
@@ -4371,6 +4379,7 @@ function myTeam(){ return state.teams.find(t=>t.owner===MY_TEAM_OWNER); }
 function renderFinderView(){
   maybeAutoSyncWaiverValue();
   maybeAutoSyncEnsembleRos();
+  maybeAutoSyncTradeRadar();
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
@@ -4446,6 +4455,55 @@ function renderFinderView(){
         offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0}${liveRankFor(o.give)?`, ROS ${rankCell(o.give)}`:''})</td><td>${o.get.player.name} (MV ${o.get.mv}${liveRankFor(o.get.player)?`, ROS ${rankCell(o.get.player)}`:''})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No value-comparable, roster-legal offers found from your ${deepest} depth right now. Try widening the search manually in the Trade Analyzer.</td></tr></tbody>`;
+
+  renderTradeRadar(weakest);
+}
+
+// Renders under its own panel below Suggested Offers. myWeakestPos is the
+// local WRTE/PK-taxonomy position code renderFinderView already computed --
+// buy-low targets carry CBS's own pos codes (WR/TE/TK separately), so
+// txnPosClass() normalizes each one before comparing, same conversion the
+// rest of this app already uses everywhere CBS data meets local data.
+function renderTradeRadar(myWeakestPos){
+  const statusEl = document.getElementById('tradeRadarStatus');
+  if(statusEl){
+    const meta = getTradeRadarMeta();
+    const base = "Real ensemble rest-of-season rank movement (this backend's own blended FantasyPros + ESPN read), not a generic buy/sell list.";
+    if(tradeRadarInFlight) statusEl.textContent = 'Checking for real rank movement…';
+    else if(meta.ready===false) statusEl.textContent = `${meta.reason||'Not enough collected history yet.'} ${base}`;
+    else if(meta.error) statusEl.textContent = `Last check failed: ${meta.error}. ${base}`;
+    else statusEl.textContent = base;
+  }
+
+  const buyLowEl = document.getElementById('tradeRadarBuyLow');
+  const sellHighEl = document.getElementById('tradeRadarSellHigh');
+  if(!buyLowEl || !sellHighEl) return;
+
+  if(!tradeRadarCache){
+    const msg = '<tbody><tr><td>No data yet.</td></tr></tbody>';
+    buyLowEl.innerHTML = msg;
+    sellHighEl.innerHTML = msg;
+    return;
+  }
+
+  const buyLow = tradeRadarCache.buyLowTargets || [];
+  buyLowEl.innerHTML = buyLow.length
+    ? `<thead><tr><th>Player</th><th>Pos</th><th>Owner</th><th>Rank move</th></tr></thead><tbody>${
+        buyLow.map(t=>{
+          const isMyNeed = txnPosClass(t.pos) === myWeakestPos;
+          const needTag = isMyNeed ? `<span style="font-size:10px;color:var(--jade);margin-left:6px;" title="This is your thinnest position right now">&#9733; fills your need</span>` : '';
+          const ownerName = CBS_TEAM_ID_TO_OWNER[t.ownerTeamId] || `Team ${t.ownerTeamId}`;
+          return `<tr${isMyNeed?' style="border-color:var(--gold);"':''}><td>${t.player}${needTag}</td><td><span class="pos-tag pos-${txnPosClass(t.pos)}">${t.pos}</span></td><td>${ownerName}</td><td>#${t.fromRank} &rarr; #${t.toRank} <span style="color:var(--jade);">(+${t.delta})</span></td></tr>`;
+        }).join('')
+      }</tbody>`
+    : '<tbody><tr><td>No real buy-low movers right now -- check back as more daily snapshots accumulate.</td></tr></tbody>';
+
+  const sellHigh = tradeRadarCache.sellHighCandidates || [];
+  sellHighEl.innerHTML = sellHigh.length
+    ? `<thead><tr><th>Player</th><th>Pos</th><th>Rank move</th><th>This week's projection</th></tr></thead><tbody>${
+        sellHigh.map(t=>`<tr><td>${t.player}</td><td><span class="pos-tag pos-${txnPosClass(t.pos)}">${t.pos}</span></td><td>#${t.fromRank} &rarr; #${t.toRank} <span style="color:var(--coral);">(${t.delta})</span></td><td>${t.projectedPoints.toFixed(1)}</td></tr>`).join('')
+      }</tbody>`
+    : '<tbody><tr><td>No sell-high candidates on your roster right now.</td></tr></tbody>';
 }
 
 /* ---------- DRAFT DAY ---------- */
@@ -9028,6 +9086,59 @@ function ensembleRosBadge(cbsPlayerId){
   const srcTxt = (ens.sources||[]).join('+');
   const disagreeTxt = ens.sourceAgreement===false ? ' &middot; sources disagree' : '';
   return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble ROS rank blended from ${srcTxt}${ens.expertDisagreement?` (expert disagreement: ${ens.expertDisagreement})`:''}">${srcTxt}${disagreeTxt}</span>`;
+}
+
+/* ---------- TRADE RADAR (buy-low / sell-high) ----------
+   Real ensemble ROS rank movement (Phase 4's daily ensemble_ros_rankings
+   snapshots, via api/history.js?diff=tradeRadar -- see zub-fantasy-sync's
+   lib/tradeRadar.js) instead of a generic list: buyLowTargets are movers on
+   OTHER rosters whose ensemble rank is improving, sellHighCandidates are
+   MY players whose rank is falling but who still carry a real CBS weekly
+   projection right now. Which positions are actually thin is cross-checked
+   here against renderFinderView's own posCounts/weakest logic, not
+   duplicated server-side. */
+const TRADE_RADAR_META_KEY = "zubTradeRadarMeta_v1";
+let tradeRadarCache = null; // { buyLowTargets, sellHighCandidates }
+let tradeRadarInFlight = false;
+
+function getTradeRadarMeta(){
+  try{ return JSON.parse(localStorage.getItem(TRADE_RADAR_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setTradeRadarMeta(meta){
+  try{ localStorage.setItem(TRADE_RADAR_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncTradeRadar(){
+  if(tradeRadarInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  tradeRadarInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/history?diff=tradeRadar&team=${teamId}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.ready){
+      tradeRadarCache = { buyLowTargets: data.buyLowTargets, sellHighCandidates: data.sellHighCandidates };
+    }
+    setTradeRadarMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null, ready: data.ready, reason: data.reason || null });
+  }catch(e){
+    setTradeRadarMeta({ lastSync: getTradeRadarMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    tradeRadarInFlight = false;
+  }
+}
+function maybeAutoSyncTradeRadar(){
+  if(tradeRadarInFlight) return;
+  const meta = getTradeRadarMeta();
+  // matches the backend's own 15-minute cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 15*60*1000;
+  if(!stale && (tradeRadarCache || meta.ready===false)) return;
+  // Back off after a failed attempt -- same infinite-retry shape as every
+  // other auto-sync in this file (see the FantasyPros-injuries fix) while
+  // Trade Finder stays open.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncTradeRadar().then(()=>{
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
 }
 
 function renderLiveLineupTables(cbsTeam){
