@@ -6019,13 +6019,18 @@ const ZUB_DIVISIONS = [
 function divisionOf(owner){ return ZUB_DIVISIONS.find(d=>d.teams.includes(owner))?.name || null; }
 function nickOf(owner){ const i=teamIdxOf(owner); return i>=0 ? (state.teams[i].team||owner) : owner; }
 
-/* Pulled straight off the real CBS schedule grid, cross-checked screenshot
-   by screenshot against the actual site rather than a first-pass
-   transcription -- every week is fully populated now, including week 3
-   (LickaMikeDitka/Jon Thorn vs texas SUCKS/JS Bull, The Big Apple/Ryan
-   Monigan vs PackNiners/Scott Bull), which an earlier pass had gotten
-   tangled and left blank for those four teams. */
-const SEASON_SCHEDULE = {
+/* Hand-typed fallback only -- the real source of truth is now CBS's own
+   /schedule/full, synced live via syncSeasonSchedule() below and swapped
+   into the mutable SEASON_SCHEDULE binding once it validates. This stays
+   as the value the app opens with (and the one it falls back to if that
+   live fetch ever fails) so nothing ever renders blank while waiting on
+   the network. Originally pulled off the real CBS schedule grid,
+   cross-checked screenshot by screenshot against the actual site rather
+   than a first-pass transcription -- every week is fully populated,
+   including week 3 (LickaMikeDitka/Jon Thorn vs texas SUCKS/JS Bull, The
+   Big Apple/Ryan Monigan vs PackNiners/Scott Bull), which an earlier pass
+   had gotten tangled and left blank for those four teams. */
+const SEASON_SCHEDULE_FALLBACK = {
   "Justin McDonald": {"1":"Blake Taylor", "2":"Brett Booker", "3":"Brandon Hill", "4":"PJ Humphreys", "5":"Caleb DeWoody", "6":"JS Bull", "7":"Travis and Wayne Banks", "8":"Tom McDonald", "9":"Scott Bull", "10":"Ryan Monigan", "11":"Jon Thorn", "12":"Blake Taylor", "13":"Brett Booker", "14":"Blake Taylor"},
   "Blake Taylor": {"1":"Justin McDonald", "2":"PJ Humphreys", "3":"Brett Booker", "4":"Caleb DeWoody", "5":"Brandon Hill", "6":"Tom McDonald", "7":"JS Bull", "8":"Travis and Wayne Banks", "9":"Jon Thorn", "10":"Scott Bull", "11":"Brett Booker", "12":"Justin McDonald", "13":"Ryan Monigan", "14":"Justin McDonald"},
   "Brett Booker": {"1":"Caleb DeWoody", "2":"Justin McDonald", "3":"Blake Taylor", "4":"Brandon Hill", "5":"PJ Humphreys", "6":"Travis and Wayne Banks", "7":"Tom McDonald", "8":"JS Bull", "9":"Ryan Monigan", "10":"Jon Thorn", "11":"Blake Taylor", "12":"Scott Bull", "13":"Justin McDonald", "14":"Caleb DeWoody"},
@@ -6039,6 +6044,11 @@ const SEASON_SCHEDULE = {
   "Jon Thorn": {"1":"Ryan Monigan", "2":"Scott Bull", "3":"JS Bull", "4":"Travis and Wayne Banks", "5":"Tom McDonald", "6":"Brandon Hill", "7":"PJ Humphreys", "8":"Caleb DeWoody", "9":"Blake Taylor", "10":"Brett Booker", "11":"Justin McDonald", "12":"Ryan Monigan", "13":"Scott Bull", "14":"Ryan Monigan"},
   "Scott Bull": {"1":"Travis and Wayne Banks", "2":"Jon Thorn", "3":"Ryan Monigan", "4":"Tom McDonald", "5":"JS Bull", "6":"Caleb DeWoody", "7":"Brandon Hill", "8":"PJ Humphreys", "9":"Justin McDonald", "10":"Blake Taylor", "11":"Ryan Monigan", "12":"Brett Booker", "13":"Jon Thorn", "14":"Travis and Wayne Banks"}
 };
+// Mutable -- syncSeasonSchedule() overwrites this in place once a live fetch
+// from CBS validates, so every reader (currentScheduleWeek, computeStandings,
+// renderWeekScoreBody) picking it up via closure sees the live version
+// without needing to know sync happened.
+let SEASON_SCHEDULE = SEASON_SCHEDULE_FALLBACK;
 const SEASON_WEEKS = 14;
 
 /* ---------- LIVE CBS SYNC ----------
@@ -6071,6 +6081,66 @@ function getLiveSyncMeta(){
 }
 function setLiveSyncMeta(meta){
   try{ localStorage.setItem(LIVE_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+/* ---------- LIVE SEASON SCHEDULE ----------
+   Replaces the hand-typed SEASON_SCHEDULE_FALLBACK with CBS's own
+   /schedule/full once it's fetched and validated -- see that constant's
+   comment above for why the fallback still exists and stays wired in. */
+const SEASON_SCHEDULE_CACHE_KEY = "zubSeasonScheduleCache_v1";
+
+// Converts CBS's live /schedule/full periods into the same
+// {owner: {week: opponentOwner}} shape SEASON_SCHEDULE_FALLBACK uses, so
+// every existing reader (currentScheduleWeek, computeStandings,
+// renderWeekScoreBody) keeps working unchanged. Only periods 1-SEASON_WEEKS
+// (regular season) are used -- periods beyond that are the playoff
+// bracket, which CBS itself shows as "TBA" until seeded and which this app
+// computes separately (see computeStandings/renderPlayoffPicture), not
+// from a fixed schedule pairing.
+function scheduleFromPeriods(periods){
+  const schedule = {};
+  (periods||[]).forEach(p=>{
+    if(p.period > SEASON_WEEKS) return;
+    const wk = String(p.period);
+    (p.matchups||[]).forEach(m=>{
+      const awayOwner = CBS_TEAM_ID_TO_OWNER[String(m.away.teamId)];
+      const homeOwner = CBS_TEAM_ID_TO_OWNER[String(m.home.teamId)];
+      if(!awayOwner || !homeOwner) return; // still "TBA", or an id outside this league's 12 tracked owners
+      if(!schedule[awayOwner]) schedule[awayOwner] = {};
+      if(!schedule[homeOwner]) schedule[homeOwner] = {};
+      schedule[awayOwner][wk] = homeOwner;
+      schedule[homeOwner][wk] = awayOwner;
+    });
+  });
+  return schedule;
+}
+
+// The schedule is set before Week 1 and barely changes mid-season, so
+// unlike live scores this only needs to run once per browser session
+// rather than on a 5-minute cadence -- cached in localStorage so a page
+// reload doesn't refetch every time either.
+async function syncSeasonSchedule(){
+  try{
+    const cached = JSON.parse(localStorage.getItem(SEASON_SCHEDULE_CACHE_KEY) || 'null');
+    if(cached && cached.schedule) SEASON_SCHEDULE = cached.schedule;
+  }catch(e){}
+
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/scores?mode=schedule&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const schedule = scheduleFromPeriods(data.periods);
+    // Sanity check before trusting it over the hand-verified fallback --
+    // every one of the 12 tracked owners needs a full SEASON_WEEKS row,
+    // the same shape the fallback guarantees.
+    const owners = Object.values(CBS_TEAM_ID_TO_OWNER);
+    const complete = owners.every(o => schedule[o] && Object.keys(schedule[o]).length === SEASON_WEEKS);
+    if(!complete) throw new Error('Live schedule fetch was incomplete -- keeping the current copy.');
+    SEASON_SCHEDULE = schedule;
+    try{ localStorage.setItem(SEASON_SCHEDULE_CACHE_KEY, JSON.stringify({ schedule, syncedAt: Date.now() })); }catch(e){}
+  }catch(e){
+    console.warn('Live schedule sync failed, staying on the fallback/cached schedule:', e.message);
+  }
 }
 
 // CBS reports 0 for any team whose players haven't kicked off yet, which
@@ -17837,6 +17907,19 @@ loadState().then(()=>{
   if(footerDateEl){
     const [y,m,d] = VALUES_SNAPSHOT_DATE.split('-').map(Number);
     footerDateEl.textContent = `${m}/${d}/${y}`;
+  }
+});
+
+// Runs once per page load, after every const it needs (CBS_TEAM_ID_TO_OWNER,
+// ZUB_SYNC_KEY) has initialized -- called here at the very end of the boot
+// path rather than nearer applyActiveLeague() above for exactly that reason.
+// Re-renders Schedule/Standings only if the live fetch actually changed
+// anything and one of them happens to already be the open tab.
+syncSeasonSchedule().then(()=>{
+  if(document.getElementById('view-schedule')?.classList.contains('active')) renderScheduleView();
+  if(document.getElementById('view-standings')?.classList.contains('active')){
+    _standingsCache = null;
+    renderStandingsView();
   }
 });
 </script>
