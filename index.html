@@ -2201,7 +2201,7 @@
   <div class="view" id="view-finder">
     <div class="panel">
       <h3>Roster breakdown &middot; The John Waynes</h3>
-      <p class="panel-sub">Active contracts only, dead cap doesn't count as a roster spot.</p>
+      <p class="panel-sub" id="finderBreakdownNote">Active contracts only, dead cap doesn't count as a roster spot.</p>
       <div class="table-scroll"><table class="result-table" id="finderBreakdown"></table></div>
     </div>
     <div class="panel">
@@ -2213,6 +2213,14 @@
       <h3>Suggested offers</h3>
       <p class="panel-sub">Realistic swaps, pairing a target with someone from your deepest position. <span class="th-help" title="Only pairs where both teams end up better off by their own needs, so these are offers worth actually sending rather than ones you would be embarrassed to make.">What makes an offer realistic</span></p>
       <div class="table-scroll"><table class="result-table" id="finderOffers"></table></div>
+    </div>
+    <div class="panel">
+      <h3>Trade Radar</h3>
+      <p class="panel-sub" id="tradeRadarStatus">Real ensemble rest-of-season rank movement (this backend's own blended FantasyPros + ESPN read), not a generic buy/sell list.</p>
+      <div style="margin-top:8px;font-size:13px;font-weight:600;color:var(--chalk-2);">Buy-low targets &middot; on other rosters, rank improving</div>
+      <div class="table-scroll"><table class="result-table" id="tradeRadarBuyLow"></table></div>
+      <div style="margin-top:16px;font-size:13px;font-weight:600;color:var(--chalk-2);">Sell-high candidates &middot; yours, rank falling but still projects well</div>
+      <div class="table-scroll"><table class="result-table" id="tradeRadarSellHigh"></table></div>
     </div>
   </div>
 
@@ -4250,6 +4258,7 @@ function computeDrop(){
 /* ---------- TRADE ANALYZER ---------- */
 function renderTradeView(){
   maybeAutoSyncWaiverValue();
+  maybeAutoSyncEnsembleRos();
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
   const opts = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
@@ -4325,7 +4334,7 @@ function computeTrade(){
     const aLive = liveRankSummaryHTML(aSendPlayers);
     const bLive = liveRankSummaryHTML(bSendPlayers);
     const liveRankHTML = (aLive || bLive) ? `<div style="margin-top:8px;font-size:12px;">
-      <b>Live FantasyPros ROS rank</b> (cross-check only, not part of the cap/legality read -- needs Roster Sync to have matched a player to their CBS id):<br>
+      <b>Live ROS rank</b> (this backend's ensemble blend where available, FantasyPros-only otherwise -- cross-check only, not part of the cap/legality read -- needs Roster Sync to have matched a player to their CBS id):<br>
       ${aLive ? `${tA.team||tA.owner}: ${aLive}<br>` : ''}
       ${bLive ? `${tB.team||tB.owner}: ${bLive}` : ''}
     </div>` : '';
@@ -4367,30 +4376,63 @@ function posCounts(team){
 }
 function myTeam(){ return state.teams.find(t=>t.owner===MY_TEAM_OWNER); }
 
+// Real CBS roster depth (once Roster Sync has run), grouped into this app's
+// local WRTE/PK taxonomy via txnPosClass -- null before the first sync.
+// Exists because posCounts(me) only sees the contract ledger, which for a
+// real team can badly understate actual depth: a player added off waivers
+// or never drafted/kept has no ledger entry at all, so a team that's
+// genuinely deep at a position can still show 0 there.
+function liveCbsPosCounts(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam) return null;
+  const counts = {QB:0,RB:0,WRTE:0,PK:0,DST:0};
+  cbsTeam.players.forEach(p=>{
+    const pos = txnPosClass(p.pos);
+    if(counts[pos]!==undefined) counts[pos]++;
+  });
+  return counts;
+}
+
 function renderFinderView(){
   maybeAutoSyncWaiverValue();
+  maybeAutoSyncEnsembleRos();
+  maybeAutoSyncTradeRadar();
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
+  // Prefers your real CBS roster for the breakdown display and for picking
+  // which position is actually thinnest -- falls back to the contract
+  // ledger before Roster Sync has ever run. Suggested Offers below keeps
+  // reading the ledger-only `counts` unconditionally regardless: offering a
+  // player away requires an actual tracked contract (cost + market value),
+  // so "what I have to trade" can only ever mean the ledger.
+  const liveCounts = liveCbsPosCounts();
+  const needCounts = liveCounts || counts;
 
   // breakdown table
   const rows = POSITIONS.map(pos=>{
-    const n = counts[pos];
+    const n = needCounts[pos];
     const flag = n===0 ? ' &middot; needs attention' : (n===1 ? ' &middot; thin' : '');
     return `<tr><td>${posLabel(pos)}</td><td class="${n<=1?'':'hero'}">${n}${flag}</td></tr>`;
   }).join('');
   document.getElementById('finderBreakdown').innerHTML =
-    `<thead><tr><th>Position</th><th>Active players</th></tr></thead><tbody>${rows}</tbody>`;
+    `<thead><tr><th>Position</th><th>${liveCounts?'On your CBS roster':'Active players'}</th></tr></thead><tbody>${rows}</tbody>`;
+  const breakdownNoteEl = document.getElementById('finderBreakdownNote');
+  if(breakdownNoteEl){
+    breakdownNoteEl.textContent = liveCounts
+      ? "Your real CBS roster, via Roster Sync -- not just what's recorded in contracts here."
+      : "Active contracts only, dead cap doesn't count as a roster spot. Run Roster Sync (League → Roster Sync) to see your real CBS depth instead.";
+  }
 
   // weakest position(s): lowest count, ties broken by roster-relevance order
   const priority = ["WRTE","RB","QB","PK","DST"];
   let weakest = priority[0];
   let weakestCount = Infinity;
   priority.forEach(pos=>{
-    if(counts[pos] < weakestCount){ weakestCount = counts[pos]; weakest = pos; }
+    if(needCounts[pos] < weakestCount){ weakestCount = needCounts[pos]; weakest = pos; }
   });
   document.getElementById('finderNeedNote').textContent =
-    `Your thinnest position right now is ${posLabel(weakest)} (${weakestCount} active player${weakestCount===1?'':'s'}). Showing every ${posLabel(weakest)} on another roster.`;
+    `Your thinnest position right now is ${posLabel(weakest)} (${weakestCount} ${liveCounts?'rostered':'active'} player${weakestCount===1?'':'s'}). Showing every ${posLabel(weakest)} on another roster.`;
 
   // targets across the league at that position
   const targets = [];
@@ -4403,10 +4445,11 @@ function renderFinderView(){
     });
   });
   targets.sort((a,b)=>b.mv-a.mv);
-  // Live FantasyPros ROS rank alongside the static mv, where Roster Sync has
-  // matched the player to their real CBS id -- a cross-check, not a
-  // replacement, since mv still drives the actual value-gap math below.
-  const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rankEcr??'--'}` : '--'; };
+  // Live ROS rank alongside the static mv, where Roster Sync has matched the
+  // player to their real CBS id -- this backend's ensemble blend where
+  // available, FantasyPros-only otherwise. A cross-check, not a replacement:
+  // mv still drives the actual value-gap math below, untouched.
+  const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rank??'--'}${liveRankBadge(r)}` : '--'; };
   document.getElementById('finderTargets').innerHTML = targets.length
     ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Live ROS rank</th><th>Value/$</th></tr></thead><tbody>${
         targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${rankCell(x.player)}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
@@ -4443,6 +4486,58 @@ function renderFinderView(){
         offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0}${liveRankFor(o.give)?`, ROS ${rankCell(o.give)}`:''})</td><td>${o.get.player.name} (MV ${o.get.mv}${liveRankFor(o.get.player)?`, ROS ${rankCell(o.get.player)}`:''})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No value-comparable, roster-legal offers found from your ${deepest} depth right now. Try widening the search manually in the Trade Analyzer.</td></tr></tbody>`;
+
+  renderTradeRadar(weakest);
+}
+
+// Renders under its own panel below Suggested Offers. myWeakestPos is the
+// local WRTE/PK-taxonomy position code renderFinderView already computed --
+// buy-low targets carry CBS's own pos codes (WR/TE/TK separately), so
+// txnPosClass() normalizes each one before comparing, same conversion the
+// rest of this app already uses everywhere CBS data meets local data.
+function renderTradeRadar(myWeakestPos){
+  const statusEl = document.getElementById('tradeRadarStatus');
+  if(statusEl){
+    const meta = getTradeRadarMeta();
+    const base = "Real ensemble rest-of-season rank movement (this backend's own blended FantasyPros + ESPN read), not a generic buy/sell list.";
+    if(tradeRadarInFlight) statusEl.textContent = 'Checking for real rank movement…';
+    else if(meta.ready===false) statusEl.textContent = `${meta.reason||'Not enough collected history yet.'} ${base}`;
+    else if(meta.error) statusEl.textContent = `Last check failed: ${meta.error}. ${base}`;
+    else statusEl.textContent = base;
+  }
+
+  const buyLowEl = document.getElementById('tradeRadarBuyLow');
+  const sellHighEl = document.getElementById('tradeRadarSellHigh');
+  if(!buyLowEl || !sellHighEl) return;
+
+  if(!tradeRadarCache){
+    const msg = '<tbody><tr><td>No data yet.</td></tr></tbody>';
+    buyLowEl.innerHTML = msg;
+    sellHighEl.innerHTML = msg;
+    return;
+  }
+
+  const buyLow = tradeRadarCache.buyLowTargets || [];
+  buyLowEl.innerHTML = buyLow.length
+    ? `<thead><tr><th>Player</th><th>Pos</th><th>Owner</th><th>Rank move</th></tr></thead><tbody>${
+        buyLow.map(t=>{
+          const isMyNeed = txnPosClass(t.pos) === myWeakestPos;
+          const needTag = isMyNeed ? `<span style="font-size:10px;color:var(--jade);margin-left:6px;" title="This is your thinnest position right now">&#9733; fills your need</span>` : '';
+          // null ownerTeamId is a real, meaningful state here -- a free
+          // agent, not a data gap -- and arguably the best kind of buy-low
+          // target since it's a straight add, not a trade ask.
+          const ownerName = t.ownerTeamId == null ? 'Free agent' : (CBS_TEAM_ID_TO_OWNER[t.ownerTeamId] || `Team ${t.ownerTeamId}`);
+          return `<tr${isMyNeed?' style="border-color:var(--gold);"':''}><td>${t.player}${needTag}</td><td><span class="pos-tag pos-${txnPosClass(t.pos)}">${t.pos}</span></td><td>${ownerName}</td><td>#${t.fromRank} &rarr; #${t.toRank} <span style="color:var(--jade);">(+${t.delta})</span></td></tr>`;
+        }).join('')
+      }</tbody>`
+    : '<tbody><tr><td>No real buy-low movers right now -- check back as more daily snapshots accumulate.</td></tr></tbody>';
+
+  const sellHigh = tradeRadarCache.sellHighCandidates || [];
+  sellHighEl.innerHTML = sellHigh.length
+    ? `<thead><tr><th>Player</th><th>Pos</th><th>Rank move</th><th>This week's projection</th></tr></thead><tbody>${
+        sellHigh.map(t=>`<tr><td>${t.player}</td><td><span class="pos-tag pos-${txnPosClass(t.pos)}">${t.pos}</span></td><td>#${t.fromRank} &rarr; #${t.toRank} <span style="color:var(--coral);">(${t.delta})</span></td><td>${t.projectedPoints.toFixed(1)}</td></tr>`).join('')
+      }</tbody>`
+    : '<tbody><tr><td>No sell-high candidates on your roster right now.</td></tr></tbody>';
 }
 
 /* ---------- DRAFT DAY ---------- */
@@ -5664,9 +5759,9 @@ async function syncHistory(){
     if(!newsRes.ok) throw new Error(`HTTP ${newsRes.status} (news diff)`);
     const [roster, news] = await Promise.all([rosterRes.json(), newsRes.json()]);
     historyCache = { roster, news };
-    setHistoryMeta({ lastSync: Date.now(), error: null });
+    setHistoryMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setHistoryMeta({ lastSync: getHistoryMeta().lastSync || null, error: e.message });
+    setHistoryMeta({ lastSync: getHistoryMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     historyInFlight = false;
   }
@@ -5676,6 +5771,10 @@ function maybeAutoSyncHistory(){
   const meta = getHistoryMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
   if(!stale && historyCache) return;
+  // Back off after a failed attempt -- see the FantasyPros-injuries fix
+  // above for the full explanation of why an unconditional retry-on-every-
+  // render here can spin two functions off each other forever.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncHistory().then(()=>{
     if(document.getElementById('view-chronicle')?.classList.contains('active')) renderWhatsChanged();
   });
@@ -5770,9 +5869,9 @@ async function syncCbsTeamNews(){
     const res = await fetch(`${ZUB_SYNC_API}/api/news?source=cbs&team=${teamId}&limit=25&key=${ZUB_SYNC_KEY}`);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     cbsTeamNewsCache = await res.json();
-    setCbsTeamNewsMeta({ lastSync: Date.now(), error: null });
+    setCbsTeamNewsMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setCbsTeamNewsMeta({ lastSync: getCbsTeamNewsMeta().lastSync || null, error: e.message });
+    setCbsTeamNewsMeta({ lastSync: getCbsTeamNewsMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     cbsTeamNewsInFlight = false;
   }
@@ -5782,6 +5881,10 @@ function maybeAutoSyncCbsTeamNews(){
   const meta = getCbsTeamNewsMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000; // matches backend's cache
   if(!stale && cbsTeamNewsCache) return;
+  // Back off after a failed attempt -- renderTeamNews() calls this, and this
+  // calls renderTeamNews() back in its .then(), same infinite-retry shape as
+  // the FantasyPros-injuries fix elsewhere in this file.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncCbsTeamNews().then(()=>{ renderTeamNews(); });
 }
 function cbsTeamNewsStatusText(){
@@ -5833,9 +5936,9 @@ async function syncFpNews(){
     const res = await fetch(`${ZUB_SYNC_API}/api/news?key=${ZUB_SYNC_KEY}`);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     fpNewsCache = await res.json();
-    setFpNewsMeta({ lastSync: Date.now(), error: null });
+    setFpNewsMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setFpNewsMeta({ lastSync: getFpNewsMeta().lastSync || null, error: e.message });
+    setFpNewsMeta({ lastSync: getFpNewsMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     fpNewsInFlight = false;
   }
@@ -5845,6 +5948,10 @@ function maybeAutoSyncFpNews(){
   const meta = getFpNewsMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000; // matches backend's cache
   if(!stale && fpNewsCache) return;
+  // Back off after a failed attempt -- same infinite-retry shape as the
+  // FantasyPros-injuries fix elsewhere in this file (renderTeamNews() calls
+  // this, and this calls renderTeamNews() back in its .then()).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncFpNews().then(()=>{ renderTeamNews(); });
 }
 function newsStatusText(){
@@ -6362,9 +6469,9 @@ async function syncTransactions(){
     // parsing the human date string.
     txnCache = (data.transactions||[]).sort((a,b)=>
       Number((b.id||'0-0').split('-')[0]) - Number((a.id||'0-0').split('-')[0]));
-    setTxnSyncMeta({ lastSync: Date.now(), error: null });
+    setTxnSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setTxnSyncMeta({ lastSync: getTxnSyncMeta().lastSync || null, error: e.message });
+    setTxnSyncMeta({ lastSync: getTxnSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     txnSyncInFlight = false;
   }
@@ -6375,6 +6482,10 @@ function maybeAutoSyncTransactions(){
   const meta = getTxnSyncMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 5*60*1000;
   if(!stale && txnCache) return;
+  // Back off after a failed attempt -- same infinite-retry shape as the
+  // FantasyPros-injuries fix elsewhere in this file (renderTransactionsView()
+  // calls this, and this calls renderTransactionsView() back in its .then()).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncTransactions().then(()=>{ renderTransactionsView(); });
 }
 
@@ -6509,9 +6620,9 @@ async function syncCbsRosters(){
     cbsRostersCache = await res.json();
     computeRosterDrift(); // side effect: attaches real cbsId to matched local players
     saveState();
-    setRosterSyncMeta({ lastSync: Date.now(), error: null });
+    setRosterSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setRosterSyncMeta({ lastSync: getRosterSyncMeta().lastSync || null, error: e.message });
+    setRosterSyncMeta({ lastSync: getRosterSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     rosterSyncInFlight = false;
   }
@@ -6521,6 +6632,12 @@ function maybeAutoSyncCbsRosters(){
   const meta = getRosterSyncMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 15*60*1000;
   if(!stale && cbsRostersCache) return;
+  // Back off after a failed attempt instead of retrying on every render --
+  // renderRosterSyncView() calls this, and this calls renderRosterSyncView()
+  // back in its .then(), so a permanently-failing fetch would otherwise spin
+  // the two functions off each other forever (confirmed live for the
+  // equivalent FantasyPros-injuries pair below).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncCbsRosters().then(()=>{ renderRosterSyncView(); });
 }
 function rosterSyncStatusText(){
@@ -6614,9 +6731,9 @@ async function syncWaiverTrending(){
     if(!dropRes.ok) throw new Error(`HTTP ${dropRes.status} (drop)`);
     const [addData, dropData] = await Promise.all([addRes.json(), dropRes.json()]);
     waiverTrendingCache = { add: addData.items, drop: dropData.items };
-    setWaiverSyncMeta({ lastSync: Date.now(), error: null });
+    setWaiverSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setWaiverSyncMeta({ lastSync: getWaiverSyncMeta().lastSync || null, error: e.message });
+    setWaiverSyncMeta({ lastSync: getWaiverSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     waiverSyncInFlight = false;
   }
@@ -6627,6 +6744,10 @@ function maybeAutoSyncWaiverTrending(){
   // matches the backend's own 30-minute cache
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
   if(!stale && waiverTrendingCache) return;
+  // Back off after a failed attempt -- same infinite-retry shape as the
+  // FantasyPros-injuries fix elsewhere in this file (renderWaiverView() calls
+  // this, and this calls renderWaiverView() back in its .then()).
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncWaiverTrending().then(()=>{ renderWaiverView(); });
 }
 function waiverSyncStatusText(){
@@ -6693,9 +6814,9 @@ async function syncWaiverValue(){
     const [rankData, faData] = await Promise.all([rankRes.json(), faRes.json()]);
     rosRankingsCache = rankData.players;
     freeAgentsCache = faData.freeAgents;
-    setWaiverValueMeta({ lastSync: Date.now(), error: null });
+    setWaiverValueMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setWaiverValueMeta({ lastSync: getWaiverValueMeta().lastSync || null, error: e.message });
+    setWaiverValueMeta({ lastSync: getWaiverValueMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     waiverValueInFlight = false;
   }
@@ -6706,6 +6827,11 @@ function maybeAutoSyncWaiverValue(){
   // matches the backend's own 1-hour cache
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
   if(!stale && rosRankingsCache) return;
+  // Back off after a failed attempt -- with one of Waiver Wire/Trade
+  // Analyzer/Trade Finder left open, a permanently-failing fetch would
+  // otherwise re-trigger on every render of that view, same infinite-retry
+  // shape as the FantasyPros-injuries fix elsewhere in this file.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   // Shared cache -- Waiver Wire and Trade Analyzer both want live rankings,
   // so whichever view is on screen when the fetch resolves gets refreshed.
   syncWaiverValue().then(()=>{
@@ -6718,17 +6844,32 @@ function maybeAutoSyncWaiverValue(){
 // A trade's cap legality is decided by the contract data in state.teams --
 // that stays authoritative and unchanged below. This is a second, purely
 // informational cross-check: if Roster Sync has matched a traded player to
-// their real CBS id, look up their current FantasyPros ROS rank so the
+// their real CBS id, look up their current rest-of-season rank so the
 // fairness read isn't leaning entirely on a hand-set draft-day mv number
-// that may be stale months into the season.
+// that may be stale months into the season. Prefers this backend's blended
+// ensemble rank (FantasyPros + ESPN, api/players.js mode=ensemble&scope=ros)
+// over the raw FantasyPros-only rankEcr wherever the ensemble has a rank for
+// this player, falling back to the FP-only number otherwise -- callers get
+// one normalized shape ({rank, sources, ...}) regardless of which it was.
 function liveRankFor(p){
-  if(!p.cbsId || !rosRankingsCache) return null;
-  return rosRankingsCache.find(r=>r.cbsPlayerId===p.cbsId) || null;
+  if(!p.cbsId) return null;
+  const ens = ensembleRosFor(p.cbsId);
+  if(ens && ens.rank != null){
+    return { rank: ens.rank, sources: ens.sources, expertDisagreement: ens.expertDisagreement, sourceAgreement: ens.sourceAgreement, isEnsemble: true };
+  }
+  if(!rosRankingsCache) return null;
+  const r = rosRankingsCache.find(r=>r.cbsPlayerId===p.cbsId);
+  return r ? { rank: r.rankEcr, sources: ['fp'], expertDisagreement: null, sourceAgreement: null, isEnsemble: false } : null;
+}
+function liveRankBadge(r){
+  if(!r || !r.isEnsemble) return '';
+  const srcTxt = (r.sources||[]).join('+');
+  return ` <span style="font-size:10px;color:var(--chalk-3);" title="Ensemble ROS rank blended from ${srcTxt}${r.expertDisagreement?` (expert disagreement: ${r.expertDisagreement})`:''}">(${srcTxt})</span>`;
 }
 function liveRankSummaryHTML(players){
   const matched = players.map(p=>({p, r: liveRankFor(p)})).filter(x=>x.r);
   if(!matched.length) return '';
-  return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rankEcr??'--'})</span>`).join(', ');
+  return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rank??'--'})</span>${liveRankBadge(r)}`).join(', ');
 }
 function waiverValueStatusText(){
   if(waiverValueInFlight) return 'Pulling FantasyPros rest-of-season rankings…';
@@ -6753,7 +6894,7 @@ function bestAvailableByPosition(){
     out[r.pos].push(r);
   });
   Object.keys(out).forEach(pos=>{
-    out[pos].sort((a,b)=>(a.rankEcr??9999)-(b.rankEcr??9999));
+    out[pos].sort((a,b)=>waiverRankFor(a)-waiverRankFor(b));
     out[pos] = out[pos].slice(0,5);
   });
   return out;
@@ -6769,7 +6910,7 @@ function weakestOwnByPosition(){
   cbsTeam.players.forEach(p=>{
     const r = rankByCbsId.get(p.id);
     if(!r || !WAIVER_VALUE_POSITIONS.includes(r.pos)) return;
-    if(!out[r.pos] || (r.rankEcr??9999) > (out[r.pos].rankEcr??9999)) out[r.pos] = r;
+    if(!out[r.pos] || waiverRankFor(r) > waiverRankFor(out[r.pos])) out[r.pos] = r;
   });
   return out;
 }
@@ -6786,17 +6927,17 @@ function renderBestAvailableCard(){
     if(!list.length) return '';
     const weak = weakest[pos];
     const rows = list.map(r=>{
-      const isUpgrade = weak && (r.rankEcr??9999) < (weak.rankEcr??9999);
+      const isUpgrade = weak && waiverRankFor(r) < waiverRankFor(weak);
       const upgradeTag = isUpgrade
-        ? `<span style="font-size:10px;color:var(--jade);margin-left:8px;" title="Ranks ahead of your current ${weak.player} (#${weak.rankEcr})">&#8593; upgrade over ${weak.player}</span>`
+        ? `<span style="font-size:10px;color:var(--jade);margin-left:8px;" title="Ranks ahead of your current ${weak.player} (#${waiverRankFor(weak)})">&#8593; upgrade over ${weak.player}</span>`
         : '';
       return `<div class="div-team-row" style="align-items:center;">
-        <span class="dt-name">#${r.rankEcr??'--'} ${r.player} <span style="color:var(--chalk-3);font-size:11px;">${r.team||''}</span>${upgradeTag}</span>
+        <span class="dt-name">#${waiverRankFor(r)} ${r.player} <span style="color:var(--chalk-3);font-size:11px;">${r.team||''}</span>${ensembleRosBadge(r.cbsPlayerId)}${upgradeTag}</span>
         <span style="font-size:11px;color:var(--chalk-3);">${r.recommendation||r.tag||''}</span>
       </div>`;
     }).join('');
     return `<div style="margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:600;color:var(--chalk-2);margin-bottom:4px;">${pos}${weak?` <span style="font-weight:400;color:var(--chalk-3);">(your weakest: ${weak.player}, #${weak.rankEcr??'--'})</span>`:''}</div>
+      <div style="font-size:12px;font-weight:600;color:var(--chalk-2);margin-bottom:4px;">${pos}${weak?` <span style="font-weight:400;color:var(--chalk-3);">(your weakest: ${weak.player}, #${waiverRankFor(weak)})</span>`:''}</div>
       ${rows}
     </div>`;
   }).join('');
@@ -6809,6 +6950,7 @@ function renderWaiverView(){
   if(!host) return;
   maybeAutoSyncWaiverTrending();
   maybeAutoSyncWaiverValue();
+  maybeAutoSyncEnsembleRos();
 
   if(!waiverTrendingCache){
     host.innerHTML = `<div class="chron-hero">
@@ -8627,9 +8769,9 @@ async function syncFpInjuries(){
     const res = await fetch(`${ZUB_SYNC_API}/api/injuries?key=${ZUB_SYNC_KEY}`);
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     fpInjuriesCache = await res.json();
-    setFpInjuriesMeta({ lastSync: Date.now(), error: null });
+    setFpInjuriesMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setFpInjuriesMeta({ lastSync: getFpInjuriesMeta().lastSync || null, error: e.message });
+    setFpInjuriesMeta({ lastSync: getFpInjuriesMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     fpInjuriesInFlight = false;
   }
@@ -8640,6 +8782,13 @@ function maybeAutoSyncFpInjuries(){
   // matches the backend's own 30-minute cache -- no point checking more often
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
   if(!stale && fpInjuriesCache) return;
+  // Back off after a failed attempt instead of retrying on every render --
+  // this is called at the top of every renderLineupView(), and its own
+  // .then() calls renderLineupView() again, so a permanently-failing fetch
+  // (backend down, rate-limited, or fully network-blocked) would otherwise
+  // spin the two functions off each other forever with no backoff at all.
+  // Confirmed live: reproduced a hung, unresponsive tab this way.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncFpInjuries().then(()=>{ renderLineupView(); });
 }
 function fpInjuryFor(playerName){
@@ -8810,9 +8959,9 @@ async function syncSleeperRoster(){
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     sleeperRosterCache = data.items;
-    setSleeperRosterMeta({ lastSync: Date.now(), error: null });
+    setSleeperRosterMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
   }catch(e){
-    setSleeperRosterMeta({ lastSync: getSleeperRosterMeta().lastSync || null, error: e.message });
+    setSleeperRosterMeta({ lastSync: getSleeperRosterMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
   } finally {
     sleeperRosterInFlight = false;
   }
@@ -8822,6 +8971,12 @@ function maybeAutoSyncSleeperRoster(){
   const meta = getSleeperRosterMeta();
   const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
   if(!stale && sleeperRosterCache) return;
+  // Back off after a failed attempt -- with the Lineup Coach view left open,
+  // a permanently-failing fetch would otherwise re-trigger on every render
+  // this causes (renderLiveLineupTables calls this, and this re-renders the
+  // lineup view in its .then() while that view stays active), same failure
+  // mode as the FantasyPros-injuries/roster-sync pairs above.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
   syncSleeperRoster().then(()=>{
     if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
   });
@@ -8837,8 +8992,192 @@ function sleeperDepthBadge(cbsPlayerId){
   return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Sleeper depth chart">Depth #${sp.depthChartOrder} (${sp.depthChartPosition||sp.pos})${projTxt}</span>`;
 }
 
+/* ---------- ENSEMBLE WEEKLY PROJECTIONS ----------
+   This backend's own blended weekly point projection (CBS + Sleeper + ESPN,
+   matchup-adjusted by CBS's oprk) -- see zub-fantasy-sync/lib/ensemble.js.
+   Drives the actual start/sit picks in computeCbsSuggestedStarters below,
+   falling back to CBS's lone projectedPoints wherever it isn't available
+   yet (free agents, or before the first sync completes). */
+const ENSEMBLE_WEEKLY_META_KEY = "zubEnsembleWeeklyMeta_v1";
+let ensembleWeeklyCache = null; // array of projections from mode=ensemble&scope=weekly
+let ensembleWeeklyInFlight = false;
+
+function getEnsembleWeeklyMeta(){
+  try{ return JSON.parse(localStorage.getItem(ENSEMBLE_WEEKLY_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setEnsembleWeeklyMeta(meta){
+  try{ localStorage.setItem(ENSEMBLE_WEEKLY_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncEnsembleWeekly(){
+  if(ensembleWeeklyInFlight) return;
+  ensembleWeeklyInFlight = true;
+  try{
+    const week = cbsRostersCache?.period || currentScheduleWeek();
+    const year = new Date().getFullYear();
+    const res = await fetch(`${ZUB_SYNC_API}/api/players?mode=ensemble&scope=weekly&year=${year}&week=${week}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    ensembleWeeklyCache = data.projections;
+    setEnsembleWeeklyMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
+  }catch(e){
+    setEnsembleWeeklyMeta({ lastSync: getEnsembleWeeklyMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    ensembleWeeklyInFlight = false;
+  }
+}
+function maybeAutoSyncEnsembleWeekly(){
+  if(ensembleWeeklyInFlight) return;
+  const meta = getEnsembleWeeklyMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 60*60*1000;
+  if(!stale && ensembleWeeklyCache) return;
+  // Back off after a failed attempt -- same re-trigger risk as the sync
+  // functions above while the Lineup Coach view stays open and the backend
+  // stays unreachable.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncEnsembleWeekly().then(()=>{
+    if(document.getElementById('view-lineup')?.classList.contains('active')) renderLineupView();
+  });
+}
+function ensembleWeeklyFor(cbsPlayerId){
+  if(!ensembleWeeklyCache) return null;
+  return ensembleWeeklyCache.find(p=>p.cbsPlayerId===cbsPlayerId) || null;
+}
+function lineupValueFor(p){
+  const ens = ensembleWeeklyFor(p.id);
+  return ens && ens.matchupAdjustedPoints != null ? ens.matchupAdjustedPoints : (p.projectedPoints||0);
+}
+function ensembleConfidenceBadge(cbsPlayerId){
+  const ep = ensembleWeeklyFor(cbsPlayerId);
+  if(!ep || ep.matchupAdjustedPoints == null) return '';
+  const srcTxt = (ep.sources||[]).join('+');
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble projection blended from ${srcTxt}">${ep.confidence==='blended'?'blended':srcTxt}</span>`;
+}
+
+/* ---------- ENSEMBLE ROS RANKINGS ----------
+   This backend's own blended rest-of-season rank (FantasyPros rankEcr +
+   ESPN draftRankStd -- api/players.js mode=ensemble&scope=ros), with
+   cross-provider agreement and expert-disagreement flagged per player.
+   Drives Waiver Wire's best-available/weakest-own comparisons below,
+   falling back to the raw FantasyPros rankEcr already in rosRankingsCache
+   wherever the ensemble has no rank for a player. Shared cache -- Waiver
+   Wire and Trade Analyzer/Finder (Phase 3) both want this. */
+const ENSEMBLE_ROS_META_KEY = "zubEnsembleRosMeta_v1";
+let ensembleRosCache = null; // array of rankings from mode=ensemble&scope=ros
+let ensembleRosInFlight = false;
+
+function getEnsembleRosMeta(){
+  try{ return JSON.parse(localStorage.getItem(ENSEMBLE_ROS_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setEnsembleRosMeta(meta){
+  try{ localStorage.setItem(ENSEMBLE_ROS_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncEnsembleRos(){
+  if(ensembleRosInFlight) return;
+  ensembleRosInFlight = true;
+  try{
+    const year = new Date().getFullYear();
+    const res = await fetch(`${ZUB_SYNC_API}/api/players?mode=ensemble&scope=ros&year=${year}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    ensembleRosCache = data.rankings;
+    setEnsembleRosMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
+  }catch(e){
+    setEnsembleRosMeta({ lastSync: getEnsembleRosMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    ensembleRosInFlight = false;
+  }
+}
+function maybeAutoSyncEnsembleRos(){
+  if(ensembleRosInFlight) return;
+  const meta = getEnsembleRosMeta();
+  // matches the backend's own 30-minute cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 30*60*1000;
+  if(!stale && ensembleRosCache) return;
+  // Back off after a failed attempt -- same re-trigger risk as every other
+  // auto-sync in this file (see the FantasyPros-injuries fix for the full
+  // explanation) while Waiver Wire/Trade Analyzer/Trade Finder stays open.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncEnsembleRos().then(()=>{
+    if(document.getElementById('view-waivers')?.classList.contains('active')) renderWaiverView();
+    if(document.getElementById('view-trade')?.classList.contains('active')) computeTrade();
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
+}
+function ensembleRosFor(cbsPlayerId){
+  if(!ensembleRosCache || !cbsPlayerId) return null;
+  return ensembleRosCache.find(r=>r.cbsPlayerId===cbsPlayerId) || null;
+}
+// Ensemble rank when available, falling back to the raw FantasyPros rankEcr
+// already on the rosRankingsCache row -- keeps every position group sortable
+// even for players the ensemble has no ESPN/FP overlap for yet.
+function waiverRankFor(r){
+  const ens = ensembleRosFor(r.cbsPlayerId);
+  return ens && ens.rank != null ? ens.rank : (r.rankEcr ?? 9999);
+}
+function ensembleRosBadge(cbsPlayerId){
+  const ens = ensembleRosFor(cbsPlayerId);
+  if(!ens || ens.rank == null) return '';
+  const srcTxt = (ens.sources||[]).join('+');
+  const disagreeTxt = ens.sourceAgreement===false ? ' &middot; sources disagree' : '';
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble ROS rank blended from ${srcTxt}${ens.expertDisagreement?` (expert disagreement: ${ens.expertDisagreement})`:''}">${srcTxt}${disagreeTxt}</span>`;
+}
+
+/* ---------- TRADE RADAR (buy-low / sell-high) ----------
+   Real ensemble ROS rank movement (Phase 4's daily ensemble_ros_rankings
+   snapshots, via api/history.js?diff=tradeRadar -- see zub-fantasy-sync's
+   lib/tradeRadar.js) instead of a generic list: buyLowTargets are movers on
+   OTHER rosters whose ensemble rank is improving, sellHighCandidates are
+   MY players whose rank is falling but who still carry a real CBS weekly
+   projection right now. Which positions are actually thin is cross-checked
+   here against renderFinderView's own posCounts/weakest logic, not
+   duplicated server-side. */
+const TRADE_RADAR_META_KEY = "zubTradeRadarMeta_v1";
+let tradeRadarCache = null; // { buyLowTargets, sellHighCandidates }
+let tradeRadarInFlight = false;
+
+function getTradeRadarMeta(){
+  try{ return JSON.parse(localStorage.getItem(TRADE_RADAR_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setTradeRadarMeta(meta){
+  try{ localStorage.setItem(TRADE_RADAR_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncTradeRadar(){
+  if(tradeRadarInFlight) return;
+  const teamId = myCbsTeamId();
+  if(!teamId) return;
+  tradeRadarInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/history?diff=tradeRadar&team=${teamId}&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.ready){
+      tradeRadarCache = { buyLowTargets: data.buyLowTargets, sellHighCandidates: data.sellHighCandidates };
+    }
+    setTradeRadarMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null, ready: data.ready, reason: data.reason || null });
+  }catch(e){
+    setTradeRadarMeta({ lastSync: getTradeRadarMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    tradeRadarInFlight = false;
+  }
+}
+function maybeAutoSyncTradeRadar(){
+  if(tradeRadarInFlight) return;
+  const meta = getTradeRadarMeta();
+  // matches the backend's own 15-minute cache
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 15*60*1000;
+  if(!stale && (tradeRadarCache || meta.ready===false)) return;
+  // Back off after a failed attempt -- same infinite-retry shape as every
+  // other auto-sync in this file (see the FantasyPros-injuries fix) while
+  // Trade Finder stays open.
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncTradeRadar().then(()=>{
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
+}
+
 function renderLiveLineupTables(cbsTeam){
   maybeAutoSyncSleeperRoster();
+  maybeAutoSyncEnsembleWeekly();
   const week = cbsRostersCache.period;
   const starters = computeCbsSuggestedStarters(cbsTeam, week);
   const usedIds = new Set(starters.filter(s=>s.player).map(s=>s.player.id));
@@ -8851,7 +9190,7 @@ function renderLiveLineupTables(cbsTeam){
         const fpHit = fpInjuryFor(p.player);
         const statusText = p.injury || (fpHit ? fpHit.status : null);
         const warn = statusText ? `<span class="dead-tag" title="${p.injury ? 'CBS' : 'FantasyPros'}">${statusText}</span>` : '';
-        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}${sleeperDepthBadge(p.id)}</td><td class="hero">${(p.projectedPoints||0).toFixed(1)}</td><td></td></tr>`;
+        return `<tr><td>${s.label}</td><td>${p.player} <span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span> ${warn}${sleeperDepthBadge(p.id)}${ensembleConfidenceBadge(p.id)}</td><td class="hero">${lineupValueFor(p).toFixed(1)}</td><td></td></tr>`;
       }).join('')
     }`;
 
@@ -8861,7 +9200,7 @@ function renderLiveLineupTables(cbsTeam){
       bench.map(p=>{
         const fpHit = fpInjuryFor(p.player);
         const statusText = p.injury || (fpHit ? fpHit.status : 'Healthy');
-        return `<tr><td>${p.player}${sleeperDepthBadge(p.id)}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${(p.projectedPoints||0).toFixed(1)}</td><td>${statusText}</td></tr>`;
+        return `<tr><td>${p.player}${sleeperDepthBadge(p.id)}${ensembleConfidenceBadge(p.id)}</td><td><span class="pos-tag pos-${txnPosClass(p.pos)}">${p.pos}</span></td><td>${lineupValueFor(p).toFixed(1)}</td><td>${statusText}</td></tr>`;
       }).join('') || '<tr><td>Nobody left on the bench.</td></tr>'
     }`;
 
@@ -8889,17 +9228,19 @@ const CBS_ROSTER_SLOTS = [
   { slot: 'DST', label: 'DST', positions: ['DST'] },
 ];
 
-// Best lineup CBS's own roster + projections can build: highest
-// projected_points at each slot, skipping anyone on bye this week. Doesn't
-// second-guess CBS's projections with local injury flags -- a real Out
-// player generally projects near zero anyway, and this stays honest about
-// only using data actually available here.
+// Best lineup this backend's own data can build: highest ensemble
+// matchup-adjusted points (CBS+Sleeper+ESPN blended, oprk-adjusted -- see
+// lineupValueFor above) at each slot, falling back to CBS's lone
+// projected_points wherever the ensemble has nothing, skipping anyone on
+// bye this week. Doesn't second-guess projections with local injury flags
+// -- a real Out player generally projects near zero anyway, and this stays
+// honest about only using data actually available here.
 function computeCbsSuggestedStarters(cbsTeam, week){
   const used = new Set();
   const bestAt = (positions)=>{
     const pool = cbsTeam.players.filter(p=>
       positions.includes(p.pos) && !used.has(p.id) && String(p.byeWeek||'') !== String(week||''));
-    pool.sort((a,b)=>(b.projectedPoints||0)-(a.projectedPoints||0));
+    pool.sort((a,b)=>lineupValueFor(b)-lineupValueFor(a));
     return pool[0] || null;
   };
   return CBS_ROSTER_SLOTS.map(({slot,label,positions})=>{
