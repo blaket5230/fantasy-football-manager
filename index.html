@@ -2201,7 +2201,7 @@
   <div class="view" id="view-finder">
     <div class="panel">
       <h3>Roster breakdown &middot; The John Waynes</h3>
-      <p class="panel-sub">Active contracts only, dead cap doesn't count as a roster spot.</p>
+      <p class="panel-sub" id="finderBreakdownNote">Active contracts only, dead cap doesn't count as a roster spot.</p>
       <div class="table-scroll"><table class="result-table" id="finderBreakdown"></table></div>
     </div>
     <div class="panel">
@@ -4376,6 +4376,23 @@ function posCounts(team){
 }
 function myTeam(){ return state.teams.find(t=>t.owner===MY_TEAM_OWNER); }
 
+// Real CBS roster depth (once Roster Sync has run), grouped into this app's
+// local WRTE/PK taxonomy via txnPosClass -- null before the first sync.
+// Exists because posCounts(me) only sees the contract ledger, which for a
+// real team can badly understate actual depth: a player added off waivers
+// or never drafted/kept has no ledger entry at all, so a team that's
+// genuinely deep at a position can still show 0 there.
+function liveCbsPosCounts(){
+  const cbsTeam = cbsTeamFor(MY_TEAM_OWNER);
+  if(!cbsTeam) return null;
+  const counts = {QB:0,RB:0,WRTE:0,PK:0,DST:0};
+  cbsTeam.players.forEach(p=>{
+    const pos = txnPosClass(p.pos);
+    if(counts[pos]!==undefined) counts[pos]++;
+  });
+  return counts;
+}
+
 function renderFinderView(){
   maybeAutoSyncWaiverValue();
   maybeAutoSyncEnsembleRos();
@@ -4383,25 +4400,39 @@ function renderFinderView(){
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
+  // Prefers your real CBS roster for the breakdown display and for picking
+  // which position is actually thinnest -- falls back to the contract
+  // ledger before Roster Sync has ever run. Suggested Offers below keeps
+  // reading the ledger-only `counts` unconditionally regardless: offering a
+  // player away requires an actual tracked contract (cost + market value),
+  // so "what I have to trade" can only ever mean the ledger.
+  const liveCounts = liveCbsPosCounts();
+  const needCounts = liveCounts || counts;
 
   // breakdown table
   const rows = POSITIONS.map(pos=>{
-    const n = counts[pos];
+    const n = needCounts[pos];
     const flag = n===0 ? ' &middot; needs attention' : (n===1 ? ' &middot; thin' : '');
     return `<tr><td>${posLabel(pos)}</td><td class="${n<=1?'':'hero'}">${n}${flag}</td></tr>`;
   }).join('');
   document.getElementById('finderBreakdown').innerHTML =
-    `<thead><tr><th>Position</th><th>Active players</th></tr></thead><tbody>${rows}</tbody>`;
+    `<thead><tr><th>Position</th><th>${liveCounts?'On your CBS roster':'Active players'}</th></tr></thead><tbody>${rows}</tbody>`;
+  const breakdownNoteEl = document.getElementById('finderBreakdownNote');
+  if(breakdownNoteEl){
+    breakdownNoteEl.textContent = liveCounts
+      ? "Your real CBS roster, via Roster Sync -- not just what's recorded in contracts here."
+      : "Active contracts only, dead cap doesn't count as a roster spot. Run Roster Sync (League → Roster Sync) to see your real CBS depth instead.";
+  }
 
   // weakest position(s): lowest count, ties broken by roster-relevance order
   const priority = ["WRTE","RB","QB","PK","DST"];
   let weakest = priority[0];
   let weakestCount = Infinity;
   priority.forEach(pos=>{
-    if(counts[pos] < weakestCount){ weakestCount = counts[pos]; weakest = pos; }
+    if(needCounts[pos] < weakestCount){ weakestCount = needCounts[pos]; weakest = pos; }
   });
   document.getElementById('finderNeedNote').textContent =
-    `Your thinnest position right now is ${posLabel(weakest)} (${weakestCount} active player${weakestCount===1?'':'s'}). Showing every ${posLabel(weakest)} on another roster.`;
+    `Your thinnest position right now is ${posLabel(weakest)} (${weakestCount} ${liveCounts?'rostered':'active'} player${weakestCount===1?'':'s'}). Showing every ${posLabel(weakest)} on another roster.`;
 
   // targets across the league at that position
   const targets = [];
