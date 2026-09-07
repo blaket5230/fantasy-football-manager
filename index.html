@@ -2222,6 +2222,14 @@
       <div style="margin-top:16px;font-size:13px;font-weight:600;color:var(--chalk-2);">Sell-high candidates &middot; yours, rank falling but still projects well</div>
       <div class="table-scroll"><table class="result-table" id="tradeRadarSellHigh"></table></div>
     </div>
+    <div class="panel">
+      <h3>Trade Value Movers</h3>
+      <p class="panel-sub" id="tradeValueMoversStatus">Real day-over-day change in the FantasyCalc+KTC consensus trade value, the market-value counterpart to Trade Radar's rank movement above.</p>
+      <div style="margin-top:8px;font-size:13px;font-weight:600;color:var(--chalk-2);">Risers &middot; biggest value gains league-wide</div>
+      <div class="table-scroll"><table class="result-table" id="tradeValueMoversRisers"></table></div>
+      <div style="margin-top:16px;font-size:13px;font-weight:600;color:var(--chalk-2);">Fallers &middot; biggest value drops league-wide</div>
+      <div class="table-scroll"><table class="result-table" id="tradeValueMoversFallers"></table></div>
+    </div>
   </div>
 
   <!-- DRAFT DAY -->
@@ -4414,6 +4422,8 @@ function renderFinderView(){
   maybeAutoSyncEnsembleRos();
   maybeAutoSyncTradeValues();
   maybeAutoSyncTradeRadar();
+  maybeAutoSyncTradeValueMovers();
+  renderTradeValueMovers();
   const me = myTeam();
   if(!me){ return; }
   const counts = posCounts(me);
@@ -9269,6 +9279,107 @@ function maybeAutoSyncTradeRadar(){
   syncTradeRadar().then(()=>{
     if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
   });
+}
+
+/* ---------- TRADE VALUE MOVERS (risers / fallers) ----------
+   Real day-over-day change in the FantasyCalc+KTC consensus trade value
+   (lib/tradeValueMovers.js via api/history.js?diff=tradeValueMovers) --
+   the market-value counterpart to Trade Radar above: that panel moves on
+   ensemble RANK, this one moves on real market VALUE, so a player whose
+   rank barely shifted but whose price has swung hard on trend/news shows
+   up here even when Trade Radar has nothing to say about them. League-wide
+   (not scoped to my roster) -- the backend doesn't join ownership onto
+   this list, so ownerNameForCbsId below resolves it client-side from the
+   already-cached live CBS rosters, same idea as CBS_TEAM_ID_TO_OWNER
+   elsewhere in this file. */
+const TRADE_VALUE_MOVERS_META_KEY = "zubTradeValueMoversMeta_v1";
+let tradeValueMoversCache = null; // { risers, fallers }
+let tradeValueMoversInFlight = false;
+
+function getTradeValueMoversMeta(){
+  try{ return JSON.parse(localStorage.getItem(TRADE_VALUE_MOVERS_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setTradeValueMoversMeta(meta){
+  try{ localStorage.setItem(TRADE_VALUE_MOVERS_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncTradeValueMovers(){
+  if(tradeValueMoversInFlight) return;
+  tradeValueMoversInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/history?diff=tradeValueMovers&limit=20&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if(data.ready){
+      tradeValueMoversCache = { risers: data.risers, fallers: data.fallers };
+    }
+    setTradeValueMoversMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null, ready: data.ready, reason: data.reason || null });
+  }catch(e){
+    setTradeValueMoversMeta({ lastSync: getTradeValueMoversMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    tradeValueMoversInFlight = false;
+  }
+}
+function maybeAutoSyncTradeValueMovers(){
+  if(tradeValueMoversInFlight) return;
+  const meta = getTradeValueMoversMeta();
+  // matches the backend's own 6-hour cache (mode=tradevalue trade_values
+  // snapshot only changes once/day, same reasoning as tradeValueCache's window)
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 6*60*60*1000;
+  if(!stale && (tradeValueMoversCache || meta.ready===false)) return;
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncTradeValueMovers().then(()=>{
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderTradeValueMovers();
+  });
+}
+// Scans the already-cached live CBS rosters (cbsRostersCache, populated by
+// Roster Sync) for whichever team owns this player right now -- the movers
+// endpoint itself is a pure value diff with no ownership join, unlike Trade
+// Radar's buyLowTargets which the backend already resolves.
+function ownerNameForCbsId(cbsPlayerId){
+  if(!cbsRostersCache || !cbsPlayerId) return null;
+  const team = cbsRostersCache.teams.find(t=>t.players.some(p=>p.id===cbsPlayerId));
+  if(!team) return 'Free agent';
+  return CBS_TEAM_ID_TO_OWNER[team.teamId] || `Team ${team.teamId}`;
+}
+function renderTradeValueMovers(){
+  const statusEl = document.getElementById('tradeValueMoversStatus');
+  if(statusEl){
+    const meta = getTradeValueMoversMeta();
+    const base = "Real day-over-day change in the FantasyCalc+KTC consensus trade value, the market-value counterpart to Trade Radar's rank movement above.";
+    if(tradeValueMoversInFlight) statusEl.textContent = 'Checking for real value movement…';
+    else if(meta.ready===false) statusEl.textContent = `${meta.reason||'Not enough collected history yet.'} ${base}`;
+    else if(meta.error) statusEl.textContent = `Last check failed: ${meta.error}. ${base}`;
+    else statusEl.textContent = base;
+  }
+
+  const risersEl = document.getElementById('tradeValueMoversRisers');
+  const fallersEl = document.getElementById('tradeValueMoversFallers');
+  if(!risersEl || !fallersEl) return;
+
+  if(!tradeValueMoversCache){
+    const msg = '<tbody><tr><td>No data yet.</td></tr></tbody>';
+    risersEl.innerHTML = msg;
+    fallersEl.innerHTML = msg;
+    return;
+  }
+
+  const row = m => {
+    const owner = ownerNameForCbsId(m.cbsPlayerId);
+    const isMine = owner === MY_TEAM_OWNER;
+    const deltaColor = m.delta > 0 ? 'var(--jade)' : 'var(--coral)';
+    const deltaTxt = m.delta > 0 ? `+${m.delta}` : `${m.delta}`;
+    return `<tr${isMine?' style="border-color:var(--gold);"':''}><td>${m.name}${isMine?' <span style="font-size:10px;color:var(--gold);">(mine)</span>':''}</td><td><span class="pos-tag pos-${txnPosClass(m.pos)}">${m.pos||''}</span></td><td>${owner||'--'}</td><td>${m.prevValue} &rarr; ${m.currValue} <span style="color:${deltaColor};">(${deltaTxt})</span></td></tr>`;
+  };
+
+  const risers = tradeValueMoversCache.risers || [];
+  risersEl.innerHTML = risers.length
+    ? `<thead><tr><th>Player</th><th>Pos</th><th>Owner</th><th>Value move</th></tr></thead><tbody>${risers.map(row).join('')}</tbody>`
+    : '<tbody><tr><td>No real value risers right now -- check back as more daily snapshots accumulate.</td></tr></tbody>';
+
+  const fallers = tradeValueMoversCache.fallers || [];
+  fallersEl.innerHTML = fallers.length
+    ? `<thead><tr><th>Player</th><th>Pos</th><th>Owner</th><th>Value move</th></tr></thead><tbody>${fallers.map(row).join('')}</tbody>`
+    : '<tbody><tr><td>No real value fallers right now -- check back as more daily snapshots accumulate.</td></tr></tbody>';
 }
 
 function renderLiveLineupTables(cbsTeam){
