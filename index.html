@@ -4259,6 +4259,7 @@ function computeDrop(){
 function renderTradeView(){
   maybeAutoSyncWaiverValue();
   maybeAutoSyncEnsembleRos();
+  maybeAutoSyncTradeValues();
   const aSel = document.getElementById('tradeTeamA');
   const bSel = document.getElementById('tradeTeamB');
   const opts = state.teams.map((t,i)=>`<option value="${i}">${t.owner} &middot; ${t.team||'(no name)'}</option>`).join('');
@@ -4338,11 +4339,19 @@ function computeTrade(){
       ${aLive ? `${tA.team||tA.owner}: ${aLive}<br>` : ''}
       ${bLive ? `${tB.team||tB.owner}: ${bLive}` : ''}
     </div>` : '';
+    const aTV = liveTradeValueSummaryHTML(aSendPlayers);
+    const bTV = liveTradeValueSummaryHTML(bSendPlayers);
+    const liveTradeValueHTML = (aTV || bTV) ? `<div style="margin-top:8px;font-size:12px;">
+      <b>Live market trade value</b> (FantasyCalc dynasty consensus -- cross-check only, not part of the cap/legality read):<br>
+      ${aTV ? `${tA.team||tA.owner}: ${aTV}<br>` : ''}
+      ${bTV ? `${tB.team||tB.owner}: ${bTV}` : ''}
+    </div>` : '';
     fairnessHTML = `<div class="trade-verdict ${gap<0.10?'ok':(gap<0.25?'':'bad')}">
       <strong>Market value read</strong><br>
       ${tA.team||tA.owner} sends: ${aSendMV} MV &middot; ${tB.team||tB.owner} sends: ${bSendMV} MV<br>
       ${readout}
       ${liveRankHTML}
+      ${liveTradeValueHTML}
     </div>`;
   }
 
@@ -4396,6 +4405,7 @@ function liveCbsPosCounts(){
 function renderFinderView(){
   maybeAutoSyncWaiverValue();
   maybeAutoSyncEnsembleRos();
+  maybeAutoSyncTradeValues();
   maybeAutoSyncTradeRadar();
   const me = myTeam();
   if(!me){ return; }
@@ -4450,9 +4460,13 @@ function renderFinderView(){
   // available, FantasyPros-only otherwise. A cross-check, not a replacement:
   // mv still drives the actual value-gap math below, untouched.
   const rankCell = p => { const r = liveRankFor(p); return r ? `#${r.rank??'--'}${liveRankBadge(r)}` : '--'; };
+  // Live FantasyCalc dynasty value alongside the static mv, same cross-check
+  // treatment as rankCell above -- also needs Roster Sync to have matched
+  // the player to their real CBS id.
+  const tradeValueCell = p => { const tv = p.cbsId ? tradeValueFor(p.cbsId) : null; return (tv && tv.dynastyValue!=null) ? `${tv.dynastyValue}${tradeValueBadge(p.cbsId)}` : '--'; };
   document.getElementById('finderTargets').innerHTML = targets.length
-    ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Live ROS rank</th><th>Value/$</th></tr></thead><tbody>${
-        targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${rankCell(x.player)}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
+    ? `<thead><tr><th>Player</th><th>Team</th><th>${state.currentYear} cost</th><th>Market value</th><th>Live ROS rank</th><th>Live trade value</th><th>Value/$</th></tr></thead><tbody>${
+        targets.map(x=>`<tr><td>${x.player.name}</td><td>${x.team.owner}</td><td>$${x.cost}</td><td>${x.mv}</td><td>${rankCell(x.player)}</td><td>${tradeValueCell(x.player)}</td><td>${x.surplus.toFixed(0)}</td></tr>`).join('')
       }</tbody>`
     : `<tbody><tr><td>No other team has an active ${weakest} on the books right now.</td></tr></tbody>`;
 
@@ -4483,7 +4497,13 @@ function renderFinderView(){
   offers.sort((a,b)=>a.gap-b.gap);
   document.getElementById('finderOffers').innerHTML = offers.length
     ? `<thead><tr><th>You send</th><th>You get</th><th>From</th><th>Value gap</th><th>Your cap after</th><th>Their cap after</th></tr></thead><tbody>${
-        offers.map(o=>`<tr><td>${o.give.name} (MV ${o.give.mv||0}${liveRankFor(o.give)?`, ROS ${rankCell(o.give)}`:''})</td><td>${o.get.player.name} (MV ${o.get.mv}${liveRankFor(o.get.player)?`, ROS ${rankCell(o.get.player)}`:''})</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`).join('')
+        offers.map(o=>{
+          const giveTV = o.give.cbsId ? tradeValueFor(o.give.cbsId) : null;
+          const getTV = o.get.player.cbsId ? tradeValueFor(o.get.player.cbsId) : null;
+          const giveTxt = `${o.give.name} (MV ${o.give.mv||0}${liveRankFor(o.give)?`, ROS ${rankCell(o.give)}`:''}${giveTV&&giveTV.dynastyValue!=null?`, TV ${giveTV.dynastyValue}`:''})`;
+          const getTxt = `${o.get.player.name} (MV ${o.get.mv}${liveRankFor(o.get.player)?`, ROS ${rankCell(o.get.player)}`:''}${getTV&&getTV.dynastyValue!=null?`, TV ${getTV.dynastyValue}`:''})`;
+          return `<tr><td>${giveTxt}</td><td>${getTxt}</td><td>${o.get.team.owner}</td><td>${(o.gap*100).toFixed(0)}%</td><td class="hero">$${o.myCapAfter}</td><td>$${o.theirCapAfter}</td></tr>`;
+        }).join('')
       }</tbody>`
     : `<tbody><tr><td>No value-comparable, roster-legal offers found from your ${deepest} depth right now. Try widening the search manually in the Trade Analyzer.</td></tr></tbody>`;
 
@@ -6871,6 +6891,16 @@ function liveRankSummaryHTML(players){
   if(!matched.length) return '';
   return matched.map(({p,r})=>`${p.name} <span style="color:var(--chalk-3);">(live ROS #${r.rank??'--'})</span>${liveRankBadge(r)}`).join(', ');
 }
+// Same shape as liveRankSummaryHTML above, for FantasyCalc's live dynasty
+// value instead of ensemble rank -- also needs Roster Sync to have matched
+// a player to their CBS id, since that's the join key into tradeValueCache.
+function liveTradeValueSummaryHTML(players){
+  const matched = players.map(p=>({p, tv: p.cbsId ? tradeValueFor(p.cbsId) : null})).filter(x=>x.tv && x.tv.dynastyValue!=null);
+  if(!matched.length) return '';
+  const total = matched.reduce((s,{tv})=>s+tv.dynastyValue,0);
+  const perPlayer = matched.map(({p,tv})=>`${p.name} <span style="color:var(--chalk-3);">(TV ${tv.dynastyValue})</span>`).join(', ');
+  return `${perPlayer} &middot; total ${total}`;
+}
 function waiverValueStatusText(){
   if(waiverValueInFlight) return 'Pulling FantasyPros rest-of-season rankings…';
   const meta = getWaiverValueMeta();
@@ -9120,6 +9150,65 @@ function ensembleRosBadge(cbsPlayerId){
   const srcTxt = (ens.sources||[]).join('+');
   const disagreeTxt = ens.sourceAgreement===false ? ' &middot; sources disagree' : '';
   return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="Ensemble ROS rank blended from ${srcTxt}${ens.expertDisagreement?` (expert disagreement: ${ens.expertDisagreement})`:''}">${srcTxt}${disagreeTxt}</span>`;
+}
+
+/* ---------- LIVE TRADE VALUE (FantasyCalc) ----------
+   Real market-consensus dynasty (+ redraft) trade value per player --
+   api/players.js mode=tradevalue, joined server-side via the crosswalk's
+   sleeperId/espnId (see zub-fantasy-sync's lib/fantasyCalcFetch.js).
+   Deliberately separate from `mv` (the static draft-day auction number the
+   whole cap/legality engine runs on): this is "what would the market
+   actually give up for this player right now", refreshed from a live
+   source. Same cache/auto-sync shape as ensembleRosCache above -- Trade
+   Analyzer and Trade Finder both read it as an informational cross-check,
+   never folded into the MV gap math. */
+const TRADE_VALUE_META_KEY = "zubTradeValueMeta_v1";
+let tradeValueCache = null; // array from mode=tradevalue's `values`
+let tradeValueInFlight = false;
+
+function getTradeValueMeta(){
+  try{ return JSON.parse(localStorage.getItem(TRADE_VALUE_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setTradeValueMeta(meta){
+  try{ localStorage.setItem(TRADE_VALUE_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+async function syncTradeValues(){
+  if(tradeValueInFlight) return;
+  tradeValueInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/players?mode=tradevalue&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    tradeValueCache = data.values;
+    setTradeValueMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
+  }catch(e){
+    setTradeValueMeta({ lastSync: getTradeValueMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    tradeValueInFlight = false;
+  }
+}
+function maybeAutoSyncTradeValues(){
+  if(tradeValueInFlight) return;
+  const meta = getTradeValueMeta();
+  // matches the backend's own 6-hour cache (mode=tradevalue rebuilds the
+  // full crosswalk, same reasoning as mode=crosswalk's own cache window)
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 6*60*60*1000;
+  if(!stale && tradeValueCache) return;
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncTradeValues().then(()=>{
+    if(document.getElementById('view-trade')?.classList.contains('active')) computeTrade();
+    if(document.getElementById('view-finder')?.classList.contains('active')) renderFinderView();
+  });
+}
+function tradeValueFor(cbsPlayerId){
+  if(!tradeValueCache || !cbsPlayerId) return null;
+  return tradeValueCache.find(v=>v.cbsPlayerId===cbsPlayerId) || null;
+}
+function tradeValueBadge(cbsPlayerId){
+  const tv = tradeValueFor(cbsPlayerId);
+  if(!tv || tv.dynastyValue == null) return '';
+  const trendTxt = tv.trend30Day ? (tv.trend30Day>0 ? ` &uarr;${tv.trend30Day}` : ` &darr;${Math.abs(tv.trend30Day)}`) : '';
+  return `<span style="font-size:10px;color:var(--chalk-3);margin-left:6px;" title="FantasyCalc dynasty trade value, live market consensus (redraft ${tv.redraftValue ?? '--'})">TV ${tv.dynastyValue}${trendTxt}</span>`;
 }
 
 /* ---------- TRADE RADAR (buy-low / sell-high) ----------
