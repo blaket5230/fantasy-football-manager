@@ -2508,6 +2508,7 @@ const SEED_TEAMS = [
   {owner:"Blake Taylor", team:"The John Waynes", players:[
     {name:"Caleb Williams", pos:"QB", base:3, years:{2026:6,2027:6,2028:7}},
     {name:"Jayden Daniels", pos:"QB", base:2, years:{2026:4,2027:5,2028:5}},
+    {name:"KC Concepcion", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
     {name:"Ty Chandler", pos:"RB", base:1, years:{2026:1,2027:1}, deadCap:true},
     {name:"Quentin Johnston", pos:"WRTE", base:3, years:{2026:1,2027:1}, deadCap:true},
     {name:"Roschon Johnson", pos:"RB", base:2, years:{2026:1,2027:1}, deadCap:true},
@@ -2519,6 +2520,9 @@ const SEED_TEAMS = [
   {owner:"JS Bull", team:"texas SUCKS", players:[
     {name:"Nico Collins", pos:"WRTE", base:1, years:{2026:3,2027:3}},
     {name:"Quentin Johnston", pos:"WRTE", base:1, years:{2026:3,2027:3}},
+    {name:"Woody Marks", pos:"RB", base:2, years:{2026:2,2027:4,2028:4,2029:5,2030:5}},
+    {name:"Kayshon Boutte", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
+    {name:"Ja'Kobi Lane", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
     {name:"Alexander Mattison", pos:"RB", base:1, years:{2026:1}, deadCap:true},
     {name:"Desmond Ridder", pos:"QB", base:1, years:{2026:1}, deadCap:true},
     {name:"Kareem Hunt", pos:"RB", base:4, years:{2026:1}, deadCap:true},
@@ -2527,6 +2531,7 @@ const SEED_TEAMS = [
   {owner:"Tom McDonald", team:"The Champs", players:[
     {name:"Jaxson Dart", pos:"QB", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
     {name:"Ollie Gordon II", pos:"RB", base:1, years:{2026:3,2027:3,2028:3,2029:3}},
+    {name:"Jordyn Tyson", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
     {name:"Jahan Dotson", pos:"WRTE", base:1, years:{2026:1}, deadCap:true}
   ]},
   {owner:"PJ Humphreys", team:"Cardinal Inn", players:[
@@ -2534,19 +2539,21 @@ const SEED_TEAMS = [
     {name:"Garrett Wilson", pos:"WRTE", base:2, years:{2026:5}},
     {name:"Tyler Allgeier", pos:"RB", base:2, years:{2026:1}, deadCap:true},
     {name:"Skyy Moore", pos:"WRTE", base:2, years:{2026:1}, deadCap:true},
-    {name:"Rondale Moore", pos:"WRTE", base:1, years:{2026:1}, deadCap:true},
-    {name:"Tyrion Davis-Price", pos:"RB", base:1, years:{2026:1}, deadCap:true},
     {name:"Kenneth Gainwell", pos:"RB", base:1, years:{2026:1,2027:1}, deadCap:true},
     {name:"Keon Coleman", pos:"WRTE", base:2, years:{2026:1,2027:1,2028:1}, deadCap:true}
   ]},
   {owner:"Brandon Hill", team:"King of the Hill", players:[
-    
+    {name:"Dylan Sampson", pos:"RB", base:1, years:{2026:1,2027:3,2028:3,2029:3}},
+    {name:"Isaiah Likely", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
+    {name:"Jordan Addison", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
+    {name:"Jaylin Noel", pos:"WRTE", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}}
   ]},
   {owner:"Caleb DeWoody", team:"DeWood", players:[
-    
+
   ]},
   {owner:"Jon Thorn", team:"LickaMikeDitka", players:[
     {name:"Bo Nix", pos:"QB", base:1, years:{2026:3,2027:3,2028:3}},
+    {name:"Emmett Johnson", pos:"RB", base:1, years:{2026:1,2027:3,2028:3,2029:3,2030:3}},
     {name:"Zamir White", pos:"RB", base:1, years:{2026:1}, deadCap:true}
   ]},
   {owner:"Scott Bull", team:"PackNiners", players:[
@@ -3496,7 +3503,7 @@ let leagueGridPainted = false;
    corrected data and you keep looking at an old roster while the file on disk
    says something else. Your own work (draft picks, plan, start/bench choices)
    is carried across the re-seed. */
-const SEED_VERSION = 9;
+const SEED_VERSION = 10;
 
 async function loadState(){
   try{
