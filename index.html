@@ -4492,7 +4492,10 @@ function renderTradeRadar(myWeakestPos){
         buyLow.map(t=>{
           const isMyNeed = txnPosClass(t.pos) === myWeakestPos;
           const needTag = isMyNeed ? `<span style="font-size:10px;color:var(--jade);margin-left:6px;" title="This is your thinnest position right now">&#9733; fills your need</span>` : '';
-          const ownerName = CBS_TEAM_ID_TO_OWNER[t.ownerTeamId] || `Team ${t.ownerTeamId}`;
+          // null ownerTeamId is a real, meaningful state here -- a free
+          // agent, not a data gap -- and arguably the best kind of buy-low
+          // target since it's a straight add, not a trade ask.
+          const ownerName = t.ownerTeamId == null ? 'Free agent' : (CBS_TEAM_ID_TO_OWNER[t.ownerTeamId] || `Team ${t.ownerTeamId}`);
           return `<tr${isMyNeed?' style="border-color:var(--gold);"':''}><td>${t.player}${needTag}</td><td><span class="pos-tag pos-${txnPosClass(t.pos)}">${t.pos}</span></td><td>${ownerName}</td><td>#${t.fromRank} &rarr; #${t.toRank} <span style="color:var(--jade);">(+${t.delta})</span></td></tr>`;
         }).join('')
       }</tbody>`
