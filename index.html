@@ -18441,6 +18441,27 @@ function render(){
   if(activeTeamIdx!==null) renderTeamDetail();
 }
 
+/* Deep links for pages that live outside the app (the weekly recap write-up,
+   a text to another owner) -- #team=<owner> opens that team's page,
+   #player=<name> opens that player's card. Both values have to match the
+   app's own data exactly, since they're handed straight to the same
+   lookups the UI itself uses (teamIdxOf's owner match, DRAFT_POOL's name
+   match in renderPlayerCard) -- no fuzzy matching, so a stale or misspelled
+   link just does nothing rather than opening the wrong player. */
+function applyLocationHash(){
+  const raw = location.hash.slice(1);
+  const eq = raw.indexOf('=');
+  if(eq < 0) return;
+  const key = raw.slice(0, eq);
+  const val = decodeURIComponent(raw.slice(eq + 1));
+  if(key === 'team'){
+    const idx = teamIdxOf(val);
+    if(idx >= 0) openTeam(idx);
+  } else if(key === 'player'){
+    if(DRAFT_POOL.some(p=>p.name===val)) openPlayerCard(val);
+  }
+}
+
 /* No network calls in the boot path. See the comment above VALUES_SNAPSHOT_DATE
    for why the old live market-value fetch was removed entirely, not just
    disconnected: a hung cross-origin fetch here used to leave the whole page
@@ -18456,6 +18477,7 @@ loadState().then(()=>{
     const [y,m,d] = VALUES_SNAPSHOT_DATE.split('-').map(Number);
     footerDateEl.textContent = `${m}/${d}/${y}`;
   }
+  applyLocationHash();
 });
 
 // Runs once per page load, after every const it needs (CBS_TEAM_ID_TO_OWNER,
