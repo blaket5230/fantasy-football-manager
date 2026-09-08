@@ -1893,6 +1893,20 @@
   .rules-sec table{ width:100%; border-collapse:collapse; margin:10px 0; font-size:13px; }
   .rules-sec table td, .rules-sec table th{ padding:6px 10px; border-bottom:1px solid var(--line-soft); text-align:left; }
 
+  /* ---------- HALL OF FAME ----------
+     Chronicle's .chron-card already carries a label/title/sub/paragraph
+     shape built for exactly this -- one card per franchise. The full
+     year-by-year list below it is denser than a card grid supports, so it
+     gets its own compact row instead. */
+  .hof-list{ display:flex; flex-direction:column; }
+  .hof-year-row{ display:grid; grid-template-columns:52px 1fr; gap:12px; align-items:baseline; padding:9px 4px; border-bottom:1px solid var(--line-soft); font-size:13px; }
+  .hof-year-row:last-child{ border-bottom:none; }
+  .hof-year-row .hof-yr{ font:600 12px 'JetBrains Mono',monospace; color:var(--gold); }
+  .hof-year-row .hof-team{ color:var(--chalk); font-weight:600; }
+  .hof-year-row .hof-note{ color:var(--chalk-3); font-size:11.5px; margin-left:4px; }
+  .hof-clickable{ cursor:pointer; }
+  .hof-clickable:hover{ color:var(--gold); }
+
   @media (max-width:760px){
     .news-cols{ grid-template-columns:1fr; }
   }
@@ -2005,6 +2019,7 @@
     <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
+    <button data-view="halloffame" data-mode="leaguehub" hidden>Hall of Fame</button>
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
     <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
@@ -2075,6 +2090,11 @@
   <!-- RULES VIEW -->
   <div class="view" id="view-rules">
     <div id="rulesBody"></div>
+  </div>
+
+  <!-- HALL OF FAME VIEW -->
+  <div class="view" id="view-halloffame">
+    <div id="hallOfFameBody"></div>
   </div>
 
   <!-- DRAFT RECAP VIEW -->
@@ -3807,6 +3827,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='chronicle') renderChronicle();
     if(btn.dataset.view==='schedule') renderScheduleView();
     if(btn.dataset.view==='rules') renderRulesView();
+    if(btn.dataset.view==='halloffame') renderHallOfFameView();
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
@@ -6287,6 +6308,37 @@ async function syncSeasonSchedule(){
   }
 }
 
+/* ---------- LEAGUE HISTORY (Hall of Fame) ----------
+   CBS's own League History overview -- hallOfFame/mostChampionships/
+   allTimeStandings/leagueChampions/mostConsistent, 2002-2025, bundled
+   server-side rather than scraped live (see zub-fantasy-sync's
+   lib/leagueHistory.js). teamId in this payload is the same CBS team id
+   CBS_TEAM_ID_TO_OWNER already keys on, so a franchise still active today
+   maps straight through to an owner with no name matching; a teamId with
+   no entry in CBS_TEAM_ID_TO_OWNER is a franchise that isn't one of
+   today's twelve. */
+const LEAGUE_HISTORY_CACHE_KEY = "zubLeagueHistoryCache_v1";
+let LEAGUE_HISTORY = null;
+try{
+  const cachedHistory = JSON.parse(localStorage.getItem(LEAGUE_HISTORY_CACHE_KEY) || 'null');
+  if(cachedHistory && cachedHistory.overview) LEAGUE_HISTORY = cachedHistory.overview;
+}catch(e){}
+
+async function syncLeagueHistory(){
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/league-history?key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const overview = await res.json();
+    if(!overview || !Array.isArray(overview.mostChampionships) || !Array.isArray(overview.leagueChampions)){
+      throw new Error('Unexpected /api/league-history response shape');
+    }
+    LEAGUE_HISTORY = overview;
+    try{ localStorage.setItem(LEAGUE_HISTORY_CACHE_KEY, JSON.stringify({ overview, syncedAt: Date.now() })); }catch(e){}
+  }catch(e){
+    console.warn('Live league-history sync failed, staying on the cached copy:', e.message);
+  }
+}
+
 // CBS reports 0 for any team whose players haven't kicked off yet, which
 // isn't a real result -- skip those rather than writing placeholder zeros
 // into weeklyScores (that would also fool currentScheduleWeek() into
@@ -7567,6 +7619,133 @@ function renderRulesView(){
       <p>Season-long ties: winning percentage &rarr; most points scored &rarr; head-to-head &rarr; most points allowed &rarr; coin flip. Playoff-game ties: bench points &rarr; starting-roster touchdowns &rarr; starting QB points &rarr; coin flip.</p>
     </div>
   `;
+}
+
+/* ---------- HALL OF FAME (League > Hall of Fame) ----------
+   Real championship history, sourced from LEAGUE_HISTORY (synced above).
+   The counts, years and full year-by-year list are all live off the API;
+   the one-line commentary per franchise is curated by hand, same as the
+   Rules view's prose is -- the API has no room for tone. Scott Bull's
+   PackNiners is the one franchise where the raw title count (2, per CBS)
+   and the confirmed-owner count (1) genuinely differ: CBS's own
+   year-by-year manager records for every team in this league start at
+   2004, one year after PackNiners' other ring in 2003, so that title
+   isn't attributed to him here even though the franchise banner counts
+   it. Same reasoning covers the 2002 and 2003 league champions in the
+   full list below -- neither gets a name attached. */
+const HOF_FLAVOR = {
+  'PJ Humphreys': 'More rings than anyone else in this book, on both sides of a real slump in between.',
+  'Brett Booker': 'A ring every three years, on schedule, for going on a decade.',
+  'Tom McDonald': "Tom McDonald's franchise since 2009, every one of them his.",
+  'JS Bull': "Both belong to John Scott Bull outright. He's run this team since 2006 and hasn't been back to the top since.",
+  'Scott Bull': "2007 is confirmed Scott Bull's. The other ring on this franchise's page, 2003, predates every manager record CBS has for this league -- it isn't his to claim.",
+  'Travis and Wayne Banks': 'The newest ring in the whole book, defended starting this season.',
+  'Ryan Monigan': "The payoff on a six-year climb that, by the numbers, still hasn't peaked.",
+  'Jon Thorn': 'Fourteen years under one owner, zero rings to show for any of them.',
+  'Blake Taylor': "No title since the franchise's first season on record, 2014.",
+  'Justin McDonald': 'Eight years in, still waiting on the first one.',
+  'Brandon Hill': 'No history before this season. Nothing to defend, nothing to live down.',
+  'Caleb DeWoody': 'Same blank page as King of the Hill. First year in the book starts now.',
+};
+
+// Notes for champions whose teamId isn't one of today's twelve (CBS_TEAM_ID_TO_OWNER
+// has no entry for it) -- either a franchise that no longer exists, or a
+// year old enough that no manager record covers it at all.
+const HOF_DEFUNCT_NOTES = {
+  2002: 'No confirmed owner -- every team’s manager record in this league starts at 2004.',
+  2003: 'Same franchise slot as today’s PackNiners, but no confirmed owner -- CBS’s manager records don’t reach back this far.',
+  2004: 'Brian Walker, the earliest name on record for the franchise that later became The Steel Curtain.',
+  2005: 'Bryson Moss, an earlier name for the franchise now known as Cougars.',
+  2006: 'Michael Posey, an earlier name for the franchise now known as McAttack.',
+  2008: 'Doug Walker. Not one of today’s twelve.',
+  2010: 'Scott Daniel. Not one of today’s twelve.',
+  2013: 'Brian Walker, the same franchise that later became The Steel Curtain.',
+  2018: 'Brian Walker. Not one of today’s twelve.',
+};
+
+function renderHallOfFameView(){
+  const host = document.getElementById('hallOfFameBody');
+  if(!host) return;
+
+  if(!LEAGUE_HISTORY){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Hall of Fame</div>
+      <h2>No record book synced yet.</h2>
+      <p>This pulls straight from the league's own championship history. Give it a moment to sync, or check your connection and reopen this tab.</p>
+    </div>`;
+    return;
+  }
+
+  const owners = Object.values(CBS_TEAM_ID_TO_OWNER);
+  const champsByOwner = new Map();
+  (LEAGUE_HISTORY.mostChampionships||[]).forEach(c=>{
+    const owner = CBS_TEAM_ID_TO_OWNER[String(c.teamId)];
+    if(owner) champsByOwner.set(owner, c);
+  });
+
+  const rows = owners.map(owner=>{
+    const c = champsByOwner.get(owner);
+    const years = c ? c.years.map(Number).sort((a,b)=>a-b) : [];
+    return { owner, count: c ? c.titles : 0, years, mostRecent: years.length ? years[years.length-1] : 0 };
+  }).sort((a,b)=> b.count-a.count || b.mostRecent-a.mostRecent);
+
+  const totalRings = rows.reduce((sum,r)=>sum+r.count, 0);
+  const allTimeTitles = (LEAGUE_HISTORY.leagueChampions||[]).length;
+
+  const cardsHtml = rows.map(r=>{
+    const idx = teamIdxOf(r.owner);
+    const team = nickOf(r.owner);
+    const titleHtml = idx>=0
+      ? `<div class="cc-title hof-clickable" data-owner="${r.owner}">${team}</div>`
+      : `<div class="cc-title">${team}</div>`;
+    const yearsText = r.years.length ? r.years.join(' &middot; ') : 'No championships yet';
+    return `<div class="chron-card">
+      <div class="cc-label">${r.count} championship${r.count===1?'':'s'}</div>
+      ${titleHtml}
+      <div class="cc-sub">${yearsText}</div>
+      <p>${HOF_FLAVOR[r.owner] || ''}</p>
+    </div>`;
+  }).join('');
+
+  const champYears = (LEAGUE_HISTORY.leagueChampions||[]).slice().sort((a,b)=>b.year-a.year);
+  const yearRowsHtml = champYears.map(c=>{
+    // 2003's champion carries the same teamId as today's PackNiners, but
+    // that's a franchise-slot match, not an ownership one -- Scott Bull's
+    // own manager record (like every team's) only goes back to 2004, so
+    // this year is treated the same as any other unconfirmed-owner year
+    // rather than credited to him via the teamId lookup below.
+    const owner = c.year === 2003 ? null : CBS_TEAM_ID_TO_OWNER[String(c.teamId)];
+    if(owner){
+      const idx = teamIdxOf(owner);
+      const team = nickOf(owner);
+      const teamHtml = idx>=0 ? `<span class="hof-team hof-clickable" data-owner="${owner}">${team}</span>` : `<span class="hof-team">${team}</span>`;
+      return `<div class="hof-year-row"><span class="hof-yr">${c.year}</span><span>${teamHtml}</span></div>`;
+    }
+    const note = HOF_DEFUNCT_NOTES[c.year] || 'Not one of today’s twelve.';
+    return `<div class="hof-year-row"><span class="hof-yr">${c.year}</span><span><span class="hof-team">${c.team}</span> <span class="hof-note">${note}</span></span></div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Hall of Fame</div>
+      <h2>${totalRings} of ${allTimeTitles} championships belong to a franchise still at this table.</h2>
+      <p>${allTimeTitles} champions are on record since 2002, one for every season this league has played. The other ${allTimeTitles-totalRings} went out with owners and team names that don't exist here anymore.</p>
+    </div>
+    <div class="chron-grid">${cardsHtml}</div>
+    <div class="chron-grid" style="grid-template-columns:1fr;">
+      <div class="chron-card">
+        <div class="cc-label">Every champion, ${champYears[champYears.length-1]?.year}&ndash;${champYears[0]?.year}</div>
+        <div class="hof-list">${yearRowsHtml}</div>
+      </div>
+    </div>
+  `;
+
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
 }
 
 // Cards view (each team's own full roster stacked vertically) vs. Board
@@ -18491,6 +18670,10 @@ syncSeasonSchedule().then(()=>{
     _standingsCache = null;
     renderStandingsView();
   }
+});
+
+syncLeagueHistory().then(()=>{
+  if(document.getElementById('view-halloffame')?.classList.contains('active')) renderHallOfFameView();
 });
 </script>
 </body>
