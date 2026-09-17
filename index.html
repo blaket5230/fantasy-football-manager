@@ -2023,6 +2023,7 @@
     <button data-view="standings" data-mode="leaguehub" hidden>Standings</button>
     <button data-view="allplay" data-mode="leaguehub" hidden>All-Play Record</button>
     <button data-view="vsschedule" data-mode="leaguehub" hidden>Record vs. Schedule</button>
+    <button data-view="leaguerating" data-mode="leaguehub" hidden>League Rating</button>
     <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
@@ -2069,6 +2070,11 @@
   <!-- RECORD VS. SCHEDULE VIEW -->
   <div class="view" id="view-vsschedule">
     <div id="vsScheduleBody"></div>
+  </div>
+
+  <!-- LEAGUE RATING VIEW -->
+  <div class="view" id="view-leaguerating">
+    <div id="leagueRatingBody"></div>
   </div>
 
   <!-- LEAGUE VIEW -->
@@ -3876,6 +3882,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='allplay') renderAllPlayView();
     if(btn.dataset.view==='vsschedule') renderVsScheduleView();
+    if(btn.dataset.view==='leaguerating') renderLeagueRatingView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='txnstats') renderTxnStatsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
@@ -7005,6 +7012,123 @@ function renderTxnStatsView(){
         <tbody>${rowsHtml}</tbody>
       </table>
       <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Moves counts every transaction event since draft day, including draft-day free-agent claims. FAAB Spent is the dollar total CBS billed for those moves, waivers and draft-day claims alike.</p>
+    </div>
+  `;
+
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
+}
+
+/* ---------- LEAGUE RATING (League > League Rating) ----------
+   CBS's own live Power Rankings page -- the backend has parsed this
+   since day one (lib/parseStandings.js's parsePowerRankings, mode=
+   power-rankings) but nothing in the frontend has ever called it until
+   now. Confirmed live: Power is exactly Record + Points + Breakdown for
+   every row (e.g. The John Waynes: 9.5 + 12 + 12 = 33.5), so it's CBS's
+   own composite of three rank-derived component scores, not something
+   this app computes -- same relationship as the historical bprs/wprs
+   record-book categories, just the current-season live version. */
+const POWER_RANKINGS_SYNC_META_KEY = "zubPowerRankingsSyncMeta_v1";
+let powerRankingsCache = null;
+let powerRankingsSyncInFlight = false;
+
+function getPowerRankingsSyncMeta(){
+  try{ return JSON.parse(localStorage.getItem(POWER_RANKINGS_SYNC_META_KEY)) || {}; }catch(e){ return {}; }
+}
+function setPowerRankingsSyncMeta(meta){
+  try{ localStorage.setItem(POWER_RANKINGS_SYNC_META_KEY, JSON.stringify(meta)); }catch(e){}
+}
+
+async function syncPowerRankings(){
+  if(powerRankingsSyncInFlight) return;
+  powerRankingsSyncInFlight = true;
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/scores?mode=power-rankings&key=${ZUB_SYNC_KEY}`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    powerRankingsCache = (data.rankings||[]).slice().sort((a,b)=>(a.rank||99)-(b.rank||99));
+    setPowerRankingsSyncMeta({ lastSync: Date.now(), lastAttempt: Date.now(), error: null });
+  }catch(e){
+    setPowerRankingsSyncMeta({ lastSync: getPowerRankingsSyncMeta().lastSync || null, lastAttempt: Date.now(), error: e.message });
+  } finally {
+    powerRankingsSyncInFlight = false;
+  }
+}
+
+function powerRankingsStatusText(){
+  if(powerRankingsSyncInFlight) return 'Syncing with CBS…';
+  const meta = getPowerRankingsSyncMeta();
+  if(!meta.lastSync) return 'Not synced with CBS yet.';
+  const mins = Math.round((Date.now()-meta.lastSync)/60000);
+  const when = mins < 1 ? 'just now' : mins===1 ? '1 minute ago' : `${mins} minutes ago`;
+  return meta.error ? `Last sync failed (${meta.error}) -- showing data from ${when}.` : `Synced with CBS ${when}.`;
+}
+
+function maybeAutoSyncPowerRankings(){
+  if(powerRankingsSyncInFlight) return;
+  const meta = getPowerRankingsSyncMeta();
+  const stale = !meta.lastSync || (Date.now() - meta.lastSync) > 5*60*1000;
+  if(!stale && powerRankingsCache) return;
+  if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
+  syncPowerRankings().then(()=>{
+    if(document.getElementById('view-leaguerating')?.classList.contains('active')) renderLeagueRatingView();
+  });
+}
+
+function renderLeagueRatingView(){
+  const host = document.getElementById('leagueRatingBody');
+  if(!host) return;
+  maybeAutoSyncPowerRankings();
+
+  if(!powerRankingsCache){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; League Rating</div>
+      <h2>${powerRankingsSyncInFlight ? 'Pulling Power Rankings from CBS…' : 'No data yet.'}</h2>
+      <p>${powerRankingsStatusText()}</p>
+    </div>`;
+    return;
+  }
+
+  const teamLink = r => {
+    const owner = CBS_TEAM_ID_TO_OWNER[String(r.teamId)];
+    const name = owner ? nickOf(owner) : r.team;
+    return owner && teamIdxOf(owner)>=0
+      ? `<span class="hof-team hof-clickable" data-owner="${owner}">${name}</span>`
+      : `<span class="hof-team">${name}</span>`;
+  };
+
+  const leader = powerRankingsCache[0];
+  const leaderName = leader ? (nickOf(CBS_TEAM_ID_TO_OWNER[String(leader.teamId)]) || leader.team) : 'League';
+  const rowsHtml = powerRankingsCache.map(r=>`<tr>
+      <td style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;padding:8px 0;">${r.rank}</td>
+      <td>${teamLink(r)}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-3);">${r.record}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-2);">${r.points}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-2);">${r.breakdown}</td>
+      <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;color:var(--gold);">${r.power}</td>
+    </tr>`).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; League Rating</div>
+      <h2>${leaderName} tops CBS's own Power Ranking this week.</h2>
+      <p>CBS's live Power Ranking, straight from their Standings &rarr; Power Ranking page -- a composite of three components (Record, Points, Breakdown), each its own rank-derived score, summed into the Power total. This is the same metric behind the all-time Best/Worst Power Ranking categories in the Achievements record book, just the current-season live version.</p>
+      <p id="leagueRatingSyncStatus" style="margin-top:6px;">${powerRankingsStatusText()}</p>
+    </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+          <th style="text-align:left;padding-bottom:8px;">#</th><th style="text-align:left;">Team</th>
+          <th style="text-align:right;">Record</th><th style="text-align:right;">Points</th>
+          <th style="text-align:right;">Breakdown</th><th style="text-align:right;">Power</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Record, Points, and Breakdown are CBS's own rank-derived component scores (not raw win-loss or point totals) -- Power is their sum, and CBS's own ranking order.</p>
     </div>
   `;
 
