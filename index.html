@@ -2170,6 +2170,7 @@
       <button class="primary" id="addPlayerBtn">Add player</button>
     </div>
     <p class="footnote">Adding a player auto-fills the escalator (Year1 = base, Year2 = 120%+$1, Year3 = 140%+$1, Year4 = 160%+$1, Year5 = 180%+$1, rounded up) starting from the year you pick. Click any dollar value in the table to edit it directly, for players signed to flat one-year tags or restructured deals.</p>
+    <div id="franchiseHistoryBody"></div>
   </div>
 
   <!-- CONTRACT CALCULATOR -->
@@ -4211,6 +4212,101 @@ function renderTeamDetail(){
   // add-player start year options
   const startSel = document.getElementById('newPlayerStartYear');
   startSel.innerHTML = YEARS.map(y=>`<option value="${y}" ${y===state.currentYear?'selected':''}>${y}</option>`).join('');
+
+  renderFranchiseHistory(t);
+}
+
+/* ---------- FRANCHISE HISTORY (on the team page) ----------
+   Every current-roster page (My Team, All Rosters, and every link out of
+   Hall of Fame/Achievements/Team Stats) already lands here via openTeam,
+   so this is where a real per-franchise profile belongs rather than a
+   new parallel tab -- the roster ledger above is this year's page, this
+   panel is every year before it. Lazily synced per teamId the first time
+   a given team's page is opened (see syncTeamProfile) rather than
+   bundled into the league-wide syncs Hall of Fame/Achievements/Team
+   Stats already run at boot.
+
+   Deliberately omits CBS's own per-season yearlyResults table: verified
+   it's corrupted at the source (every row shows an impossible 0-win
+   season, values landing in the wrong fields, a manager's name where the
+   finish should be -- confirmed via cross-checked arithmetic, not just a
+   display bug here). overallRecord/championships/avgFinish/allTimeSeries
+   are unaffected (allTimeSeries independently sums exactly to
+   overallRecord). Filed as blaket5230/zub-fantasy-sync#3 -- add the
+   season-by-season table back once that's fixed at the source. */
+let _franchiseHistoryReqId = 0;
+function renderFranchiseHistory(t){
+  const host = document.getElementById('franchiseHistoryBody');
+  if(!host) return;
+  const teamId = cbsTeamIdFor(t.owner);
+  if(!teamId){ host.innerHTML = ''; return; }
+
+  const cached = TEAM_PROFILE_CACHE[teamId];
+  if(!cached){
+    host.innerHTML = `<div class="panel-head"><h2>Franchise History</h2></div><p class="footnote">Loading franchise history&hellip;</p>`;
+    const reqId = ++_franchiseHistoryReqId;
+    syncTeamProfile(teamId).then(()=>{
+      // The user may have clicked into a different team (or a rapid
+      // double-click re-ran this) before the fetch resolved -- only the
+      // most recent request for the currently-open team should render.
+      if(reqId !== _franchiseHistoryReqId) return;
+      if(activeTeamIdx !== null && state.teams[activeTeamIdx] === t) renderFranchiseHistory(t);
+    });
+    return;
+  }
+
+  if(cached.noHistory){
+    host.innerHTML = `
+      <div class="panel-head"><h2>Franchise History</h2></div>
+      <p class="footnote">No seasons on CBS's record for this franchise yet -- this is its first year in the league.</p>
+    `;
+    return;
+  }
+
+  const record = cached.overallRecord || {w:0,l:0,t:0};
+  const games = record.w + record.l + record.t;
+  const pct = games ? (record.w + record.t*0.5) / games : 0;
+  const cell = (label, val, cls)=>
+    `<div class="strip-cell"><div class="strip-label">${label}</div><div class="strip-val ${cls||''}">${val}</div></div>`;
+
+  const opponents = (cached.allTimeSeries||[]).slice().sort((a,b)=> (b.w+b.l+b.t) - (a.w+a.l+a.t));
+  const opponentRowsHtml = opponents.map(o=>{
+    const oOwner = CBS_TEAM_ID_TO_OWNER[String(o.opponentTeamId)];
+    const oIdx = oOwner ? teamIdxOf(oOwner) : -1;
+    const nameHtml = oIdx>=0
+      ? `<span class="hof-team hof-clickable" data-owner="${oOwner}">${nickOf(oOwner)}</span>`
+      : `<span class="hof-team">${o.opponent}</span>`;
+    return `<tr>
+      <td>${nameHtml}</td>
+      <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;">${o.w}-${o.l}${o.t?'-'+o.t:''}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-2);">${(o.pct*100).toFixed(1)}%</td>
+      <td style="text-align:right;font:500 11.5px 'JetBrains Mono',monospace;color:var(--chalk-3);">${o.streak||''}</td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="panel-head"><h2>Franchise History</h2></div>
+    <div class="status-strip" style="margin:14px 0 20px;">
+      ${cell('All-Time Record', `${record.w}-${record.l}${record.t?'-'+record.t:''}`)}
+      ${cell('Win%', (pct*100).toFixed(1)+'%')}
+      ${cell('Championships', cached.championships ?? 0, (cached.championships? 'money':''))}
+      ${cell('Avg Finish', cached.avgFinish!=null ? cached.avgFinish.toFixed(1) : '—')}
+    </div>
+    <p class="panel-sub">Head-to-head, all-time, against every opponent this franchise has ever faced -- sorted by games played.</p>
+    <div class="table-scroll">
+      <table class="ledger">
+        <thead><tr><th>Opponent</th><th style="text-align:right;">Record</th><th style="text-align:right;">Win%</th><th style="text-align:right;">Streak</th></tr></thead>
+        <tbody>${opponentRowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
 }
 
 document.getElementById('addPlayerBtn').addEventListener('click', ()=>{
@@ -6388,6 +6484,49 @@ async function syncRecordBook(){
     try{ localStorage.setItem(LEAGUE_RECORD_BOOK_CACHE_KEY, JSON.stringify({ recordBook, syncedAt: Date.now() })); }catch(e){}
   }catch(e){
     console.warn('Live record-book sync failed, staying on the cached copy:', e.message);
+  }
+}
+
+/* ---------- TEAM PROFILE (Franchise History, on the team page) ----------
+   CBS's own per-franchise overview -- overallRecord/championships/
+   avgFinish/allTimeSeries (head-to-head vs every opponent it's ever
+   faced)/yearlyResults (every season under this franchise id, including
+   owners before the current one). Unlike Hall of Fame/Achievements/Team
+   Stats, which each need the whole league's data up front, a franchise
+   profile only ever needs one team's -- so this fetches lazily, per
+   teamId, the first time that team's page is actually opened, rather
+   than pulling all twelve on every page load. Cached per teamId so
+   flipping between team pages doesn't re-fetch.
+   King of the Hill and DeWood (teamIds 35/34) predate no CBS record at
+   all -- the backend 404s for them -- so that's treated as "no history
+   yet", not an error. */
+const TEAM_PROFILE_CACHE_KEY = "zubTeamProfileCache_v1";
+let TEAM_PROFILE_CACHE = {};
+try{
+  const cachedProfiles = JSON.parse(localStorage.getItem(TEAM_PROFILE_CACHE_KEY) || 'null');
+  if(cachedProfiles && typeof cachedProfiles === 'object') TEAM_PROFILE_CACHE = cachedProfiles;
+}catch(e){}
+
+function cbsTeamIdFor(owner){
+  return Object.keys(CBS_TEAM_ID_TO_OWNER).find(id=>CBS_TEAM_ID_TO_OWNER[id]===owner) || null;
+}
+
+async function syncTeamProfile(teamId){
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/league-history?part=team&teamId=${teamId}&key=${ZUB_SYNC_KEY}`);
+    if(res.status === 404){
+      TEAM_PROFILE_CACHE[teamId] = { noHistory: true };
+    } else {
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const profile = await res.json();
+      if(!profile || !Array.isArray(profile.yearlyResults) || !Array.isArray(profile.allTimeSeries)){
+        throw new Error('Unexpected /api/league-history?part=team response shape');
+      }
+      TEAM_PROFILE_CACHE[teamId] = profile;
+    }
+    try{ localStorage.setItem(TEAM_PROFILE_CACHE_KEY, JSON.stringify(TEAM_PROFILE_CACHE)); }catch(e){}
+  }catch(e){
+    console.warn(`Live team-profile sync failed for teamId ${teamId}, staying on the cached copy:`, e.message);
   }
 }
 
