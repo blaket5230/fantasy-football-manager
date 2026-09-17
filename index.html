@@ -2027,6 +2027,7 @@
     <button data-view="halloffame" data-mode="leaguehub" hidden>Hall of Fame</button>
     <button data-view="achievements" data-mode="leaguehub" hidden>Achievements</button>
     <button data-view="teamstats" data-mode="leaguehub" hidden>Team Stats</button>
+    <button data-view="playoffs" data-mode="leaguehub" hidden>Playoffs</button>
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
     <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
@@ -2112,6 +2113,11 @@
   <!-- TEAM STATS VIEW -->
   <div class="view" id="view-teamstats">
     <div id="teamStatsBody"></div>
+  </div>
+
+  <!-- PLAYOFFS VIEW -->
+  <div class="view" id="view-playoffs">
+    <div id="playoffsBody"></div>
   </div>
 
   <!-- DRAFT RECAP VIEW -->
@@ -3848,6 +3854,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='halloffame') renderHallOfFameView();
     if(btn.dataset.view==='achievements') renderAchievementsView();
     if(btn.dataset.view==='teamstats') renderTeamStatsView();
+    if(btn.dataset.view==='playoffs') renderPlayoffsView();
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
@@ -6530,6 +6537,47 @@ async function syncTeamProfile(teamId){
   }
 }
 
+/* ---------- YEAR HISTORY (Playoffs) ----------
+   CBS's own per-season page -- finalStandings, playoffBracket,
+   consolationBracket, weekByWeek, yearlyAwards -- for one specific year
+   at a time. playoffBracket/consolationBracket entries only ever carry
+   {team, score}, no teamId (same limitation the record book had), but
+   this response's own finalStandings already carries real {teamId, team}
+   pairs for that exact year, so team names in the bracket resolve
+   entirely client-side against this same payload -- no backend change
+   needed this time, unlike Achievements' record book.
+   Verified against three known championship results before building
+   anything on this (2019/2007/2012 bracket winners all match the
+   already-confirmed Hall of Fame champions), so unlike yearlyResults,
+   there's no reason to think this data is corrupted.
+   Lazily synced per year, cached, same reasoning as team profiles --
+   this view only ever needs one season at a time. */
+const YEAR_HISTORY_CACHE_KEY = "zubYearHistoryCache_v1";
+let YEAR_HISTORY_CACHE = {};
+try{
+  const cachedYears = JSON.parse(localStorage.getItem(YEAR_HISTORY_CACHE_KEY) || 'null');
+  if(cachedYears && typeof cachedYears === 'object') YEAR_HISTORY_CACHE = cachedYears;
+}catch(e){}
+
+async function syncYearHistory(year){
+  try{
+    const res = await fetch(`${ZUB_SYNC_API}/api/league-history?part=year&year=${year}&key=${ZUB_SYNC_KEY}`);
+    if(res.status === 404){
+      YEAR_HISTORY_CACHE[year] = { noHistory: true };
+    } else {
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if(!data || !data.finalStandings){
+        throw new Error('Unexpected /api/league-history?part=year response shape');
+      }
+      YEAR_HISTORY_CACHE[year] = data;
+    }
+    try{ localStorage.setItem(YEAR_HISTORY_CACHE_KEY, JSON.stringify(YEAR_HISTORY_CACHE)); }catch(e){}
+  }catch(e){
+    console.warn(`Live year-history sync failed for ${year}, staying on the cached copy:`, e.message);
+  }
+}
+
 // CBS reports 0 for any team whose players haven't kicked off yet, which
 // isn't a real result -- skip those rather than writing placeholder zeros
 // into weeklyScores (that would also fool currentScheduleWeek() into
@@ -8178,6 +8226,145 @@ function renderTeamStatsView(){
     </div>
   `;
 
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
+}
+
+/* ---------- PLAYOFFS (League > Playoffs) ----------
+   Every past season's real playoff bracket, one year at a time --
+   CBS's own bracket, not a reconstruction. 2002 and 2003 have no bracket
+   data in this dataset (same gap as everywhere else historical: no
+   manager records reach back that far either), so the year picker starts
+   at 2004. Round counts vary by year (the field size changed over the
+   league's history) -- rounds are labeled by distance from the final
+   round rather than assuming a fixed bracket shape. */
+let _selectedPlayoffYear = 2025;
+function playoffRoundLabel(round, maxRound, isConsolation){
+  const fromEnd = maxRound - round;
+  if(isConsolation) return fromEnd===0 ? 'Third Place' : `Consolation, Round ${round}`;
+  if(fromEnd===0) return 'Championship';
+  if(fromEnd===1) return 'Semifinals';
+  return `Round ${round}`;
+}
+
+function playoffMatchupRow(m, nameToTeamId){
+  const side = (side)=>{
+    const isBye = side.team === 'BYE';
+    const score = side.score!=null ? Number(side.score) : null;
+    let nameHtml;
+    if(isBye){
+      nameHtml = `<span class="hof-team" style="color:var(--chalk-3);font-style:italic;">BYE</span>`;
+    } else {
+      const teamId = nameToTeamId.get(side.team);
+      const owner = teamId ? CBS_TEAM_ID_TO_OWNER[teamId] : null;
+      const idx = owner ? teamIdxOf(owner) : -1;
+      nameHtml = idx>=0
+        ? `<span class="hof-team hof-clickable" data-owner="${owner}">${nickOf(owner)}</span>`
+        : `<span class="hof-team">${side.team}</span>`;
+    }
+    return { nameHtml, score };
+  };
+  const top = side(m.top), bottom = side(m.bottom);
+  const topWon = top.score!=null && bottom.score!=null && top.score > bottom.score;
+  const botWon = top.score!=null && bottom.score!=null && bottom.score > top.score;
+  const row = (s, won)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;${won?'color:var(--gold);':''}">
+    <span style="${won?'font-weight:700;':''}">${s.nameHtml}</span>
+    <span style="font:600 13px 'JetBrains Mono',monospace;${won?'color:var(--gold);':'color:var(--chalk-3);'}">${s.score!=null?s.score:''}</span>
+  </div>`;
+  return `<div class="hist-row">${row(top,topWon)}${row(bottom,botWon)}</div>`;
+}
+
+function playoffBracketSection(title, rounds, nameToTeamId, isConsolation){
+  if(!rounds || !rounds.length) return '';
+  const maxRound = Math.max(...rounds.map(r=>r.round));
+  const roundsHtml = rounds.map(r=>`
+    <div class="panel-head" style="margin-top:22px;"><h2 style="font-size:16px;">${playoffRoundLabel(r.round, maxRound, isConsolation)}</h2></div>
+    <div class="widget">${r.matchups.map(m=>playoffMatchupRow(m, nameToTeamId)).join('')}</div>
+  `).join('');
+  return `<div class="panel-head"><h2>${title}</h2></div>${roundsHtml}`;
+}
+
+function renderPlayoffsView(){
+  const host = document.getElementById('playoffsBody');
+  if(!host) return;
+
+  const yearOptions = [];
+  for(let y=2025; y>=2004; y--) yearOptions.push(y);
+  const selectHtml = `<select id="playoffYearSelect">${yearOptions.map(y=>`<option value="${y}" ${y===_selectedPlayoffYear?'selected':''}>${y}</option>`).join('')}</select>`;
+
+  const cached = YEAR_HISTORY_CACHE[_selectedPlayoffYear];
+  if(!cached){
+    host.innerHTML = `
+      <div class="chron-hero">
+        <div class="chron-kicker">League &middot; Playoffs</div>
+        <h2>Every real bracket, one season at a time.</h2>
+        <p>Viewing <span style="color:var(--gold);">${selectHtml}</span></p>
+      </div>
+      <p class="footnote">Loading ${_selectedPlayoffYear}&hellip;</p>
+    `;
+    document.getElementById('playoffYearSelect').addEventListener('change', (e)=>{
+      _selectedPlayoffYear = Number(e.target.value);
+      renderPlayoffsView();
+    });
+    syncYearHistory(_selectedPlayoffYear).then(()=>{
+      if(document.getElementById('view-playoffs')?.classList.contains('active')) renderPlayoffsView();
+    });
+    return;
+  }
+
+  if(cached.noHistory || !cached.playoffBracket || !cached.playoffBracket.length){
+    host.innerHTML = `
+      <div class="chron-hero">
+        <div class="chron-kicker">League &middot; Playoffs</div>
+        <h2>Every real bracket, one season at a time.</h2>
+        <p>Viewing <span style="color:var(--gold);">${selectHtml}</span></p>
+      </div>
+      <p class="footnote">No bracket on record for ${_selectedPlayoffYear} -- CBS's own manager and season records for this league don't reach back this far.</p>
+    `;
+    document.getElementById('playoffYearSelect').addEventListener('change', (e)=>{
+      _selectedPlayoffYear = Number(e.target.value);
+      renderPlayoffsView();
+    });
+    return;
+  }
+
+  const nameToTeamId = new Map();
+  Object.values(cached.finalStandings||{}).flat().forEach(t=>nameToTeamId.set(t.team, t.teamId));
+
+  const maxRound = Math.max(...cached.playoffBracket.map(r=>r.round));
+  const finalGame = cached.playoffBracket.find(r=>r.round===maxRound)?.matchups?.[0];
+  let championLine = '';
+  if(finalGame){
+    const t = Number(finalGame.top.score), b = Number(finalGame.bottom.score);
+    const winnerName = t>b ? finalGame.top.team : finalGame.bottom.team;
+    const teamId = nameToTeamId.get(winnerName);
+    const owner = teamId ? CBS_TEAM_ID_TO_OWNER[teamId] : null;
+    const idx = owner ? teamIdxOf(owner) : -1;
+    const winnerHtml = idx>=0
+      ? `<span class="hof-team hof-clickable" data-owner="${owner}">${nickOf(owner)}</span>`
+      : winnerName;
+    championLine = `<p>${winnerHtml} won it all, ${Math.max(t,b)}&ndash;${Math.min(t,b)}.</p>`;
+  }
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Playoffs</div>
+      <h2>Every real bracket, one season at a time.</h2>
+      <p>Viewing <span style="color:var(--gold);">${selectHtml}</span></p>
+      ${championLine}
+    </div>
+    ${playoffBracketSection('Championship Bracket', cached.playoffBracket, nameToTeamId, false)}
+    ${playoffBracketSection('Consolation Bracket', cached.consolationBracket, nameToTeamId, true)}
+  `;
+
+  document.getElementById('playoffYearSelect').addEventListener('change', (e)=>{
+    _selectedPlayoffYear = Number(e.target.value);
+    renderPlayoffsView();
+  });
   host.querySelectorAll('[data-owner]').forEach(el=>{
     el.addEventListener('click', ()=>{
       const idx = teamIdxOf(el.dataset.owner);
