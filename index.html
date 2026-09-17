@@ -2035,6 +2035,7 @@
     <button data-view="txnstats" data-mode="leaguehub" hidden>Transaction Stats</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
     <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
+    <button data-view="gamecenter" data-mode="leaguehub" hidden>Gamecenter</button>
     <button data-view="matchup" data-mode="leaguehub" hidden>Matchup</button>
 
     <button data-view="trade" data-mode="league" hidden>Trade Analyzer</button>
@@ -2104,6 +2105,11 @@
 
   <div class="view" id="view-waivers">
     <div id="waiverBody"></div>
+  </div>
+
+  <!-- GAMECENTER VIEW -->
+  <div class="view" id="view-gamecenter">
+    <div id="gamecenterBody"></div>
   </div>
 
   <!-- MATCHUP VIEW -->
@@ -3887,6 +3893,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='txnstats') renderTxnStatsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
     if(btn.dataset.view==='waivers') renderWaiverView();
+    if(btn.dataset.view==='gamecenter') renderGamecenterView();
     if(btn.dataset.view==='matchup') renderMatchupView();
     if(btn.dataset.view==='recap') renderRecap();
     if(btn.dataset.view==='ideas') renderIdeasView();
@@ -6800,6 +6807,99 @@ async function renderMatchupView(){
   document.getElementById('matchupWeekSelect')?.addEventListener('change', (e)=>{
     matchupSelectedWeek = Number(e.target.value);
     renderMatchupView();
+  });
+}
+
+/* ---------- GAMECENTER (League > Gamecenter) ----------
+   Matchup's league-wide sibling: every one of the week's 6 matchups at
+   once instead of just your own. No new CBS call or cache -- reuses
+   fetchMatchupWeek()/matchupWeekCache above, since it's the exact same
+   /api/scores?week= payload (league.matchups joined against
+   league.teams -- see lib/parseScoreboard.js), just rendered as a full
+   scoreboard grid instead of one team's boxscore. */
+let gamecenterSelectedWeek = null;
+
+function gcWeekOptionsHtml(){
+  return Array.from({length: SEASON_WEEKS}, (_,i)=>i+1)
+    .map(w=>`<option value="${w}" ${w===gamecenterSelectedWeek?'selected':''}>Week ${w}</option>`).join('');
+}
+
+function gcSideHtml(side, teamsById){
+  const owner = CBS_TEAM_ID_TO_OWNER[String(side?.teamId)];
+  const t = teamsById.get(String(side?.teamId));
+  const name = owner ? nickOf(owner) : (side?.name || t?.name || '--');
+  const nameHtml = owner && teamIdxOf(owner)>=0
+    ? `<span class="hof-team hof-clickable" data-owner="${owner}">${name}</span>`
+    : `<span class="hof-team">${name}</span>`;
+  const score = side?.score!=null ? Number(side.score).toFixed(1) : '--';
+  const proj = t?.projectedPoints!=null ? Number(t.projectedPoints).toFixed(1) : null;
+  const playing = t?.playersCurrentlyPlaying;
+  return { nameHtml, score, rawScore: side?.score, proj, playing };
+}
+
+function renderGamecenterMatchups(body, data){
+  const teamsById = new Map((data.teams||[]).map(t=>[String(t.id), t]));
+  const matchups = data.matchups||[];
+  if(!matchups.length){
+    body.innerHTML = `<div class="chron-hero"><h2>No matchups found for this week yet.</h2></div>`;
+    return;
+  }
+
+  const cards = matchups.map(m=>{
+    const away = gcSideHtml(m.away, teamsById);
+    const home = gcSideHtml(m.home, teamsById);
+    const awayWinning = away.rawScore!=null && home.rawScore!=null && away.rawScore > home.rawScore;
+    const homeWinning = away.rawScore!=null && home.rawScore!=null && home.rawScore > away.rawScore;
+    const sideRow = (side, winning) => `
+      <div class="div-team-row">
+        <span class="dt-name" style="${winning?'color:var(--chalk);':'color:var(--chalk-3);font-weight:500;'}">${side.nameHtml}
+          ${side.playing!=null && side.playing>0 ? `<span class="dt-owner" style="color:var(--jade);">${side.playing} still playing</span>` : ''}
+        </span>
+        <span style="text-align:right;">
+          <span style="font:${winning?'700':'500'} 15px 'JetBrains Mono',monospace;color:${winning?'var(--gold)':'var(--chalk-2)'};">${side.score}</span>
+          ${side.proj!=null ? `<span style="display:block;font-size:10px;color:var(--chalk-3);">proj ${side.proj}</span>` : ''}
+        </span>
+      </div>`;
+    return `<div class="chron-card">${sideRow(away, awayWinning)}${sideRow(home, homeWinning)}</div>`;
+  }).join('');
+
+  body.innerHTML = `<div class="div-grid">${cards}</div>`;
+
+  body.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
+}
+
+function renderGamecenterView(){
+  const host = document.getElementById('gamecenterBody');
+  if(!host) return;
+  if(gamecenterSelectedWeek==null) gamecenterSelectedWeek = currentScheduleWeek();
+  const requestedWeek = gamecenterSelectedWeek;
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Gamecenter</div>
+      <h2>Every game, one scoreboard.</h2>
+      <p>All 6 matchups for Week <select id="gcWeekSelect">${gcWeekOptionsHtml()}</select> at once -- the same live CBS scores and projections the Matchup tab uses for your own team, just every team's game side by side.</p>
+    </div>
+    <div id="gcMatchupsBody" style="margin-top:16px;">Loading from CBS…</div>
+  `;
+  document.getElementById('gcWeekSelect')?.addEventListener('change', (e)=>{
+    gamecenterSelectedWeek = Number(e.target.value);
+    renderGamecenterView();
+  });
+
+  fetchMatchupWeek(requestedWeek).then(data=>{
+    if(gamecenterSelectedWeek !== requestedWeek) return; // user flipped weeks before this landed
+    const body = document.getElementById('gcMatchupsBody');
+    if(body) renderGamecenterMatchups(body, data);
+  }).catch(e=>{
+    if(gamecenterSelectedWeek !== requestedWeek) return;
+    const body = document.getElementById('gcMatchupsBody');
+    if(body) body.innerHTML = `<p class="panel-sub" style="color:var(--coral);">Failed to load week ${requestedWeek}: ${e.message}</p>`;
   });
 }
 
