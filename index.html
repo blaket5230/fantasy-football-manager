@@ -2029,6 +2029,7 @@
     <button data-view="teamstats" data-mode="leaguehub" hidden>Team Stats</button>
     <button data-view="playoffs" data-mode="leaguehub" hidden>Playoffs</button>
     <button data-view="transactions" data-mode="leaguehub" hidden>Transaction Log</button>
+    <button data-view="txnstats" data-mode="leaguehub" hidden>Transaction Stats</button>
     <button data-view="rostersync" data-mode="leaguehub" hidden>Roster Sync</button>
     <button data-view="waivers" data-mode="leaguehub" hidden>Waiver Wire</button>
     <button data-view="matchup" data-mode="leaguehub" hidden>Matchup</button>
@@ -2066,6 +2067,11 @@
   <!-- TRANSACTION LOG VIEW -->
   <div class="view" id="view-transactions">
     <div id="transactionsBody"></div>
+  </div>
+
+  <!-- TRANSACTION STATS VIEW -->
+  <div class="view" id="view-txnstats">
+    <div id="txnStatsBody"></div>
   </div>
 
   <!-- IMPORT RANKINGS VIEW -->
@@ -3857,6 +3863,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='playoffs') renderPlayoffsView();
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
+    if(btn.dataset.view==='txnstats') renderTxnStatsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
     if(btn.dataset.view==='waivers') renderWaiverView();
     if(btn.dataset.view==='matchup') renderMatchupView();
@@ -6814,7 +6821,10 @@ function maybeAutoSyncTransactions(){
   // FantasyPros-injuries fix elsewhere in this file (renderTransactionsView()
   // calls this, and this calls renderTransactionsView() back in its .then()).
   if(meta.error && meta.lastAttempt && (Date.now() - meta.lastAttempt) < 2*60*1000) return;
-  syncTransactions().then(()=>{ renderTransactionsView(); });
+  syncTransactions().then(()=>{
+    if(document.getElementById('view-txnstats')?.classList.contains('active')) renderTxnStatsView();
+    else renderTransactionsView();
+  });
 }
 
 // CBS's raw codes (WR/TE separate, TK for kicker) mapped onto this app's
@@ -6881,6 +6891,112 @@ function renderTransactionsView(){
     if(statusEl) statusEl.textContent = 'Syncing with CBS…';
     await syncTransactions();
     renderTransactionsView();
+  });
+}
+
+/* ---------- TRANSACTION STATS (League > Transaction Stats) ----------
+   Aggregates the same txnCache the Transaction Log renders into
+   per-team totals -- moves, adds, drops, FAAB spent. Current season
+   only, same as the log: CBS's transactions page has no year/team
+   filter wired up on the backend yet (see api/transactions.js), so
+   there's no multi-year archive to pull from like the other League
+   Legacy tabs. */
+function renderTxnStatsView(){
+  const host = document.getElementById('txnStatsBody');
+  if(!host) return;
+  maybeAutoSyncTransactions();
+
+  if(!txnCache){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Transaction Stats</div>
+      <h2>${txnSyncInFlight ? 'Pulling the transaction log from CBS…' : 'No data yet.'}</h2>
+      <p>${txnStatusText()}</p>
+    </div>`;
+    return;
+  }
+
+  const byTeamId = new Map();
+  Object.entries(CBS_TEAM_ID_TO_OWNER).forEach(([teamId, owner])=>{
+    byTeamId.set(teamId, { teamId, owner, displayName: nickOf(owner), txnCount:0, adds:0, drops:0, faab:0 });
+  });
+  txnCache.forEach(t=>{
+    const key = String(t.teamId);
+    if(!byTeamId.has(key)){
+      byTeamId.set(key, { teamId:key, owner:null, displayName:t.team, txnCount:0, adds:0, drops:0, faab:0 });
+    }
+    const row = byTeamId.get(key);
+    row.txnCount++;
+    (t.actions||[]).forEach(a=>{
+      if(a.action==='Added') row.adds++;
+      else if(a.action==='Dropped') row.drops++;
+    });
+    row.faab += parseFloat(String(t.cost).replace(/[^0-9.]/g,'')) || 0;
+  });
+
+  const rows = Array.from(byTeamId.values()).sort((a,b)=> b.faab - a.faab || (b.adds+b.drops)-(a.adds+a.drops));
+  const totalFaab = rows.reduce((s,r)=>s+r.faab, 0);
+  const totalMoves = rows.reduce((s,r)=>s+r.adds+r.drops, 0);
+
+  const active = rows.filter(r=>r.txnCount>0);
+  const topSpender = [...active].sort((a,b)=>b.faab-a.faab)[0];
+  const busiest = [...active].sort((a,b)=>(b.adds+b.drops)-(a.adds+a.drops))[0];
+  const quietest = [...rows].sort((a,b)=>(a.adds+a.drops)-(b.adds+b.drops))[0];
+
+  const teamLink = r => r.owner && teamIdxOf(r.owner)>=0
+    ? `<span class="hof-team hof-clickable" data-owner="${r.owner}">${r.displayName}</span>`
+    : `<span class="hof-team">${r.displayName}</span>`;
+
+  const rowsHtml = rows.map((r,i)=>`<tr>
+      <td style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;padding:8px 0;">${i+1}</td>
+      <td>${teamLink(r)}</td>
+      <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;">${r.txnCount}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--jade);">${r.adds}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-3);">${r.drops}</td>
+      <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;color:var(--gold);">$${r.faab.toFixed(2)}</td>
+    </tr>`).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Transaction Stats</div>
+      <h2>$${totalFaab.toFixed(2)} in FAAB spent, ${totalMoves} adds and drops across all 12 teams.</h2>
+      <p>Every roster move this season, tallied by team -- who's spending, who's active, who's sitting still. Current season only; CBS doesn't expose a multi-year transaction archive.</p>
+      <p id="txnStatsSyncStatus" style="margin-top:6px;">${txnStatusText()}</p>
+    </div>
+    <div class="div-grid" style="margin-top:16px;align-items:start;">
+      <div class="chron-card">
+        <div class="cc-label">Biggest spender</div>
+        <div class="cc-title">${topSpender ? teamLink(topSpender) : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--gold);margin-top:4px;">$${topSpender?topSpender.faab.toFixed(2):'0.00'}</div>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Busiest team</div>
+        <div class="cc-title">${busiest ? teamLink(busiest) : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--jade);margin-top:4px;">${busiest?busiest.adds+busiest.drops:0} moves</div>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Quietest team</div>
+        <div class="cc-title">${quietest ? teamLink(quietest) : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--chalk-3);margin-top:4px;">${quietest?quietest.adds+quietest.drops:0} moves</div>
+      </div>
+    </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+          <th style="text-align:left;padding-bottom:8px;">#</th><th style="text-align:left;">Team</th>
+          <th style="text-align:right;">Moves</th><th style="text-align:right;">Added</th>
+          <th style="text-align:right;">Dropped</th><th style="text-align:right;">FAAB Spent</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Moves counts every transaction event since draft day, including draft-day free-agent claims. FAAB Spent is the dollar total CBS billed for those moves, waivers and draft-day claims alike.</p>
+    </div>
+  `;
+
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
   });
 }
 
