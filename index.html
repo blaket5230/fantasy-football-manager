@@ -2022,6 +2022,7 @@
 
     <button data-view="standings" data-mode="leaguehub" hidden>Standings</button>
     <button data-view="allplay" data-mode="leaguehub" hidden>All-Play Record</button>
+    <button data-view="vsschedule" data-mode="leaguehub" hidden>Record vs. Schedule</button>
     <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
@@ -2063,6 +2064,11 @@
   <!-- ALL-PLAY RECORD VIEW -->
   <div class="view" id="view-allplay">
     <div id="allPlayBody"></div>
+  </div>
+
+  <!-- RECORD VS. SCHEDULE VIEW -->
+  <div class="view" id="view-vsschedule">
+    <div id="vsScheduleBody"></div>
   </div>
 
   <!-- LEAGUE VIEW -->
@@ -3869,6 +3875,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='playoffs') renderPlayoffsView();
     if(btn.dataset.view==='standings') renderStandingsView();
     if(btn.dataset.view==='allplay') renderAllPlayView();
+    if(btn.dataset.view==='vsschedule') renderVsScheduleView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='txnstats') renderTxnStatsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
@@ -6660,6 +6667,7 @@ function maybeAutoSyncLiveScores(){
     renderScheduleView();
     if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
     if(document.getElementById('view-allplay')?.classList.contains('active')) renderAllPlayView();
+    if(document.getElementById('view-vsschedule')?.classList.contains('active')) renderVsScheduleView();
   });
 }
 
@@ -8053,6 +8061,179 @@ function renderAllPlayView(){
         <tbody>${rowsHtml}</tbody>
       </table>
       <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Luck is actual wins minus all-play pace &times; games played -- positive means the schedule's been kind, negative means it's cost you wins your scoring deserved.</p>
+    </div>
+  `;
+
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
+}
+
+/* ---------- RECORD VS. SCHEDULE (League > Record vs. Schedule) ----------
+   A different question from All-Play: not "how do you score against
+   everyone," but "what would your record be if you'd been handed someone
+   ELSE's actual schedule instead of your own" -- the traditional fantasy
+   "record vs. schedule" stat, simulated by replaying each team's own
+   weekly scores against every other team's real week-by-week opponents.
+   Same no-new-backend-call approach as All-Play: built from
+   state.weeklyScores and the existing SEASON_SCHEDULE, gated to only the
+   13 real head-to-head weeks (SEASON_WEEKS-1) that actually have a
+   scheduled opponent -- week 14's gauntlet isn't a 1-on-1 matchup, so
+   there's no "schedule" to swap for it (see computeStandings' own
+   separate handling of that week). A week only counts once every one of
+   the 12 owners has reported a score, same completeness bar as All-Play,
+   so every team's aggregate covers the identical set of weeks. */
+function computeRecordVsSchedule(){
+  const owners = Object.keys(SEASON_SCHEDULE);
+  const completeWeeks = [];
+  for(let w=1; w<SEASON_WEEKS; w++){
+    const wk = String(w);
+    const scores = state.weeklyScores[wk];
+    if(scores && owners.every(o=>scores[o]!=null)) completeWeeks.push(wk);
+  }
+
+  const actual = {};
+  owners.forEach(o=>{ actual[o] = { owner:o, w:0, l:0, t:0 }; });
+  const seen = new Set();
+  completeWeeks.forEach(wk=>{
+    seen.clear();
+    owners.forEach(o=>{
+      if(seen.has(o)) return;
+      const opp = SEASON_SCHEDULE[o][wk];
+      if(!opp) return;
+      seen.add(o); seen.add(opp);
+      const so = state.weeklyScores[wk][o], sp = state.weeklyScores[wk][opp];
+      if(so>sp){ actual[o].w++; actual[opp].l++; }
+      else if(sp>so){ actual[opp].w++; actual[o].l++; }
+      else { actual[o].t++; actual[opp].t++; }
+    });
+  });
+
+  const perTeam = {};
+  owners.forEach(t=>{ perTeam[t] = { combined:{w:0,l:0,t:0}, bySchedule:[] }; });
+  owners.forEach(t=>{
+    owners.forEach(s=>{
+      if(s===t) return;
+      let w=0, l=0, ti=0, games=0;
+      completeWeeks.forEach(wk=>{
+        const opp = SEASON_SCHEDULE[s][wk];
+        if(!opp || opp===t) return; // that schedule has T playing itself this week -- not simulatable
+        const myScore = state.weeklyScores[wk][t];
+        const oppScore = state.weeklyScores[wk][opp];
+        games++;
+        if(myScore>oppScore) w++;
+        else if(oppScore>myScore) l++;
+        else ti++;
+      });
+      if(games>0) perTeam[t].bySchedule.push({ scheduleOwner:s, w, l, t:ti, games });
+      perTeam[t].combined.w += w; perTeam[t].combined.l += l; perTeam[t].combined.t += ti;
+    });
+  });
+
+  return { owners, completeWeeks, actual, perTeam };
+}
+
+function renderVsScheduleView(){
+  const host = document.getElementById('vsScheduleBody');
+  if(!host) return;
+  maybeAutoSyncLiveScores();
+  const anyScores = Object.keys(state.weeklyScores||{}).length > 0;
+  if(!anyScores){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Record vs. Schedule</div>
+      <h2>${liveSyncInFlight ? 'Syncing with CBS…' : 'No scores logged yet.'}</h2>
+      <p>${liveSyncInFlight ? "Pulling this week's scores from CBS now -- check back in a moment." : "Head to Schedule to sync live scores from CBS, or start entering weekly results yourself -- this builds straight off the same scores Standings uses."}</p>
+    </div>`;
+    return;
+  }
+
+  const { completeWeeks, actual, perTeam } = computeRecordVsSchedule();
+  if(completeWeeks.length===0){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Record vs. Schedule</div>
+      <h2>No week is fully scored yet.</h2>
+      <p>This needs every team's score in for at least one head-to-head week before it means anything -- check back once this week wraps up.</p>
+    </div>`;
+    return;
+  }
+
+  const teamLink = owner => teamIdxOf(owner)>=0
+    ? `<span class="hof-team hof-clickable" data-owner="${owner}">${nickOf(owner)}</span>`
+    : `<span class="hof-team">${nickOf(owner)}</span>`;
+  const fmtRec = r => `${r.w}-${r.l}${r.t?'-'+r.t:''}`;
+
+  const combined = Object.keys(perTeam).map(owner=>{
+    const c = perTeam[owner].combined;
+    const games = c.w + c.l + c.t;
+    const pct = games ? (c.w + c.t*0.5)/games : 0;
+    const act = actual[owner];
+    const actGames = act.w + act.l + act.t;
+    const expectedWins = actGames ? pct*actGames : 0;
+    const luck = act.w - expectedWins;
+    const bySchedule = [...perTeam[owner].bySchedule].sort((a,b)=>{
+      const pa = a.games ? (a.w + a.t*0.5)/a.games : 0;
+      const pb = b.games ? (b.w + b.t*0.5)/b.games : 0;
+      return pb - pa || b.w - a.w;
+    });
+    return {
+      owner, combined:c, games, pct, actual:act, actGames, luck,
+      bestCase: bySchedule[0], worstCase: bySchedule[bySchedule.length-1],
+    };
+  }).sort((a,b)=> b.pct - a.pct || b.games - a.games);
+
+  const toughest = [...combined].filter(r=>r.actGames).sort((a,b)=>a.luck-b.luck)[0];
+  const easiest = [...combined].filter(r=>r.actGames).sort((a,b)=>b.luck-a.luck)[0];
+  const best = combined[0];
+
+  const rowsHtml = combined.map((r,i)=>{
+    const actualRecord = r.actGames ? fmtRec(r.actual) : '&mdash;';
+    const luckTxt = r.actGames ? `${r.luck>=0?'+':''}${r.luck.toFixed(1)}` : '&mdash;';
+    const luckColor = !r.actGames ? 'var(--chalk-3)' : r.luck>0.4 ? 'var(--jade)' : r.luck<-0.4 ? '#e06060' : 'var(--chalk-3)';
+    const rangeTxt = r.bestCase && r.worstCase
+      ? `Best: ${teamLink(r.bestCase.scheduleOwner)} (${fmtRec(r.bestCase)}) &middot; Worst: ${teamLink(r.worstCase.scheduleOwner)} (${fmtRec(r.worstCase)})`
+      : '';
+    return `<tr>
+      <td style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;padding:8px 0;">${i+1}</td>
+      <td>${teamLink(r.owner)}<div style="font-size:10.5px;color:var(--chalk-3);margin-top:2px;">${rangeTxt}</div></td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-3);">${actualRecord}</td>
+      <td style="text-align:right;font:600 13px 'JetBrains Mono',monospace;">${fmtRec(r.combined)}</td>
+      <td style="text-align:right;font:500 12px 'JetBrains Mono',monospace;color:var(--chalk-2);">${(r.pct*100).toFixed(1)}%</td>
+      <td style="text-align:right;font:600 12px 'JetBrains Mono',monospace;color:${luckColor};">${luckTxt}</td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Record vs. Schedule</div>
+      <h2>${nickOf(best.owner)} holds up best no matter whose schedule you hand them.</h2>
+      <p>Through ${completeWeeks.length} fully-scored week${completeWeeks.length===1?'':'s'}: each team's real weekly scores, replayed against every other team's actual opponents instead of its own. Sorted by that combined win% -- the closer it tracks the actual record, the less the schedule's had anything to do with it.</p>
+      <p id="vsScheduleSyncStatus" style="margin-top:6px;">${liveSyncStatusText()}</p>
+    </div>
+    <div class="div-grid" style="margin-top:16px;align-items:start;">
+      <div class="chron-card">
+        <div class="cc-label">Toughest schedule</div>
+        <div class="cc-title">${toughest ? teamLink(toughest.owner) : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:#e06060;margin-top:4px;">${toughest?toughest.luck.toFixed(1):'0.0'} wins vs. an average schedule</div>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Easiest schedule</div>
+        <div class="cc-title">${easiest ? teamLink(easiest.owner) : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--jade);margin-top:4px;">+${easiest?easiest.luck.toFixed(1):'0.0'} wins vs. an average schedule</div>
+      </div>
+    </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+          <th style="text-align:left;padding-bottom:8px;">#</th><th style="text-align:left;">Team</th>
+          <th style="text-align:right;">Actual</th><th style="text-align:right;">Vs. Every Schedule</th>
+          <th style="text-align:right;">Vs-Schedule %</th><th style="text-align:right;">Luck</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Vs. Every Schedule replays each team's own scores against all 11 other teams' real week-by-week opponents and totals the result. Best/Worst under each team name is the single most favorable and least favorable schedule they could've drawn. Luck is actual wins minus what that combined win% projects across the same games -- positive means the schedule you actually got was kinder than an average one would've been.</p>
     </div>
   `;
 
