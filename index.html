@@ -2024,6 +2024,7 @@
     <button data-view="allplay" data-mode="leaguehub" hidden>All-Play Record</button>
     <button data-view="vsschedule" data-mode="leaguehub" hidden>Record vs. Schedule</button>
     <button data-view="leaguerating" data-mode="leaguehub" hidden>League Rating</button>
+    <button data-view="weeklyawards" data-mode="leaguehub" hidden>Weekly Awards</button>
     <button data-view="league" data-mode="leaguehub" hidden>All Rosters</button>
     <button data-view="schedule" data-mode="leaguehub" hidden>Schedule &amp; Divisions</button>
     <button data-view="rules" data-mode="leaguehub" hidden>Rules</button>
@@ -2076,6 +2077,11 @@
   <!-- LEAGUE RATING VIEW -->
   <div class="view" id="view-leaguerating">
     <div id="leagueRatingBody"></div>
+  </div>
+
+  <!-- WEEKLY AWARDS VIEW -->
+  <div class="view" id="view-weeklyawards">
+    <div id="weeklyAwardsBody"></div>
   </div>
 
   <!-- LEAGUE VIEW -->
@@ -3889,6 +3895,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.view==='allplay') renderAllPlayView();
     if(btn.dataset.view==='vsschedule') renderVsScheduleView();
     if(btn.dataset.view==='leaguerating') renderLeagueRatingView();
+    if(btn.dataset.view==='weeklyawards') renderWeeklyAwardsView();
     if(btn.dataset.view==='transactions') renderTransactionsView();
     if(btn.dataset.view==='txnstats') renderTxnStatsView();
     if(btn.dataset.view==='rostersync') renderRosterSyncView();
@@ -6682,6 +6689,7 @@ function maybeAutoSyncLiveScores(){
     if(document.getElementById('view-standings')?.classList.contains('active')) renderStandingsView();
     if(document.getElementById('view-allplay')?.classList.contains('active')) renderAllPlayView();
     if(document.getElementById('view-vsschedule')?.classList.contains('active')) renderVsScheduleView();
+    if(document.getElementById('view-weeklyawards')?.classList.contains('active')) renderWeeklyAwardsView();
   });
 }
 
@@ -8458,6 +8466,153 @@ function renderVsScheduleView(){
         <tbody>${rowsHtml}</tbody>
       </table>
       <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Vs. Every Schedule replays each team's own scores against all 11 other teams' real week-by-week opponents and totals the result. Best/Worst under each team name is the single most favorable and least favorable schedule they could've drawn. Luck is actual wins minus what that combined win% projects across the same games -- positive means the schedule you actually got was kinder than an average one would've been.</p>
+    </div>
+  `;
+
+  host.querySelectorAll('[data-owner]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const idx = teamIdxOf(el.dataset.owner);
+      if(idx>=0) openTeam(idx);
+    });
+  });
+}
+
+/* ---------- WEEKLY AWARDS (League > Weekly Awards) ----------
+   Same foundation as All-Play and Record vs. Schedule -- no new CBS
+   call, built from state.weeklyScores and SEASON_SCHEDULE. High/low
+   scorer only needs a team's own score that week; Biggest Blowout and
+   Closest Game need an actual head-to-head pairing, so those two are
+   only computed for the 13 real schedule weeks (SEASON_WEEKS-1) --
+   week 14's gauntlet has no 1-on-1 matchup to measure a margin against,
+   same boundary Record vs. Schedule already draws. A week only counts
+   once all 12 owners have reported a score, same completeness bar as
+   the other two live views. */
+function computeWeeklyAwards(){
+  const owners = Object.keys(SEASON_SCHEDULE);
+  const weeks = [];
+  for(let w=1; w<=SEASON_WEEKS; w++){
+    const wk = String(w);
+    const scores = state.weeklyScores[wk];
+    if(!scores || !owners.every(o=>scores[o]!=null)) continue;
+
+    const sorted = owners.map(o=>({owner:o, score:scores[o]})).sort((a,b)=>b.score-a.score);
+    const high = sorted[0];
+    const low = sorted[sorted.length-1];
+
+    let blowout = null, closest = null;
+    if(w < SEASON_WEEKS){
+      const seen = new Set();
+      const margins = [];
+      owners.forEach(o=>{
+        if(seen.has(o)) return;
+        const opp = SEASON_SCHEDULE[o][wk];
+        if(!opp) return;
+        seen.add(o); seen.add(opp);
+        const so = scores[o], sp = scores[opp];
+        const winner = so>=sp ? o : opp, loser = so>=sp ? opp : o;
+        const winnerScore = Math.max(so,sp), loserScore = Math.min(so,sp);
+        margins.push({ winner, loser, winnerScore, loserScore, margin: winnerScore-loserScore });
+      });
+      margins.sort((a,b)=>b.margin-a.margin);
+      blowout = margins[0] || null;
+      closest = margins[margins.length-1] || null;
+    }
+
+    weeks.push({ week:w, high, low, blowout, closest });
+  }
+  return { owners, weeks };
+}
+
+function renderWeeklyAwardsView(){
+  const host = document.getElementById('weeklyAwardsBody');
+  if(!host) return;
+  maybeAutoSyncLiveScores();
+  const anyScores = Object.keys(state.weeklyScores||{}).length > 0;
+  if(!anyScores){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Weekly Awards</div>
+      <h2>${liveSyncInFlight ? 'Syncing with CBS…' : 'No scores logged yet.'}</h2>
+      <p>${liveSyncInFlight ? "Pulling this week's scores from CBS now -- check back in a moment." : "Head to Schedule to sync live scores from CBS, or start entering weekly results yourself -- this builds straight off the same scores Standings uses."}</p>
+    </div>`;
+    return;
+  }
+
+  const { weeks } = computeWeeklyAwards();
+  if(weeks.length===0){
+    host.innerHTML = `<div class="chron-hero">
+      <div class="chron-kicker">League &middot; Weekly Awards</div>
+      <h2>No week is fully scored yet.</h2>
+      <p>These need every team's score in for at least one week before they mean anything -- check back once this week wraps up.</p>
+    </div>`;
+    return;
+  }
+
+  const teamLink = owner => teamIdxOf(owner)>=0
+    ? `<span class="hof-team hof-clickable" data-owner="${owner}">${nickOf(owner)}</span>`
+    : `<span class="hof-team">${nickOf(owner)}</span>`;
+  const fmt = n => Number(n).toFixed(1);
+
+  const highCounts = {}, lowCounts = {};
+  weeks.forEach(wk=>{
+    highCounts[wk.high.owner] = (highCounts[wk.high.owner]||0) + 1;
+    lowCounts[wk.low.owner] = (lowCounts[wk.low.owner]||0) + 1;
+  });
+  const topHighScorer = Object.keys(highCounts).sort((a,b)=>highCounts[b]-highCounts[a])[0];
+  const topLowScorer = Object.keys(lowCounts).sort((a,b)=>lowCounts[b]-lowCounts[a])[0];
+
+  let seasonBlowout = null, seasonClosest = null;
+  weeks.forEach(wk=>{
+    if(wk.blowout && (!seasonBlowout || wk.blowout.margin > seasonBlowout.margin)) seasonBlowout = { ...wk.blowout, week:wk.week };
+    if(wk.closest && (!seasonClosest || wk.closest.margin < seasonClosest.margin)) seasonClosest = { ...wk.closest, week:wk.week };
+  });
+
+  const rowsHtml = weeks.slice().reverse().map(wk=>`<tr>
+      <td style="color:var(--chalk-3);font:600 12px 'JetBrains Mono',monospace;padding:8px 0;">${wk.week}</td>
+      <td>${teamLink(wk.high.owner)} <span style="color:var(--chalk-3);font-size:11px;">${fmt(wk.high.score)}</span></td>
+      <td>${teamLink(wk.low.owner)} <span style="color:var(--chalk-3);font-size:11px;">${fmt(wk.low.score)}</span></td>
+      <td>${wk.blowout ? `${teamLink(wk.blowout.winner)} over ${teamLink(wk.blowout.loser)} <span style="color:var(--chalk-3);font-size:11px;">+${fmt(wk.blowout.margin)}</span>` : '&mdash;'}</td>
+      <td>${wk.closest ? `${teamLink(wk.closest.winner)} over ${teamLink(wk.closest.loser)} <span style="color:var(--chalk-3);font-size:11px;">+${fmt(wk.closest.margin)}</span>` : '&mdash;'}</td>
+    </tr>`).join('');
+
+  host.innerHTML = `
+    <div class="chron-hero">
+      <div class="chron-kicker">League &middot; Weekly Awards</div>
+      <h2>Every week's high score, low score, blowout, and nail-biter, tracked all season.</h2>
+      <p>Through ${weeks.length} fully-scored week${weeks.length===1?'':'s'}, built straight from the same scores Standings and All-Play use.</p>
+      <p id="weeklyAwardsSyncStatus" style="margin-top:6px;">${liveSyncStatusText()}</p>
+    </div>
+    <div class="div-grid" style="margin-top:16px;align-items:start;">
+      <div class="chron-card">
+        <div class="cc-label">Most weekly high scores</div>
+        <div class="cc-title">${teamLink(topHighScorer)}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--gold);margin-top:4px;">${highCounts[topHighScorer]} week${highCounts[topHighScorer]===1?'':'s'}</div>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Most weekly low scores</div>
+        <div class="cc-title">${teamLink(topLowScorer)}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--chalk-3);margin-top:4px;">${lowCounts[topLowScorer]} week${lowCounts[topLowScorer]===1?'':'s'}</div>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Biggest blowout of the season</div>
+        <div class="cc-title">${seasonBlowout ? `${teamLink(seasonBlowout.winner)} over ${teamLink(seasonBlowout.loser)}` : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--gold);margin-top:4px;">${seasonBlowout ? `+${fmt(seasonBlowout.margin)}, Week ${seasonBlowout.week}` : '&mdash;'}</div>
+      </div>
+      <div class="chron-card">
+        <div class="cc-label">Closest game of the season</div>
+        <div class="cc-title">${seasonClosest ? `${teamLink(seasonClosest.winner)} over ${teamLink(seasonClosest.loser)}` : '&mdash;'}</div>
+        <div style="font:600 13px 'JetBrains Mono',monospace;color:var(--jade);margin-top:4px;">${seasonClosest ? `+${fmt(seasonClosest.margin)}, Week ${seasonClosest.week}` : '&mdash;'}</div>
+      </div>
+    </div>
+    <div class="chron-card" style="margin-top:16px;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="font:600 10px 'JetBrains Mono',monospace;color:var(--chalk-3);text-transform:uppercase;letter-spacing:.06em;">
+          <th style="text-align:left;padding-bottom:8px;">Wk</th><th style="text-align:left;">High Score</th>
+          <th style="text-align:left;">Low Score</th><th style="text-align:left;">Blowout</th>
+          <th style="text-align:left;">Closest Game</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <p style="font-size:11.5px;color:var(--chalk-3);margin-top:14px;">Blowout and Closest Game only apply to the 13 real head-to-head weeks -- Week 14's gauntlet ranks all 12 teams by score rather than pairing them off, so there's no single margin to measure there.</p>
     </div>
   `;
 
